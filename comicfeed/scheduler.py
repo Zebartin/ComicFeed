@@ -62,10 +62,10 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
 
             _log.info("检查订阅: %s [%s] query=%s", sub.name, sub.source_key, sub.query)
 
-            from comicfeed.config import get_setting
+            from comicfeed.config import get_setting, get_source_proxy
             from comicfeed.credentials import get_source_credentials
             creds = await get_source_credentials(sub.source_key)
-            proxy = await get_setting("proxy", "") or None
+            proxy = await get_source_proxy(sub.source_key)
             source = source_manager.get_source(sub.source_key, credentials=creds, proxy=proxy)
             if source is None:
                 _log.warning("源不可用: %s", sub.source_key)
