@@ -6,9 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from comicfeed.database import get_session
 from comicfeed.hooks import Event, bus as event_bus
+from comicfeed.log import get
 from comicfeed.models import Gallery, Subscription
 from comicfeed.source_manager import SourceManager
 from comicfeed.sources.base import BaseSource, GallerySummary
+
+_log = get(__name__)
 
 
 async def check_subscription(
@@ -38,6 +41,7 @@ async def check_subscription(
     sub.last_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await session.commit()
 
+    _log.info("订阅 [%s] 检查完成: %d 个新画廊", sub.name, len(new))
     return new
 
 
@@ -56,6 +60,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
 
             source = source_manager.get_source(sub.source_key)
             if source is None:
+                _log.warning("源不可用: %s", sub.source_key)
                 await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "not_found"}))
                 continue
 

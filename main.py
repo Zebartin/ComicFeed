@@ -25,6 +25,8 @@ def main():
     parser.add_argument("--auth-pass", default="")
     args = parser.parse_args()
 
+    from comicfeed.log import setup
+    setup()
     init_db(args.db)
     asyncio.run(create_tables())
 

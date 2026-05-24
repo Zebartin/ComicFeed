@@ -321,13 +321,15 @@ function updateSel() {
 
 async function downloadPicked() {
   if (!picked.size) return
-  const ids = [...picked]; $('sel-info').textContent = `下载中 0/${ids.length} ...`
-  for (let i=0;i<ids.length;i++) {
-    try { await api('/api/galleries/download', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:current.source_key,gallery_id:ids[i]})}) } catch(e) { console.error(e) }
-    $('sel-info').textContent = `下载中 ${i+1}/${ids.length} ...`
-  }
-  $('sel-info').textContent = `已提交 ${ids.length} 个下载任务`
-  setTimeout(() => { closeResults(); load() }, 1500)
+  const ids = [...picked], src = current.source_key
+  ids.forEach(id => {
+    api('/api/galleries/download', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({source_key: src, gallery_id: id})
+    }).catch(e => console.error(e))
+  })
+  $('sel-info').textContent = `已提交 ${ids.length} 个下载，即将跳转…`
+  setTimeout(() => { closeResults(); window.location.href = '/queue' }, 800)
 }
 function closeResults() { $('overlay').classList.remove('on') }
 

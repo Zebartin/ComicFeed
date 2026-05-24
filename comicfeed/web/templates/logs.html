@@ -1,5 +1,41 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>系统日志</h2>
-<p>待实现</p>
+<style>
+.log-row { padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-family: var(--font-mono); }
+.log-row .ts { color: var(--text-muted); margin-right: 10px; }
+.log-row .src { color: var(--accent); margin-right: 10px; font-size: 11px; }
+.INFO .msg { color: var(--text); }
+.WARNING .msg { color: #e67e22; }
+.ERROR .msg { color: var(--red); }
+.filter { margin-bottom: 16px; display: flex; gap: 8px; }
+</style>
+
+<div class="page-header"><h1>系统日志</h1></div>
+
+<div class="filter">
+  <select id="filter-lvl" onchange="load()">
+    <option value="">全部级别</option>
+    <option value="INFO">INFO</option>
+    <option value="WARNING">WARNING</option>
+    <option value="ERROR">ERROR</option>
+  </select>
+  <button class="btn btn-ghost btn-sm" onclick="load()">刷新</button>
+</div>
+
+<div id="list"></div>
+
+<script>
+async function load() {
+  const lvl = document.getElementById('filter-lvl').value
+  const params = new URLSearchParams({limit: 100})
+  if (lvl) params.set('level', lvl)
+  const r = await fetch('/api/logs?' + params)
+  const logs = await r.json()
+  document.getElementById('list').innerHTML = logs.length === 0
+    ? '<p style="color:var(--text-muted);padding:20px">暂无日志</p>'
+    : logs.map(l => `<div class="log-row ${l.level}"><span class="ts">${l.timestamp.slice(0,19)}</span><span class="src">[${l.source}]</span><span class="msg">${esc(l.message)}</span></div>`).join('')
+}
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
+load()
+</script>
 {% endblock %}

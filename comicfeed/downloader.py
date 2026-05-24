@@ -3,7 +3,10 @@ import os
 from dataclasses import dataclass, field
 
 from comicfeed.cbz import make_cbz_name, normalize_title, pack_cbz
+from comicfeed.log import get
 from comicfeed.sources.base import BaseSource
+
+_log = get(__name__)
 
 
 @dataclass
@@ -55,6 +58,8 @@ async def download_gallery(
 
     if tracker:
         tracker.finished(full_gid)
+
+    _log.info("下载完成: %s (%d 页) → %s", full_gid, downloaded, os.path.basename(result.files[0]) if result.files else "")
 
     await bus.fire(Event("gallery.created", {
         "gallery_id": full_gid, "title": title, "files": result.files,
