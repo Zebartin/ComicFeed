@@ -33,19 +33,31 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
 
         auth = request.headers.get("Authorization")
         if not auth or not auth.startswith("Basic "):
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            return JSONResponse(
+                {"detail": "Unauthorized"}, status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="ComicFeed"'},
+            )
 
         credentials = auth.removeprefix("Basic ")
         try:
             decoded = base64.b64decode(credentials).decode("utf-8")
             username, _, password = decoded.partition(":")
         except Exception:
-            return JSONResponse({"detail": "Invalid credentials"}, status_code=401)
+            return JSONResponse(
+                {"detail": "Invalid credentials"}, status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="ComicFeed"'},
+            )
 
         if not secrets.compare_digest(username, self._username):
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            return JSONResponse(
+                {"detail": "Unauthorized"}, status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="ComicFeed"'},
+            )
         if not secrets.compare_digest(password, self._password):
-            return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            return JSONResponse(
+                {"detail": "Unauthorized"}, status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="ComicFeed"'},
+            )
 
         return await call_next(request)
 
