@@ -74,3 +74,11 @@ class Page(Base):
     gallery_id: Mapped[str] = mapped_column(ForeignKey("gallery.id"))
     page_index: Mapped[int] = mapped_column(Integer)
     page_native_id: Mapped[str] = mapped_column(String(256))
+
+
+class SourceCredential(Base):
+    __tablename__ = "source_credential"
+
+    source_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    encrypted_value: Mapped[str] = mapped_column(Text)

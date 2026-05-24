@@ -9,7 +9,8 @@ class SourceManager:
     REQUIRED_ATTRS = ("key", "name", "version", "domains")
 
     def __init__(self):
-        self._sources: dict[str, BaseSource] = {}
+        self._classes: dict[str, type[BaseSource]] = {}
+        self._instances: dict[str, BaseSource] = {}
 
     def validate_source(self, source_cls: type[BaseSource]) -> bool:
         if not issubclass(source_cls, BaseSource):
@@ -19,11 +20,24 @@ class SourceManager:
                 return False
         return True
 
-    def get_source(self, key: str) -> BaseSource | None:
-        return self._sources.get(key)
+    def list_sources(self) -> list[BaseSource]:
+        """返回所有已加载源的实例（不含 credentials）。"""
+        return list(self._instances.values())
 
-    def load_sources(self, directory: str) -> list[BaseSource]:
-        sources = []
+    def get_source(self, key: str, credentials: dict | None = None) -> BaseSource | None:
+        cls = self._classes.get(key)
+        if cls is None:
+            return None
+        # 每次请求时用最新凭证实例化
+        if credentials is not None:
+            return cls(credentials=credentials)
+        return cls()
+
+    def get_source_cls(self, key: str) -> type[BaseSource] | None:
+        return self._classes.get(key)
+
+    def load_sources(self, directory: str) -> list:
+        results = []
         for f in Path(directory).glob("*.py"):
             if f.name.startswith("_"):
                 continue
@@ -39,7 +53,7 @@ class SourceManager:
                 if not isinstance(attr, type) or not issubclass(attr, BaseSource) or attr is BaseSource:
                     continue
                 if self.validate_source(attr):
-                    source = attr()
-                    self._sources[source.key] = source
-                    sources.append(source)
-        return sources
+                    self._classes[attr.key] = attr
+                    self._instances[attr.key] = attr()
+                    results.append(attr.key)
+        return results

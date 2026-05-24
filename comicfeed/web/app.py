@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 
 from comicfeed.downloader import DownloadTracker
 from comicfeed.source_manager import SourceManager
+from comicfeed.web.routes.credentials import router as cred_router
 from comicfeed.web.routes.galleries import router as gallery_router
 from comicfeed.web.routes.queue import router as queue_router
 from comicfeed.web.routes.settings import router as settings_router
@@ -89,6 +90,7 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     app.include_router(sub_router)
     app.include_router(src_router)
     app.include_router(gallery_router)
+    app.include_router(cred_router)
     app.include_router(queue_router)
     app.include_router(settings_router)
 

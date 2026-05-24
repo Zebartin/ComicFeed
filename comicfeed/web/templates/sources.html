@@ -2,14 +2,64 @@
 {% block content %}
 <h2>源管理</h2>
 <div id="list"><p>加载中...</p></div>
+<div id="cred-form" class="card" style="display:none">
+    <h3>配置凭证: <span id="cred-source"></span></h3>
+    <div id="cred-inputs"></div>
+    <button class="btn-primary" onclick="saveCreds()">保存</button>
+    <button onclick="document.getElementById('cred-form').style.display='none'">取消</button>
+</div>
 <script>
 async function load() {
     const r = await fetch('/api/sources')
     const srcs = await r.json()
     document.getElementById('list').innerHTML = '<table>' +
-        '<tr><th>Key</th><th>名称</th><th>版本</th><th>域名</th><th>认证方式</th></tr>' +
-        srcs.map(s => `<tr><td>${s.key}</td><td>${s.name}</td><td>${s.version}</td><td>${s.domains.join(', ')}</td><td>${s.auth_schema}</td></tr>`).join('') +
-        '</table>'
+        '<tr><th>Key</th><th>名称</th><th>版本</th><th>域名</th><th>认证</th><th>操作</th></tr>' +
+        srcs.map(s => `<tr>
+            <td>${s.key}</td><td>${s.name}</td><td>${s.version}</td>
+            <td>${s.domains.join(', ')}</td><td>${s.auth_schema}</td>
+            <td>${s.auth_schema !== 'NONE' ? `<button class="btn-sm" onclick="editCreds('${s.key}','${s.auth_schema}')">凭证</button>` : '-'}</td>
+        </tr>`).join('') + '</table>'
+}
+async function editCreds(key, schema) {
+    document.getElementById('cred-source').textContent = key
+    document.getElementById('cred-form').dataset.sourceKey = key
+    // 加载现有凭证
+    let existing = {}
+    try {
+        const r = await fetch('/api/credentials/' + key)
+        const data = await r.json()
+        existing = data.credentials || {}
+    } catch(e) {}
+    // 根据认证类型生成输入框
+    let inputs = ''
+    if (schema === 'COOKIE') {
+        inputs = '<p>Cookie (key=value 每行一个):<br><textarea id="cookie-text" rows="6" style="width:100%"></textarea></p>'
+        inputs += `<p><small>格式: csrftoken=xxx<br>cf_clearance=yyy</small></p>`
+        document.getElementById('cred-inputs').innerHTML = inputs
+        // 填入现有值
+        let txt = Object.entries(existing).map(([k,v]) => `${k}=${v}`).join('\n')
+        setTimeout(() => document.getElementById('cookie-text').value = txt, 50)
+    } else {
+        document.getElementById('cred-inputs').innerHTML = Object.entries(existing).map(([k,v]) =>
+            `<p>${k}: <input id="cred-${k}" value="${v}"></p>`).join('')
+    }
+    document.getElementById('cred-form').style.display = 'block'
+}
+async function saveCreds() {
+    const key = document.getElementById('cred-form').dataset.sourceKey
+    let creds = {}
+    const ta = document.getElementById('cookie-text')
+    if (ta) {
+        ta.value.split('\n').filter(l => l.includes('=')).forEach(l => {
+            const [k, ...v] = l.split('=')
+            creds[k.trim()] = v.join('=').trim()
+        })
+    }
+    await fetch('/api/credentials/' + key, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({credentials: creds})
+    })
+    document.getElementById('cred-form').style.display = 'none'
 }
 load()
 </script>

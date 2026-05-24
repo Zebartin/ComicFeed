@@ -69,6 +69,8 @@ class TestPlugin(BaseSource):
 """, encoding="utf-8")
 
     manager = SourceManager()
-    sources = manager.load_sources(str(source_dir))
-    assert len(sources) == 1
-    assert sources[0].key == "test-plugin"
+    keys = manager.load_sources(str(source_dir))
+    assert len(keys) == 1
+    source = manager.get_source("test-plugin")
+    assert source is not None
+    assert source.key == "test-plugin"

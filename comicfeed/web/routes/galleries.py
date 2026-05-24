@@ -37,8 +37,10 @@ async def list_galleries(source_key: str | None = None, limit: int = 50, offset:
 async def download_by_id(req: DownloadRequest):
     """按 Gallery ID 或 URL 手动下载（后台任务）。"""
     from comicfeed.web.app import get_source_manager
+    from comicfeed.credentials import get_source_credentials
     mgr = get_source_manager()
-    source = mgr.get_source(req.source_key) if mgr else None
+    creds = await get_source_credentials(req.source_key)
+    source = mgr.get_source(req.source_key, credentials=creds) if mgr else None
     if source is None:
         return {"status": "error", "error": f"源 {req.source_key} 不可用"}
     # 解析 URL → gallery_id

@@ -16,5 +16,5 @@ async def list_sources():
     return [
         {"key": s.key, "name": s.name, "version": s.version,
          "domains": s.domains, "auth_schema": s.auth_schema.name}
-        for s in mgr._sources.values()
+        for s in mgr.list_sources()
     ]
