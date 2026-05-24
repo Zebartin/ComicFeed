@@ -1,0 +1,29 @@
+[project]
+name = "comicfeed"
+version = "0.1.0"
+description = "Multi-source comic downloader with RSS-like subscriptions"
+requires-python = ">=3.11"
+dependencies = [
+    "aiofiles>=25.1.0",
+    "aiosqlite>=0.22.1",
+    "alembic>=1.18.4",
+    "apscheduler>=3.11.2",
+    "beautifulsoup4>=4.14.3",
+    "cryptography>=48.0.0",
+    "fastapi>=0.136.3",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "lxml>=6.1.1",
+    "pillow>=12.2.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.1",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+    "python-multipart>=0.0.29",
+    "sqlalchemy>=2.0.49",
+    "uvicorn[standard]>=0.47.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(gh api *)",
+      "WebSearch",
+      "Bash(New-Item *)",
+      "Bash(uv run *)"
+    ]
+  }
+}
