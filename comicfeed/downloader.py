@@ -120,15 +120,16 @@ class DownloadPool:
         gallery_id: str,
         output_dir: str,
         cbz_max_pages: int = 0,
+        tracker: "DownloadTracker | None" = None,
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
         async with self._global_sem:
             if src_sem:
                 async with src_sem:
-                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages)
+                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker)
             else:
-                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages)
+                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker)
 
 
 class DownloadTracker:

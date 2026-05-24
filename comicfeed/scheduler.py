@@ -83,7 +83,8 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                     from comicfeed.config import get_setting
                     out_dir = await get_setting("download_path", ".")
                     _log.info("开始下载: %s:%s (%s)", source.key, item.native_id, item.title)
-                    result = await download_pool.download(source, item.native_id, out_dir)
+                    from comicfeed.web.app import get_download_tracker
+                    result = await download_pool.download(source, item.native_id, out_dir, tracker=get_download_tracker())
                     # 写入订阅-画廊关联
                     from comicfeed.models import SubscriptionGallery
                     gid = f"{source.key}:{item.native_id}"
