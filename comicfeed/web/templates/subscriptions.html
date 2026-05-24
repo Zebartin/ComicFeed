@@ -153,6 +153,10 @@
 .empty-state p { font-size: 13px; color: var(--text-muted); }
 </style>
 
+<div id="setup-banner" style="display:none;background:var(--gold-light);border:1px solid var(--gold);border-radius:var(--radius);padding:12px 18px;margin-bottom:20px;font-size:13px;color:var(--text)">
+  &#9888; 配置未完成，请先前往 <a href="/setup" style="color:var(--gold);font-weight:600">设置向导</a> 完成基础配置。
+</div>
+
 <div class="page-header">
   <h1>订阅</h1>
   <span class="stat" id="sub-stat"></span>
@@ -210,6 +214,12 @@ async function api(p, o={}) {
 }
 
 async function load() {
+  // 检查配置状态
+  try {
+    const st = await api('/api/setup/status')
+    document.getElementById('setup-banner').style.display = st.all_done ? 'none' : ''
+  } catch(_) {}
+
   try {
     const [subs, srcs] = await Promise.all([api('/api/subscriptions'), api('/api/sources')])
     $('source_key').innerHTML = srcs.map(s => `<option>${s.key}</option>`).join('')
