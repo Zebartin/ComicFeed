@@ -7,7 +7,9 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from comicfeed.downloader import DownloadTracker
+from contextlib import asynccontextmanager
+
+from comicfeed.downloader import DownloadPool, DownloadTracker
 from comicfeed.source_manager import SourceManager
 from comicfeed.web.routes.credentials import router as cred_router
 from comicfeed.web.routes.galleries import router as gallery_router
@@ -70,13 +72,24 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def create_app(config: dict | None = None, source_manager: SourceManager | None = None, download_tracker: DownloadTracker | None = None) -> FastAPI:
+def create_app(config: dict | None = None, source_manager: SourceManager | None = None,
+               download_tracker: DownloadTracker | None = None, download_pool: DownloadPool | None = None) -> FastAPI:
     global _source_manager, _download_tracker
     if config is None:
         config = {}
     _source_manager = source_manager or SourceManager()
     _download_tracker = download_tracker or DownloadTracker()
-    app = FastAPI()
+    download_pool = download_pool or DownloadPool()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        from comicfeed.scheduler import create_scheduler
+        scheduler = create_scheduler(_source_manager, download_pool)
+        scheduler.start()
+        yield
+        scheduler.shutdown()
+
+    app = FastAPI(lifespan=lifespan)
 
     auth_user = config.get("auth_username", "")
     auth_pass = config.get("auth_password", "")
