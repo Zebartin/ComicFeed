@@ -85,20 +85,28 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
 
     templates = Jinja2Templates(directory="comicfeed/web/templates")
 
-    def _page_factory(tmpl: str):
-        async def _page(request: Request):
-            return templates.TemplateResponse(tmpl, {"request": request})
-        return _page
+    @app.get("/", response_class=HTMLResponse)
+    async def page_index(request: Request):
+        return templates.TemplateResponse("subscriptions.html", {"request": request})
 
-    _pages = {
-        "/": "subscriptions.html",
-        "/sources": "sources.html",
-        "/galleries": "galleries.html",
-        "/settings": "settings.html",
-        "/queue": "queue.html",
-        "/logs": "logs.html",
-    }
-    for path, tmpl in _pages.items():
-        app.get(path, response_class=HTMLResponse, name=f"page_{path.strip('/') or 'index'}")(_page_factory(tmpl))
+    @app.get("/sources", response_class=HTMLResponse)
+    async def page_sources(request: Request):
+        return templates.TemplateResponse("sources.html", {"request": request})
+
+    @app.get("/galleries", response_class=HTMLResponse)
+    async def page_galleries(request: Request):
+        return templates.TemplateResponse("galleries.html", {"request": request})
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def page_settings(request: Request):
+        return templates.TemplateResponse("settings.html", {"request": request})
+
+    @app.get("/queue", response_class=HTMLResponse)
+    async def page_queue(request: Request):
+        return templates.TemplateResponse("queue.html", {"request": request})
+
+    @app.get("/logs", response_class=HTMLResponse)
+    async def page_logs(request: Request):
+        return templates.TemplateResponse("logs.html", {"request": request})
 
     return app
