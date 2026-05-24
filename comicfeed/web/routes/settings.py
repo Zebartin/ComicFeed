@@ -7,6 +7,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 DEFAULTS = {
     "check_interval": "10",
     "download_path": "",
+    "proxy": "",
     "global_concurrency": "5",
     "komga_url": "",
     "komga_api_key": "",

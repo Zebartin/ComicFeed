@@ -99,10 +99,12 @@ def _parse_tags(raw: str) -> list[str]:
 async def download_by_id(req: DownloadRequest):
     """按 Gallery ID 或 URL 手动下载（后台任务）。"""
     from comicfeed.web.app import get_source_manager
+    from comicfeed.config import get_setting
     from comicfeed.credentials import get_source_credentials
     mgr = get_source_manager()
     creds = await get_source_credentials(req.source_key)
-    source = mgr.get_source(req.source_key, credentials=creds) if mgr else None
+    proxy = await get_setting("proxy", "") or None
+    source = mgr.get_source(req.source_key, credentials=creds, proxy=proxy) if mgr else None
     if source is None:
         return {"status": "error", "error": f"源 {req.source_key} 不可用"}
     # 解析 URL → gallery_id

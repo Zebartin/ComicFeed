@@ -105,8 +105,10 @@ async def check_subscription_now(sub_id: int):
             raise HTTPException(404, "未找到")
         mgr = get_source_manager()
         from comicfeed.credentials import get_source_credentials
+        from comicfeed.config import get_setting
         creds = await get_source_credentials(sub.source_key)
-        source = mgr.get_source(sub.source_key, credentials=creds) if mgr else None
+        proxy = await get_setting("proxy", "") or None
+        source = mgr.get_source(sub.source_key, credentials=creds, proxy=proxy) if mgr else None
         if source is None:
             return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
         from comicfeed.scheduler import check_subscription

@@ -24,14 +24,11 @@ class SourceManager:
         """返回所有已加载源的实例（不含 credentials）。"""
         return list(self._instances.values())
 
-    def get_source(self, key: str, credentials: dict | None = None) -> BaseSource | None:
+    def get_source(self, key: str, credentials: dict | None = None, proxy: str | None = None) -> BaseSource | None:
         cls = self._classes.get(key)
         if cls is None:
             return None
-        # 每次请求时用最新凭证实例化
-        if credentials is not None:
-            return cls(credentials=credentials)
-        return cls()
+        return cls(credentials=credentials or {}, proxy=proxy or None)
 
     def get_source_cls(self, key: str) -> type[BaseSource] | None:
         return self._classes.get(key)
