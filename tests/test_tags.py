@@ -2,40 +2,41 @@ import json
 
 from comicfeed.tag_translator import TagTranslator
 
-_SAMPLE_DB = json.dumps({
-    "namespaces": {
-        "female": "女性",
-        "male": "男性",
-        "artist": "画师",
-        "group": "团队",
-        "parody": "原作",
-        "character": "角色",
-    },
+_SAMPLE_DB = {
+    "namespaces": {"artist": "画师", "group": "团队", "tag": "标签"},
     "tags": {
-        "full color": "全彩",
-        "big breasts": "巨乳",
-        "sole male": "单男主",
-        "schoolgirl uniform": "女生制服",
+        "artist": {"inu": "犬"},
+        "tag": {"full color": "全彩", "big breasts": "巨乳"},
     },
-})
+}
+
+
+def _make_tt() -> TagTranslator:
+    """创建一个用内存数据的翻译器。"""
+    tt = TagTranslator.__new__(TagTranslator)
+    tt._db_path = ""
+    tt._namespaces = _SAMPLE_DB["namespaces"]
+    tt._tags = _SAMPLE_DB["tags"]
+    return tt
 
 
 def test_translate_known_tag():
     """已知标签翻译为中文。"""
-    tt = TagTranslator(db_data=_SAMPLE_DB)
-    assert tt.translate("full color") == "全彩"
-    assert tt.translate("big breasts") == "巨乳"
+    tt = _make_tt()
+    assert tt.translate("tag", "full color") == "标签：全彩"
+    assert tt.translate("tag", "big breasts") == "标签：巨乳"
 
 
 def test_translate_unknown_tag_returns_original():
     """未知标签返回原文。"""
-    tt = TagTranslator(db_data=_SAMPLE_DB)
-    assert tt.translate("nonexistent tag") == "nonexistent tag"
+    tt = _make_tt()
+    result = tt.translate("tag", "nonexistent")
+    assert "nonexistent" in result
 
 
 def test_translate_with_namespace():
-    """带命名空间的标签格式化输出。"""
-    tt = TagTranslator(db_data=_SAMPLE_DB)
-    result = tt.translate_tag("artist", "full color")
+    """命名空间也会翻译。"""
+    tt = _make_tt()
+    result = tt.translate("artist", "inu")
     assert "画师" in result
-    assert "全彩" in result
+    assert "犬" in result

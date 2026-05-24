@@ -86,7 +86,7 @@ def test_parse_gallery_response():
     assert detail.title == "Sample Comic"
     assert detail.cover_url == "https://t.nhentai.net/galleries/12345/cover.jpg"
     assert len(detail.tags) == 2
-    assert "full color" in detail.tags
+    assert any("full color" in t for t in detail.tags)
     assert detail.reported_pages == 2
     assert len(detail.page_urls) == 2
     assert detail.page_urls[0] == "https://i.nhentai.net/galleries/12345/1.jpg"

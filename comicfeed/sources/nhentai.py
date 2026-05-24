@@ -93,7 +93,16 @@ class NhentaiSource(BaseSource):
         cover_path = cover.get("path", "")
         cover_url = self._make_image_url("https://t.nhentai.net", cover_path) if cover_path else ""
 
-        tags = [t.get("name", "") for t in data.get("tags", [])]
+        from comicfeed.tag_translator import get_translator
+        _tt = get_translator()
+        tags = []
+        for t in data.get("tags", []):
+            ns = t.get("type", "")
+            name = t.get("name", "")
+            if ns and name:
+                tags.append(_tt.translate(ns, name))
+            elif name:
+                tags.append(name)
 
         page_urls = []
         for p in data.get("pages", []):

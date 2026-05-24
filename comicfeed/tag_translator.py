@@ -1,36 +1,85 @@
+"""EhTagTranslation 标签翻译器。
+
+从 GitHub Releases 下载 gzip 压缩的翻译数据库，
+缓存到本地，过期后自动更新。
+"""
+import gzip
 import json
-from pathlib import Path
+from datetime import datetime
+from logging import getLogger
+
+from curl_cffi.requests import AsyncSession
+
+from comicfeed.sources.base import AuthSchema
+
+logger = getLogger(__name__)
+
+REMOTE_URL = "https://raw.githubusercontent.com/EhTagTranslation/DatabaseReleases/refs/heads/master/db.text.json.gz"
+UPDATE_DAYS = 15
 
 
 class TagTranslator:
-    def __init__(self, db_data: str | None = None, db_path: str | None = None):
+    def __init__(self, db_path: str):
+        self._db_path = db_path
         self._namespaces: dict[str, str] = {}
-        self._tags: dict[str, str] = {}
-        if db_data:
-            self._load_from_string(db_data)
-        elif db_path:
-            self._load_from_file(db_path)
+        self._tags: dict[str, dict[str, str]] = {}  # namespace → {en: zh}
 
-    def _load_from_string(self, data: str):
-        db = json.loads(data)
-        self._namespaces = db.get("namespaces", {})
-        self._tags = db.get("tags", {})
+    async def load(self):
+        """加载本地缓存或从远程下载。"""
+        import os
+        try:
+            mtime = os.path.getmtime(self._db_path)
+            age_days = (datetime.now().timestamp() - mtime) / 86400
+            if age_days < UPDATE_DAYS:
+                with open(self._db_path, encoding="utf-8") as f:
+                    db = json.load(f)
+                self._namespaces = db.get("namespaces", {})
+                self._tags = db.get("tags", {})
+                logger.info("标签翻译数据库已加载 (%d 个命名空间)", len(self._namespaces))
+                return
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+        await self._download()
 
-    def _load_from_file(self, path: str):
-        with open(path, "r", encoding="utf-8") as f:
-            self._load_from_string(f.read())
+    async def _download(self):
+        """从 GitHub 下载并解析翻译数据库。"""
+        logger.info("正在下载标签翻译数据库...")
+        async with AsyncSession(timeout=30) as s:
+            r = await s.get(REMOTE_URL)
+            r.raise_for_status()
+            raw = gzip.decompress(r.content)
+            db_data = json.loads(raw)
 
-    @classmethod
-    def from_default_db(cls) -> "TagTranslator":
-        default_path = Path(__file__).parent / "data" / "eh_tags.json"
-        if default_path.exists():
-            return cls(db_path=str(default_path))
-        return cls()
+        self._namespaces = {}
+        self._tags = {}
+        for item in db_data.get("data", []):
+            ns = item["namespace"]
+            if ns == "rows":
+                self._namespaces = {k: v["name"] for k, v in item["data"].items()}
+                self._namespaces["artist"] = "画师"
+            else:
+                self._tags[ns] = {k: v["name"] for k, v in item["data"].items()}
 
-    def translate(self, tag_name: str) -> str:
-        return self._tags.get(tag_name, tag_name)
+        with open(self._db_path, "w", encoding="utf-8") as f:
+            json.dump({"namespaces": self._namespaces, "tags": self._tags}, f, ensure_ascii=False)
+        logger.info("标签翻译数据库已更新 (%d 命名空间, %d 标签)", len(self._namespaces),
+                     sum(len(v) for v in self._tags.values()))
 
-    def translate_tag(self, namespace: str, tag_name: str) -> str:
-        ns_cn = self._namespaces.get(namespace, namespace)
-        tag_cn = self._tags.get(tag_name, tag_name)
-        return f"{ns_cn}：{tag_cn}"
+    def translate(self, ns: str, name: str) -> str:
+        """翻译单个标签，返回中文名。不支持则返回原文。"""
+        cn_ns = self._namespaces.get(ns, ns)
+        if ns in self._tags and name in self._tags[ns]:
+            cn_name = self._tags[ns][name]
+            return f"{cn_ns}：{cn_name}"
+        return f"{cn_ns}：{name}"
+
+
+# 全局实例
+_instance: TagTranslator | None = None
+
+
+def get_translator(db_path: str = "comicfeed/data/eh_tags.db.json") -> TagTranslator:
+    global _instance
+    if _instance is None:
+        _instance = TagTranslator(db_path)
+    return _instance
