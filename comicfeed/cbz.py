@@ -41,9 +41,26 @@ def normalize_title(title: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
-def make_cbz_name(native_id: str, normalized_title: str, start_page: int, end_page: int) -> str:
+# Windows 文件名非法字符 → 全角版本
+_FILENAME_MAP = str.maketrans({
+    '<': '＜', '>': '＞', ':': '：', '"': '＂',
+    '/': '／', '\\': '＼', '|': '｜', '?': '？', '*': '＊',
+})
+
+
+def sanitize_filename(name: str) -> str:
+    return name.translate(_FILENAME_MAP)
+
+
+def make_cbz_name(native_id: str, normalized_title: str, start_page: int, end_page: int, total_pages: int = 0) -> str:
     """生成 CBZ 文件名: [id] title (0001-0034).cbz"""
-    return f"[{native_id}] {normalized_title} ({start_page:04d}-{end_page:04d}).cbz"
+    name = f"[{native_id}] {normalized_title}"
+    if total_pages > 0 and start_page == 1 and end_page >= total_pages:
+        pass  # 不分卷，不加页码范围
+    else:
+        name += f" ({start_page:04d}-{end_page:04d})"
+    name = sanitize_filename(name)
+    return f"{name}.cbz"
 
 
 def _build_comicinfo(detail: GalleryDetail) -> bytes:

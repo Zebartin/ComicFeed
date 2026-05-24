@@ -47,10 +47,24 @@ def test_make_cbz_name_single_volume():
     assert name == "[455819] Sample Comic Title (0001-0034).cbz"
 
 
+def test_make_cbz_name_no_split_omits_range():
+    """不分卷时文件名不加页码范围。"""
+    name = make_cbz_name("455819", "Comic", 1, 42, total_pages=42)
+    assert name == "[455819] Comic.cbz"
+
+
 def test_make_cbz_name_multi_volume():
     """多卷 CBZ 文件名。"""
     name = make_cbz_name("455819", "Sample Comic Title", 61, 90)
     assert name == "[455819] Sample Comic Title (0061-0090).cbz"
+
+
+def test_sanitize_filename():
+    """替换非法字符为全角。"""
+    from comicfeed.cbz import sanitize_filename
+    assert sanitize_filename("a|b") == "a｜b"
+    assert sanitize_filename("a:b") == "a：b"
+    assert sanitize_filename("a<b>c") == "a＜b＞c"
 
 
 def test_pack_cbz_creates_valid_zip_with_comicinfo():

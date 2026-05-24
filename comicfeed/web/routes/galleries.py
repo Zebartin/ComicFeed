@@ -53,8 +53,10 @@ async def download_by_id(req: DownloadRequest):
             return {"error": "无法解析 URL"}
     # 返回已接受，后台执行下载
     from comicfeed.config import get_setting
+    from comicfeed.web.app import get_download_tracker
     out_dir = await get_setting("download_path", ".")
+    tracker = get_download_tracker()
     import asyncio
     from comicfeed.downloader import download_gallery
-    asyncio.create_task(download_gallery(source, gid, out_dir))
+    asyncio.create_task(download_gallery(source, gid, out_dir, tracker=tracker))
     return {"status": "accepted", "gallery_id": f"{req.source_key}:{gid}"}

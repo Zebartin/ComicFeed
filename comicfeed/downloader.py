@@ -38,7 +38,7 @@ async def download_gallery(
     for vol_start in range(0, total, cbz_max_pages):
         vol_end = min(vol_start + cbz_max_pages, total)
         pages = await source.download_pages(gallery_id, slice(vol_start, vol_end))
-        fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_end)
+        fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_end, total_pages=total)
         fpath = os.path.join(output_dir, fname)
         with open(fpath, "wb") as f:
             pack_cbz(f, fname, detail, pages, start_page=vol_start + 1)

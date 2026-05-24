@@ -88,7 +88,7 @@ async def main():
         print(f"\n下载卷: {vol_start+1}-{vol_end} ({vol_end - vol_start} 页)")
 
         pages = await source.download_pages(gallery_id, slice(vol_start, vol_end))
-        fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_end)
+        fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_end, total_pages=total)
         fpath = os.path.join(out_dir, fname)
 
         with open(fpath, "wb") as f:
