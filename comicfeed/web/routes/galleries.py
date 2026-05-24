@@ -14,25 +14,53 @@ class DownloadRequest(BaseModel):
     url: str | None = None
 
 
+_SORT_FIELDS = {
+    "date": Gallery.downloaded_at,
+    "pages": Gallery.reported_pages,
+    "favorites": Gallery.num_favorites,
+    "title": Gallery.display_title,
+}
+
+
 @router.get("")
-async def list_galleries(source_key: str | None = None, limit: int = 50, offset: int = 0):
+async def list_galleries(source_key: str | None = None, sort: str = "date",
+                         limit: int = 50, offset: int = 0):
     async with get_session() as session:
-        stmt = select(Gallery).order_by(Gallery.downloaded_at.desc()).offset(offset).limit(limit)
+        # 总数
+        count_stmt = select(Gallery.id)
+        if source_key:
+            count_stmt = count_stmt.where(Gallery.source_key == source_key)
+        total = (await session.execute(count_stmt)).fetchall()
+
+        # 排序
+        order_col = _SORT_FIELDS.get(sort, Gallery.downloaded_at)
+        order = order_col.desc() if sort != "title" else order_col.asc()
+
+        stmt = select(Gallery).order_by(order).offset(offset).limit(limit)
         if source_key:
             stmt = stmt.where(Gallery.source_key == source_key)
         result = await session.execute(stmt)
         galleries = result.scalars().all()
-        return [
-            {
-                "id": g.id, "source_key": g.source_key, "native_id": g.native_id,
-                "display_title": g.display_title, "cover_url": g.cover_url,
-                "tags": _parse_tags(g.tags), "num_favorites": g.num_favorites,
-                "reported_pages": g.reported_pages, "actual_pages": g.actual_pages,
-                "file_path": g.file_path,
-                "web_url": f"https://nhentai.net/g/{g.native_id}/",
-            }
-            for g in galleries
-        ]
+        return {
+            "total": len(total),
+            "items": [
+                {
+                    "id": g.id, "source_key": g.source_key, "native_id": g.native_id,
+                    "display_title": g.display_title, "cover_url": g.cover_url,
+                    "tags": _parse_tags(g.tags), "num_favorites": g.num_favorites,
+                    "reported_pages": g.reported_pages, "actual_pages": g.actual_pages,
+                    "file_path": g.file_path,
+                    "web_url": _web_url(g.source_key, g.native_id),
+                }
+                for g in galleries
+            ],
+        }
+
+
+def _web_url(source_key: str, native_id: str) -> str:
+    if source_key == "nhentai":
+        return f"https://nhentai.net/g/{native_id}/"
+    return ""
 
 
 def _parse_tags(raw: str) -> list[str]:

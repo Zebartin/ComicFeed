@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.toolbar select, .toolbar input { padding: 6px 10px; font-size: 12px; min-width: 120px; }
+.pagination { display: flex; gap: 8px; align-items: center; margin-top: 20px; justify-content: center; }
+.pagination button { padding: 6px 14px; min-width: 40px; }
+.pagination span { font-size: 12px; color: var(--text-muted); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
-.g-card {
-  background: #fcfaf7; border: 2px solid var(--border);
-  cursor: pointer; transition: all var(--transition);
-}
+.g-card { background: #fcfaf7; border: 2px solid var(--border); cursor: pointer; transition: all var(--transition); }
 .g-card:hover { border-color: var(--border-hover); box-shadow: 0 4px 16px rgba(0,0,0,.06); transform: translateY(-2px); }
 .g-card .cover { position: relative; width: 100%; background: #f0ebe0; line-height: 0; }
 .g-card .cover img { display: block; width: 100%; height: auto; }
@@ -17,35 +19,83 @@
 .g-card .info .meta .dot { width: 3px; height: 3px; background: var(--text-muted); border-radius: 50%; }
 .g-card .info .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .g-card .info .tag { font-size: 10px; color: var(--cream-dim); background: #f0ebe0; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
-.empty { text-align: center; padding: 64px 28px; color: var(--text-muted); grid-column: 1 / -1; }
 </style>
 
 <div class="page-header"><h1>画廊</h1></div>
+
+<div class="toolbar">
+  <select id="filter-src" onchange="load(0)">
+    <option value="">所有源</option>
+  </select>
+  <select id="sort-by" onchange="load(0)">
+    <option value="date">下载时间</option>
+    <option value="pages">页数</option>
+    <option value="favorites">收藏数</option>
+    <option value="title">标题</option>
+  </select>
+  <span style="font-size:12px;color:var(--text-muted)" id="total-info"></span>
+</div>
+
 <div class="grid" id="grid"></div>
+<div class="pagination" id="pager"></div>
 
 <script>
+const PAGE_SIZE = 24
+let currentPage = 0, total = 0
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
-async function load() {
-  const r = await fetch('/api/galleries?limit=100')
-  const gals = await r.json()
-  const g = document.getElementById('grid')
-  if (!gals.length) g.innerHTML = '<div class="empty"><p style="font-size:14px;margin-bottom:4px">暂无已下载的画廊</p><p style="font-size:12px;opacity:.6">下载后在此浏览</p></div>'
-  else g.innerHTML = gals.map(x => {
-    const tags = x.tags && x.tags.length ? x.tags.slice(0, 6) : []
-    return `<div class="g-card" onclick="window.open('${x.web_url||'https://nhentai.net/g/'+x.native_id+'/'}','_blank')">
-      <div class="cover">
-        ${x.cover_url ? `<img src="${x.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
-        <div class="no-img" style="${x.cover_url?'display:none':'display:flex'}">&mdash;</div>
-      </div>
-      <div class="info">
-        <div class="gid">#${esc(x.native_id)}</div>
-        <div class="title">${esc(x.display_title)}</div>
-        <div class="meta"><span>${x.reported_pages} 页</span><span class="dot"></span><span>${x.num_favorites||0} 收藏</span></div>
-        ${tags.length ? `<div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
-      </div>
-    </div>`
-  }).join('')
+
+async function loadSrcs() {
+  const r = await fetch('/api/sources'); const srcs = await r.json()
+  document.getElementById('filter-src').innerHTML = '<option value="">所有源</option>' + srcs.map(s => `<option>${s.key}</option>`).join('')
 }
-load()
+
+async function load(page) {
+  currentPage = page
+  const src = document.getElementById('filter-src').value
+  const sort = document.getElementById('sort-by').value
+  const params = new URLSearchParams({limit: PAGE_SIZE, offset: page * PAGE_SIZE, sort})
+  if (src) params.set('source_key', src)
+
+  const r = await fetch('/api/galleries?' + params)
+  const data = await r.json()
+  total = data.total; const gals = data.items
+
+  document.getElementById('total-info').textContent = `共 ${total} 个画廊`
+  const g = document.getElementById('grid')
+  if (!gals.length) {
+    g.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:64px 20px;color:var(--text-muted)"><p style="font-size:14px;margin-bottom:4px">暂无已下载的画廊</p><p style="font-size:12px;opacity:.6">下载后在此浏览</p></div>'
+  } else {
+    g.innerHTML = gals.map(x => {
+      const tags = x.tags && x.tags.length ? x.tags.slice(0, 6) : []
+      return `<div class="g-card" onclick="window.open('${x.web_url||''}','_blank')">
+        <div class="cover">
+          ${x.cover_url ? `<img src="${x.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+          <div class="no-img" style="${x.cover_url?'display:none':'display:flex'}">&mdash;</div>
+        </div>
+        <div class="info">
+          <div class="gid">#${esc(x.native_id)}</div>
+          <div class="title">${esc(x.display_title)}</div>
+          <div class="meta"><span>${x.reported_pages} 页</span><span class="dot"></span><span>${x.num_favorites||0} 收藏</span></div>
+          ${tags.length ? `<div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+        </div>
+      </div>`
+    }).join('')
+  }
+  renderPager()
+}
+
+function renderPager() {
+  const pages = Math.ceil(total / PAGE_SIZE)
+  const p = document.getElementById('pager')
+  if (pages <= 1) { p.innerHTML = ''; return }
+  let html = `<button class="btn btn-ghost btn-sm" onclick="load(${currentPage-1})" ${currentPage===0?'disabled':''}>上一页</button>`
+  for (let i = 0; i < Math.min(pages, 10); i++) {
+    html += `<button class="btn btn-sm ${i===currentPage?'btn-primary':'btn-ghost'}" onclick="load(${i})">${i+1}</button>`
+  }
+  html += `<button class="btn btn-ghost btn-sm" onclick="load(${currentPage+1})" ${currentPage>=pages-1?'disabled':''}>下一页</button>`
+  p.innerHTML = html
+}
+
+loadSrcs(); load(0)
 </script>
 {% endblock %}
