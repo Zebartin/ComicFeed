@@ -1,57 +1,102 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ComicFeed</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #1a1d23;
-            --card: #242830;
-            --border: #2e323a;
-            --text: #c8c0b4;
-            --text-dim: #6b6560;
-            --teal: #0ea5a0;
-            --accent: #f0a500;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Geist', system-ui, sans-serif;
-            background: var(--bg); color: var(--text); min-height: 100vh;
-        }
-        nav {
-            display: flex; align-items: center; gap: 0.25rem;
-            padding: 0 1.5rem; background: #14161a;
-            border-bottom: 1px solid var(--border); height: 50px;
-        }
-        nav .brand {
-            font-family: 'Instrument Serif', Georgia, serif; font-style: italic;
-            font-size: 1.2rem; color: #e8e0d5; margin-right: 1.5rem; letter-spacing: 0.02em;
-        }
-        nav a {
-            color: var(--text-dim); text-decoration: none; padding: 0.5rem 0.85rem;
-            border-radius: 6px; font-size: 0.84rem; font-weight: 500; transition: all 0.15s;
-        }
-        nav a:hover, nav a.active { color: #e8e0d5; background: var(--card); }
-        .container { max-width: 1100px; margin: 1.5rem auto; padding: 0 1.25rem; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ComicFeed</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0d0f12;
+  --paper: #1b1e24;
+  --paper-light: #262a33;
+  --gold: #c9a050;
+  --gold-dim: rgba(201,160,80,.18);
+  --cream: #e2dbcd;
+  --cream-dim: #8a8478;
+  --red: #d45d5d;
+  --teal: #509c8f;
+  --radius: 4px;
+  --font: 'Inter', system-ui, sans-serif;
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-mono: 'DM Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font); font-size: 15px; line-height: 1.5;
+  background: var(--ink); color: var(--cream);
+  min-height: 100vh;
+}
+nav {
+  display: flex; align-items: center; gap: 2px;
+  height: 48px; padding: 0 20px;
+  background: #111318; border-bottom: 1px solid #1e2128;
+}
+nav .brand {
+  font-family: var(--font-display); font-style: italic; font-size: 18px;
+  color: var(--gold); margin-right: 24px; letter-spacing: .01em;
+}
+nav a {
+  color: var(--cream-dim); text-decoration: none;
+  padding: 6px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500;
+  transition: color .15s, background .15s;
+}
+nav a:hover, nav a.on { color: var(--cream); background: var(--paper-light); }
+main { max-width: 1040px; margin: 0 auto; padding: 28px 24px 80px; }
+
+/* shared */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 16px; border: none; border-radius: var(--radius);
+  font-family: var(--font); font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: all .12s;
+}
+.btn-primary { background: var(--teal); color: #fff; }
+.btn-primary:hover { filter: brightness(1.12); }
+.btn-gold { background: var(--gold); color: #111; }
+.btn-gold:hover { background: #d4aa55; }
+.btn-ghost { background: transparent; color: var(--cream-dim); border: 1px solid #2a2d35; }
+.btn-ghost:hover { background: var(--paper-light); color: var(--cream); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-xs { padding: 2px 8px; font-size: 11px; }
+
+input, select, textarea {
+  font-family: var(--font); font-size: 13px;
+  padding: 7px 10px; background: var(--ink); color: var(--cream);
+  border: 1px solid #2a2d35; border-radius: var(--radius);
+  outline: none; transition: border-color .15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--gold); }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--cream-dim); border-bottom: 1px solid #1e2128; font-weight: 500; }
+td { padding: 9px 12px; border-bottom: 1px solid #1a1d22; font-size: 13px; }
+tr:hover td { background: rgba(255,255,255,.015); }
+
+.page-title { font-family: var(--font-display); font-style: italic; font-size: 22px; color: var(--cream); margin-bottom: 20px; font-weight: 400; }
+
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(3px);
+  animation: fadeIn .18s ease;
+}
+.modal-overlay.on { display: flex; align-items: flex-start; justify-content: center; padding-top: 5vh; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+</style>
 </head>
 <body>
-    <nav>
-        <span class="brand">ComicFeed</span>
-        <a href="/">订阅</a>
-        <a href="/sources">源管理</a>
-        <a href="/galleries">画廊</a>
-        <a href="/queue">队列</a>
-        <a href="/settings">设置</a>
-    </nav>
-    <div class="container">
-        {% block content %}{% endblock %}
-    </div>
+<nav>
+  <span class="brand">ComicFeed</span>
+  <a href="/">订阅</a>
+  <a href="/sources">源</a>
+  <a href="/galleries">画廊</a>
+  <a href="/queue">队列</a>
+  <a href="/settings">设置</a>
+</nav>
+<main>
+{% block content %}{% endblock %}
+</main>
 </body>
 </html>
