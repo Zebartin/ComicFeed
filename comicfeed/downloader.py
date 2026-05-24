@@ -17,15 +17,23 @@ async def download_gallery(
     gallery_id: str,
     output_dir: str,
     cbz_max_pages: int = 0,
+    tracker: "DownloadTracker | None" = None,
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。"""
+    from comicfeed.hooks import Event, bus
+
     detail = await source.get_gallery(gallery_id)
     title = normalize_title(detail.title)
     total = detail.reported_pages
     if cbz_max_pages <= 0:
         cbz_max_pages = total
 
-    result = DownloadResult(gallery_id=gallery_id)
+    full_gid = f"{source.key}:{gallery_id}"
+    if tracker:
+        tracker.started(full_gid, title, total)
+
+    result = DownloadResult(gallery_id=full_gid)
+    downloaded = 0
 
     for vol_start in range(0, total, cbz_max_pages):
         vol_end = min(vol_start + cbz_max_pages, total)
@@ -35,7 +43,16 @@ async def download_gallery(
         with open(fpath, "wb") as f:
             pack_cbz(f, fname, detail, pages, start_page=vol_start + 1)
         result.files.append(fpath)
+        downloaded += len(pages)
+        if tracker:
+            tracker.progress(full_gid, downloaded)
 
+    if tracker:
+        tracker.finished(full_gid)
+
+    await bus.fire(Event("gallery.created", {
+        "gallery_id": full_gid, "title": title, "files": result.files,
+    }))
     return result
 
 

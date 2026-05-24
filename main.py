@@ -34,6 +34,9 @@ def main():
     except Exception:
         pass
 
+    from comicfeed.komga import register_komga_hook
+    register_komga_hook()
+
     config = {"auth_username": args.auth_user, "auth_password": args.auth_pass}
     app = create_app(config, source_manager=source_mgr)
 
