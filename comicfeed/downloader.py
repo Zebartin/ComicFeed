@@ -73,3 +73,26 @@ class DownloadPool:
                     return await download_gallery(source, gallery_id, output_dir, cbz_max_pages)
             else:
                 return await download_gallery(source, gallery_id, output_dir, cbz_max_pages)
+
+
+class DownloadTracker:
+    """追踪正在进行的下载任务。"""
+
+    def __init__(self):
+        self._tasks: dict[str, dict] = {}
+
+    def started(self, gallery_id: str, title: str, total_pages: int):
+        self._tasks[gallery_id] = {
+            "gallery_id": gallery_id, "title": title,
+            "total_pages": total_pages, "downloaded": 0,
+        }
+
+    def progress(self, gallery_id: str, downloaded: int):
+        if gallery_id in self._tasks:
+            self._tasks[gallery_id]["downloaded"] = downloaded
+
+    def finished(self, gallery_id: str):
+        self._tasks.pop(gallery_id, None)
+
+    def active(self) -> list[dict]:
+        return list(self._tasks.values())

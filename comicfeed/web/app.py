@@ -7,17 +7,24 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from comicfeed.downloader import DownloadTracker
 from comicfeed.source_manager import SourceManager
 from comicfeed.web.routes.galleries import router as gallery_router
+from comicfeed.web.routes.queue import router as queue_router
 from comicfeed.web.routes.settings import router as settings_router
 from comicfeed.web.routes.sources import router as src_router
 from comicfeed.web.routes.subscriptions import router as sub_router
 
 _source_manager: SourceManager | None = None
+_download_tracker: DownloadTracker | None = None
 
 
 def get_source_manager() -> SourceManager | None:
     return _source_manager
+
+
+def get_download_tracker() -> DownloadTracker | None:
+    return _download_tracker
 
 
 class BasicAuthMiddleware(BaseHTTPMiddleware):
@@ -62,11 +69,12 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def create_app(config: dict | None = None, source_manager: SourceManager | None = None) -> FastAPI:
-    global _source_manager
+def create_app(config: dict | None = None, source_manager: SourceManager | None = None, download_tracker: DownloadTracker | None = None) -> FastAPI:
+    global _source_manager, _download_tracker
     if config is None:
         config = {}
     _source_manager = source_manager or SourceManager()
+    _download_tracker = download_tracker or DownloadTracker()
     app = FastAPI()
 
     auth_user = config.get("auth_username", "")
@@ -81,6 +89,7 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     app.include_router(sub_router)
     app.include_router(src_router)
     app.include_router(gallery_router)
+    app.include_router(queue_router)
     app.include_router(settings_router)
 
     templates = Jinja2Templates(directory="comicfeed/web/templates")
