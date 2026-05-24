@@ -15,7 +15,9 @@ class GallerySummary:
     native_id: str
     title: str
     cover_url: str
-    page_count: int
+    web_url: str = ""
+    page_count: int = 0
+    num_favorites: int = 0
     tag_ids: list[int] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
 

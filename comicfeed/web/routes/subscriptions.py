@@ -110,8 +110,8 @@ async def check_subscription_now(sub_id: int):
             "new_galleries": [{
                 "native_id": g.native_id, "title": g.title,
                 "page_count": g.page_count, "cover_url": g.cover_url,
+                "web_url": g.web_url, "num_favorites": g.num_favorites,
                 "tags": g.tags[:6],
-                "web_url": f"https://nhentai.net/g/{g.native_id}/",
             } for g in new],
         }
 

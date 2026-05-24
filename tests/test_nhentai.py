@@ -75,7 +75,7 @@ def test_parse_search_response():
     assert result.items[0].native_id == "455819"
     assert result.items[0].title == "Sample Comic"
     assert result.items[0].cover_url == "https://t.nhentai.net/galleries/12345/cover.jpg"
-    assert result.items[0].page_count == 0  # search API 不含页数
+    assert result.items[0].page_count == 32
 
 
 def test_parse_gallery_response():
