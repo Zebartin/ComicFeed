@@ -48,11 +48,16 @@ class NhentaiSource(BaseSource):
             resp.raise_for_status()
             return self._parse_search_response(resp.json(), page)
 
+    @staticmethod
+    def _make_image_url(base: str, path: str) -> str:
+        """拼接图片 URL，兼容 path 有无前导 /。"""
+        return f"{base}{path}" if path.startswith("/") else f"{base}/{path}"
+
     def _parse_search_response(self, data: dict, page: int) -> SearchResult:
         items = []
         for item in data.get("result", []):
             thumbnail = item.get("thumbnail", "")
-            cover_url = f"https://t.nhentai.net{thumbnail}" if thumbnail else ""
+            cover_url = self._make_image_url("https://t.nhentai.net", thumbnail) if thumbnail else ""
             items.append(GallerySummary(
                 native_id=str(item.get("id", "")),
                 title=item.get("english_title") or item.get("japanese_title", ""),
@@ -76,7 +81,7 @@ class NhentaiSource(BaseSource):
         title = title_data.get("english") or title_data.get("pretty", "")
         cover = data.get("cover", {})
         cover_path = cover.get("path", "")
-        cover_url = f"https://t.nhentai.net{cover_path}" if cover_path else ""
+        cover_url = self._make_image_url("https://t.nhentai.net", cover_path) if cover_path else ""
 
         tags = [t.get("name", "") for t in data.get("tags", [])]
 
@@ -84,7 +89,7 @@ class NhentaiSource(BaseSource):
         for p in data.get("pages", []):
             path = p.get("path", "")
             if path:
-                page_urls.append(f"https://i.nhentai.net{path}")
+                page_urls.append(self._make_image_url("https://i.nhentai.net", path))
 
         return GalleryDetail(
             native_id=str(data.get("id", "")),
@@ -95,8 +100,16 @@ class NhentaiSource(BaseSource):
             reported_pages=len(page_urls),
         )
 
-    async def download_pages(self, gallery_id: str, page_range: slice):
-        raise NotImplementedError
+    async def download_pages(self, gallery_id: str, page_range: slice) -> list[bytes]:
+        detail = await self.get_gallery(gallery_id)
+        urls = detail.page_urls[page_range]
+        async with self._client() as client:
+            results = []
+            for url in urls:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                results.append(resp.content)
+        return results
 
     async def check_updates(self, gallery_id: str, last_known: dict) -> UpdateResult:
         return UpdateResult()

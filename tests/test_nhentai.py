@@ -104,3 +104,18 @@ async def test_search_returns_results(nhentai_credentials):
     assert first.title
     assert first.cover_url
     assert first.page_count > 0
+
+
+@pytest.mark.integration
+async def test_download_pages(nhentai_credentials):
+    """下载指定范围的页面图片。"""
+    source = NhentaiSource(credentials=nhentai_credentials)
+    # 使用一个小页数的画廊：325160 (39p)
+    gallery_id = "325160"
+    pages = await source.download_pages(gallery_id, slice(0, 2))
+    assert len(pages) == 2
+    for data in pages:
+        assert isinstance(data, bytes)
+        assert len(data) > 100
+        # 验证是 JPEG/PNG/WebP 图片
+        assert data[:3] in (b"\xff\xd8\xff", b"\x89PN", b"RIFF")
