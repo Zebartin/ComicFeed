@@ -35,6 +35,7 @@ async function load() {
             <td>${s.enabled ? '启用' : '停用'}</td>
             <td>
                 <button class="btn-sm" onclick="editSub(${s.id})">编辑</button>
+                <button class="btn-sm" onclick="checkSub(${s.id})">检查</button>
                 <button class="btn-sm btn-danger" onclick="delSub(${s.id})">删除</button>
             </td>
         </tr>`).join('')}</table>`
@@ -71,6 +72,11 @@ async function saveSub() {
     if (id) await api('/api/subscriptions/' + id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
     else await api('/api/subscriptions', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
     hideForm(); load()
+}
+async function checkSub(id) {
+    const r = await api('/api/subscriptions/' + id + '/check', {method:'POST'})
+    if (r.error) alert('检查失败: ' + r.error)
+    else alert('发现 ' + r.new_galleries.length + ' 个新画廊:\n' + r.new_galleries.map(g => g.title).join('\n'))
 }
 async function delSub(id) {
     if (confirm('确认删除？')) { await api('/api/subscriptions/' + id, {method:'DELETE'}); load() }
