@@ -43,7 +43,10 @@ async def download_gallery(
         with open(fpath, "wb") as f:
             pack_cbz(f, fname, detail, pages, start_page=vol_start + 1)
         result.files.append(fpath)
-        downloaded += len(pages)
+        for _ in pages:
+            downloaded += 1
+            if tracker and downloaded % 5 == 0:
+                tracker.progress(full_gid, downloaded)
         if tracker:
             tracker.progress(full_gid, downloaded)
 
@@ -53,6 +56,23 @@ async def download_gallery(
     await bus.fire(Event("gallery.created", {
         "gallery_id": full_gid, "title": title, "files": result.files,
     }))
+
+    # 写入数据库
+    from comicfeed.database import get_session
+    from comicfeed.models import Gallery
+    async with get_session() as session:
+        g = await session.get(Gallery, full_gid)
+        if g is None:
+            g = Gallery(id=full_gid, source_key=source.key, native_id=gallery_id,
+                        normalized_title=title, display_title=detail.title,
+                        reported_pages=total, actual_pages=downloaded)
+            session.add(g)
+        else:
+            g.actual_pages = downloaded
+            g.reported_pages = total
+        g.file_path = result.files[0] if result.files else None
+        await session.commit()
+
     return result
 
 

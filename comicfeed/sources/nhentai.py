@@ -60,7 +60,7 @@ class NhentaiSource(BaseSource):
             cover_url = self._make_image_url("https://t.nhentai.net", thumbnail) if thumbnail else ""
             items.append(GallerySummary(
                 native_id=str(item.get("id", "")),
-                title=item.get("english_title") or item.get("japanese_title", ""),
+                title=item.get("japanese_title") or item.get("english_title", ""),
                 cover_url=cover_url,
                 page_count=item.get("num_pages", 0),
             ))
