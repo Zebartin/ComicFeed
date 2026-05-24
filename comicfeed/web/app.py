@@ -87,26 +87,26 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
 
     @app.get("/", response_class=HTMLResponse)
     async def page_index(request: Request):
-        return templates.TemplateResponse("subscriptions.html", {"request": request})
+        return templates.TemplateResponse(request, "subscriptions.html")
 
     @app.get("/sources", response_class=HTMLResponse)
     async def page_sources(request: Request):
-        return templates.TemplateResponse("sources.html", {"request": request})
+        return templates.TemplateResponse(request, "sources.html")
 
     @app.get("/galleries", response_class=HTMLResponse)
     async def page_galleries(request: Request):
-        return templates.TemplateResponse("galleries.html", {"request": request})
+        return templates.TemplateResponse(request, "galleries.html")
 
     @app.get("/settings", response_class=HTMLResponse)
     async def page_settings(request: Request):
-        return templates.TemplateResponse("settings.html", {"request": request})
+        return templates.TemplateResponse(request, "settings.html")
 
     @app.get("/queue", response_class=HTMLResponse)
     async def page_queue(request: Request):
-        return templates.TemplateResponse("queue.html", {"request": request})
+        return templates.TemplateResponse(request, "queue.html")
 
     @app.get("/logs", response_class=HTMLResponse)
     async def page_logs(request: Request):
-        return templates.TemplateResponse("logs.html", {"request": request})
+        return templates.TemplateResponse(request, "logs.html")
 
     return app

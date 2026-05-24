@@ -89,3 +89,13 @@ async def test_delete_subscription(transport, auth, db_tables):
         assert r2.status_code == 204
         r3 = await client.get("/api/subscriptions", auth=auth)
         assert len(r3.json()) == 0
+
+
+async def test_page_routes_return_html(transport, auth):
+    """页面路由返回 HTML。"""
+    paths = ["/", "/sources", "/galleries", "/settings", "/queue", "/logs"]
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for path in paths:
+            resp = await client.get(path, auth=auth)
+            assert resp.status_code == 200
+            assert "text/html" in resp.headers["content-type"]
