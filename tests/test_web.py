@@ -93,7 +93,7 @@ async def test_delete_subscription(transport, auth, db_tables):
 
 async def test_page_routes_return_html(transport, auth):
     """页面路由返回 HTML。"""
-    paths = ["/", "/sources", "/galleries", "/settings", "/queue", "/logs"]
+    paths = ["/", "/sources", "/galleries", "/settings", "/queue", "/logs", "/notifications"]
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         for path in paths:
             resp = await client.get(path, auth=auth)
