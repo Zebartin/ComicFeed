@@ -62,9 +62,11 @@ class NhentaiSource(BaseSource):
             tids = item.get("tag_ids", [])
             tags = [_tn(t) for t in tids]
             nid = str(item.get("id", ""))
+            from comicfeed.cbz import normalize_title
+            raw_title = item.get("japanese_title") or item.get("english_title", "")
             items.append(GallerySummary(
                 native_id=nid,
-                title=item.get("japanese_title") or item.get("english_title", ""),
+                title=normalize_title(raw_title),
                 cover_url=cover_url,
                 web_url=f"https://nhentai.net/g/{nid}/",
                 page_count=item.get("num_pages", 0),
