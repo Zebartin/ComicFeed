@@ -65,17 +65,27 @@ class TagTranslator:
         logger.info("标签翻译数据库已更新 (%d 命名空间, %d 标签)", len(self._namespaces),
                      sum(len(v) for v in self._tags.values()))
 
+    # 需要在标签文本中保留 namespace 前缀的类型
+    _SHOW_NS = {"artist", "group", "character", "parody"}
+
+    def _format(self, ns: str, name: str) -> str:
+        """格式化标签：关键 namespace 保留前缀，其余省略。"""
+        if ns in self._SHOW_NS:
+            cn_ns = self._namespaces.get(ns, ns)
+            return f"{cn_ns}：{name}"
+        return name
+
     def translate(self, ns: str, name: str) -> str:
-        """翻译单个标签，返回中文名。不支持的返回原文。"""
-        cn_ns = self._namespaces.get(ns, ns)
+        """翻译单个标签。不支持的返回原文。"""
         if ns and ns in self._tags and name in self._tags[ns]:
-            return f"{cn_ns}：{self._tags[ns][name]}"
+            return self._format(ns, self._tags[ns][name])
         # 无 namespace 时，在所有 namespace 中搜索
         for tns, tmap in self._tags.items():
             if name in tmap:
-                cn_ns = self._namespaces.get(tns, tns)
-                return f"{cn_ns}：{tmap[name]}"
-        return f"{cn_ns}：{name}" if ns else name
+                return self._format(tns, tmap[name])
+        if ns:
+            return self._format(ns, name)
+        return name
 
 
 # 全局实例

@@ -21,10 +21,16 @@ def _make_tt() -> TagTranslator:
 
 
 def test_translate_known_tag():
-    """已知标签翻译为中文。"""
+    """已知标签翻译为中文，普通 namespace 省略前缀。"""
     tt = _make_tt()
-    assert tt.translate("tag", "full color") == "标签：全彩"
-    assert tt.translate("tag", "big breasts") == "标签：巨乳"
+    assert tt.translate("tag", "full color") == "全彩"
+    assert tt.translate("tag", "big breasts") == "巨乳"
+
+
+def test_artist_namespace_keeps_prefix():
+    """画师等关键 namespace 保留前缀。"""
+    tt = _make_tt()
+    assert tt.translate("artist", "inu") == "画师：犬"
 
 
 def test_translate_unknown_tag_returns_original():
@@ -35,11 +41,10 @@ def test_translate_unknown_tag_returns_original():
 
 
 def test_translate_with_namespace():
-    """命名空间也会翻译。"""
+    """命名空间也会翻译，关键 namespace 保留前缀。"""
     tt = _make_tt()
     result = tt.translate("artist", "inu")
-    assert "画师" in result
-    assert "犬" in result
+    assert result == "画师：犬"
 
 
 def test_translate_no_namespace_searches_all():
