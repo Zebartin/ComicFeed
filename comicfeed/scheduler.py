@@ -58,7 +58,9 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 if elapsed < sub.interval_minutes:
                     continue
 
-            source = source_manager.get_source(sub.source_key)
+            from comicfeed.credentials import get_source_credentials
+            creds = await get_source_credentials(sub.source_key)
+            source = source_manager.get_source(sub.source_key, credentials=creds)
             if source is None:
                 _log.warning("源不可用: %s", sub.source_key)
                 await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "not_found"}))
@@ -72,7 +74,16 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
 
             for item in new:
                 try:
-                    result = await download_pool.download(source, item.native_id, ".")
+                    from comicfeed.config import get_setting
+                    out_dir = await get_setting("download_path", ".")
+                    result = await download_pool.download(source, item.native_id, out_dir)
+                    # 写入订阅-画廊关联
+                    from comicfeed.models import SubscriptionGallery
+                    gid = f"{source.key}:{item.native_id}"
+                    sg = await session.get(SubscriptionGallery, (sub.id, gid))
+                    if sg is None:
+                        session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
+                        await session.commit()
                     await event_bus.fire(Event("gallery.created", {
                         "gallery_id": f"{source.key}:{item.native_id}",
                         "title": item.title,
