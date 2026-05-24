@@ -1,7 +1,7 @@
 """ComicFeed 启动入口。
 
 用法:
-    uv run python main.py              # 启动 Web 服务 + 调度器
+    uv run python main.py              # 启动 Web 服务
     uv run python main.py --host 0.0.0.0 --port 8080
 """
 import argparse
@@ -16,7 +16,7 @@ from comicfeed.source_manager import SourceManager
 from comicfeed.web.app import create_app
 
 
-async def main():
+def main():
     parser = argparse.ArgumentParser(description="ComicFeed")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
@@ -26,10 +26,9 @@ async def main():
     args = parser.parse_args()
 
     init_db(args.db)
-    await create_tables()
+    asyncio.run(create_tables())
 
     source_mgr = SourceManager()
-    # 加载内置源
     try:
         source_mgr.load_sources("comicfeed/sources")
     except Exception:
@@ -47,4 +46,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
