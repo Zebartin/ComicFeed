@@ -52,3 +52,29 @@ async def test_check_subscription_finds_new_galleries():
         new = await check_subscription(session, sub_id, source)
         assert len(new) == 1
         assert new[0].native_id == "2"
+
+
+async def test_dedup_within_batch():
+    """同批次内相似标题去重，保留页数多的。"""
+    init_db(":memory:")
+    await create_tables()
+
+    async with get_session() as session:
+        sub = Subscription(name="test", source_key="fake", query="test", mode="SEARCH")
+        session.add(sub)
+        await session.commit()
+        sub_id = sub.id
+
+    source = _FakeSource()
+    source.search_results = [
+        GallerySummary(native_id="1", title="(C97) My Comic [Digital]", cover_url="", page_count=32),
+        GallerySummary(native_id="2", title="My Comic [English]", cover_url="", page_count=30),
+        GallerySummary(native_id="3", title="Other Comic", cover_url="", page_count=20),
+    ]
+
+    async with get_session() as session:
+        new = await check_subscription(session, sub_id, source)
+        # 1 和 2 相似 → 保留页数多的 #1；3 不同 → 保留
+        assert len(new) == 2
+        ids = {g.native_id for g in new}
+        assert ids == {"1", "3"}

@@ -38,6 +38,20 @@ async def check_subscription(
         if f"{source.key}:{item.native_id}" not in existing:
             new.append(item)
 
+    # 同批次内标题去重
+    if len(new) > 1:
+        from comicfeed.dedup import find_similar_groups, resolve_duplicates
+        all_keep: set[str] = {g.native_id for g in new}
+        groups = find_similar_groups(new)
+        for group in groups:
+            candidates = [(g.native_id, g.page_count) for g in group]
+            keep = resolve_duplicates(candidates)
+            # 移除重复项
+            all_keep -= {g.native_id for g in group}
+            all_keep |= keep
+        new = [g for g in new if g.native_id in all_keep]
+        _log.info("去重: %d 组候选 → 保留 %d 个", len(groups), len(new))
+
     sub.last_checked_at = datetime.now()
     await session.commit()
 
