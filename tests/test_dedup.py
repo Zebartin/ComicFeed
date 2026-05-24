@@ -1,4 +1,4 @@
-from comicfeed.dedup import find_similar_groups
+from comicfeed.dedup import find_similar_groups, resolve_duplicates
 
 # 模拟搜索返回的摘要
 _Summary = lambda nid, title, pages: type("s", (), {"native_id": nid, "title": title, "page_count": pages, "cover_url": ""})()
@@ -34,7 +34,7 @@ def test_different_titles_separated():
         _Summary("3", "Totally Different Story", 20),
     ]
     groups = find_similar_groups(items)
-    assert groups == []  # 没有相似组，全部都是单独的
+    assert groups == []
 
 
 def test_mixed_groups():
@@ -47,3 +47,30 @@ def test_mixed_groups():
     groups = find_similar_groups(items)
     assert len(groups) == 1
     assert len(groups[0]) == 2
+
+
+# --- 阶段 2：页数比对 ---
+
+
+def test_resolve_duplicates_page_diff_within_threshold():
+    """页数差异 ≤15%，保留页数多的。"""
+    keep = resolve_duplicates([("a", 32), ("b", 30)])
+    assert keep == {"a"}
+
+
+def test_resolve_duplicates_page_diff_exceeds_threshold():
+    """页数差异 >15%，都保留。"""
+    keep = resolve_duplicates([("a", 32), ("b", 20)])
+    assert keep == {"a", "b"}
+
+
+def test_resolve_duplicates_same_pages_keep_newer_id():
+    """页数相同，保留 ID 较大的。"""
+    keep = resolve_duplicates([("100", 30), ("200", 30)])
+    assert keep == {"200"}
+
+
+def test_resolve_duplicates_three_candidates():
+    """多个候选中正确筛选。"""
+    keep = resolve_duplicates([("a", 30), ("b", 28), ("c", 20)])
+    assert keep == {"a", "c"}
