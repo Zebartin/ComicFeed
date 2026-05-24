@@ -29,13 +29,7 @@ class NhentaiSource(BaseSource):
         return None
 
     def _cookies(self) -> dict[str, str]:
-        """从凭证中获取 cookies（cf_clearance 等）。"""
-        cookies = {}
-        if self.credentials:
-            for cred in self.credentials:
-                if cred.credential_type == "cookie":
-                    cookies[cred.key] = cred.value
-        return cookies
+        return dict(self.credentials)
 
     def _client(self) -> AsyncSession:
         return AsyncSession(

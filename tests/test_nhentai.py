@@ -93,11 +93,10 @@ def test_parse_gallery_response():
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="需要 cf_clearance cookie 绕过 Cloudflare")
-async def test_search_returns_results():
-    """搜索返回 GallerySummary 列表（需要 cf_clearance cookie）。"""
-    source = NhentaiSource(proxy="http://localhost:8889")
-    result = await source.search("tag:full_color", page=1)
+async def test_search_returns_results(nhentai_credentials):
+    """搜索返回 GallerySummary 列表。"""
+    source = NhentaiSource(credentials=nhentai_credentials)
+    result = await source.search("full_color", page=1)
     assert len(result.items) > 0
     assert result.current_page == 1
     first = result.items[0]
