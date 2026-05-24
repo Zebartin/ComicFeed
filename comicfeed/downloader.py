@@ -34,21 +34,24 @@ async def download_gallery(
 
     result = DownloadResult(gallery_id=full_gid)
     downloaded = 0
+    CHUNK = 5  # 每批下载页数，便于更新进度
 
     for vol_start in range(0, total, cbz_max_pages):
         vol_end = min(vol_start + cbz_max_pages, total)
-        pages = await source.download_pages(gallery_id, slice(vol_start, vol_end))
+        vol_pages: list[bytes] = []
+        # 分批下载，每批之间更新进度
+        for chunk_start in range(vol_start, vol_end, CHUNK):
+            chunk_end = min(chunk_start + CHUNK, vol_end)
+            chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end))
+            vol_pages.extend(chunk)
+            downloaded += len(chunk)
+            if tracker:
+                tracker.progress(full_gid, downloaded)
         fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_end, total_pages=total)
         fpath = os.path.join(output_dir, fname)
         with open(fpath, "wb") as f:
-            pack_cbz(f, fname, detail, pages, start_page=vol_start + 1)
+            pack_cbz(f, fname, detail, vol_pages, start_page=vol_start + 1)
         result.files.append(fpath)
-        for _ in pages:
-            downloaded += 1
-            if tracker and downloaded % 5 == 0:
-                tracker.progress(full_gid, downloaded)
-        if tracker:
-            tracker.progress(full_gid, downloaded)
 
     if tracker:
         tracker.finished(full_gid)
@@ -64,7 +67,7 @@ async def download_gallery(
         g = await session.get(Gallery, full_gid)
         if g is None:
             g = Gallery(id=full_gid, source_key=source.key, native_id=gallery_id,
-                        normalized_title=title, display_title=detail.title,
+                        normalized_title=title, display_title=title,
                         reported_pages=total, actual_pages=downloaded)
             session.add(g)
         else:
