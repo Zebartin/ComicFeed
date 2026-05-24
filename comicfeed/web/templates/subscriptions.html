@@ -76,14 +76,18 @@
 
 .g-card .cover {
   position: relative; width: 100%; background: #f0ebe0; line-height: 0;
+  overflow: hidden; border-radius: var(--radius) var(--radius) 0 0;
 }
-.g-card .cover img { display: block; width: 100%; height: auto; }
+.g-card .cover img {
+  display: block; width: 100%; height: auto;
+  transition: transform .4s cubic-bezier(.22,1,.36,1);
+}
+.g-card:hover .cover img { transform: scale(1.05); }
 .g-card .cover .no-img {
   display: flex; align-items: center; justify-content: center; min-height: 200px;
   font-family: var(--font-serif); font-style: italic;
   font-size: 36px; color: var(--text-muted); opacity: .25;
 }
-.g-card:hover .cover img { transform: scale(1.03); }
 .g-card .cover .no-img {
   font-family: var(--font-serif); font-style: italic;
   font-size: 36px; color: var(--text-muted); opacity: .25;
