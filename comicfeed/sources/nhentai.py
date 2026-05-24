@@ -39,11 +39,11 @@ class NhentaiSource(BaseSource):
             cookies=self._cookies(),
         )
 
-    async def search(self, query: str, page: int) -> SearchResult:
+    async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
         async with self._client() as client:
             resp = await client.get(
                 f"{self._BASE}/api/v2/search",
-                params={"query": query, "page": page, "sort": "date"},
+                params={"query": query, "page": page, "sort": sort},
             )
             resp.raise_for_status()
             return self._parse_search_response(resp.json(), page)

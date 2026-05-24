@@ -11,7 +11,7 @@ class _ValidSource(BaseSource):
     domains = ["test.com"]
     auth_schema = AuthSchema.NONE
 
-    async def search(self, query: str, page: int):
+    async def search(self, query: str, page: int, sort: str = "date"):
         raise NotImplementedError
 
     async def get_gallery(self, gallery_id: str):

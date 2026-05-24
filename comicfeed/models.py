@@ -32,8 +32,9 @@ class Subscription(Base):
     query: Mapped[str] = mapped_column(Text)
     mode: Mapped[str] = mapped_column(String(32), default="SEARCH")
     interval_minutes: Mapped[int] = mapped_column(Integer, default=360)
-    cbz_max_pages: Mapped[int] = mapped_column(Integer, default=30)
+    cbz_max_pages: Mapped[int] = mapped_column(Integer, default=30)  # 0 = 不分卷
     cross_source_dedup: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort: Mapped[str] = mapped_column(String(32), default="date")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

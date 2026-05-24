@@ -21,7 +21,7 @@ async def check_subscription(
     if sub is None:
         return []
 
-    result = await source.search(sub.query, page=1)
+    result = await source.search(sub.query, page=1, sort=sub.sort)
     if not result.items:
         return []
 

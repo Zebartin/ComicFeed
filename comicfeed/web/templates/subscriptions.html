@@ -10,8 +10,9 @@
     <p><label>源: <select id="source_key"></select></label></p>
     <p><label>查询串: <input id="query" required></label></p>
     <p><label>模式: <select id="mode"><option>SEARCH</option><option>SPECIFIC_GALLERY</option></select></label></p>
+    <p><label>排序: <select id="sort"><option value="date">最新</option><option value="popular-today">今日热门</option><option value="popular-week">本周热门</option><option value="popular">全部热门</option></select></label></p>
     <p><label>检查间隔(分钟): <input id="interval" type="number" value="360"></label></p>
-    <p><label>CBZ分卷上限: <input id="cbz_max_pages" type="number" value="30"></label></p>
+    <p><label>CBZ分卷上限: <input id="cbz_max_pages" type="number" value="30"> (0=不分卷)</label></p>
     <p><label>启用: <input id="enabled" type="checkbox" checked></label></p>
     <button class="btn-primary" onclick="saveSub()">保存</button>
     <button type="button" onclick="hideForm()">取消</button>
@@ -55,6 +56,7 @@ async function editSub(id) {
     document.getElementById('mode').value = sub.mode
     document.getElementById('interval').value = sub.interval_minutes
     document.getElementById('cbz_max_pages').value = sub.cbz_max_pages
+    document.getElementById('sort').value = sub.sort || 'date'
     document.getElementById('enabled').checked = sub.enabled
     document.getElementById('form').style.display = 'block'
 }
@@ -67,6 +69,7 @@ async function saveSub() {
         mode: document.getElementById('mode').value,
         interval_minutes: parseInt(document.getElementById('interval').value),
         cbz_max_pages: parseInt(document.getElementById('cbz_max_pages').value),
+        sort: document.getElementById('sort').value,
         enabled: document.getElementById('enabled').checked,
     }
     if (id) await api('/api/subscriptions/' + id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})

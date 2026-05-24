@@ -15,6 +15,7 @@ class SubCreate(BaseModel):
     interval_minutes: int = 360
     cbz_max_pages: int = 30
     cross_source_dedup: bool = True
+    sort: str = "date"
     enabled: bool = True
 
 
@@ -26,6 +27,7 @@ class SubUpdate(BaseModel):
     interval_minutes: int | None = None
     cbz_max_pages: int | None = None
     cross_source_dedup: bool | None = None
+    sort: str | None = None
     enabled: bool | None = None
 
 
@@ -111,5 +113,5 @@ def _sub_to_dict(s: Subscription) -> dict:
         "id": s.id, "name": s.name, "source_key": s.source_key,
         "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
         "cbz_max_pages": s.cbz_max_pages, "cross_source_dedup": s.cross_source_dedup,
-        "enabled": s.enabled,
+        "sort": s.sort, "enabled": s.enabled,
     }

@@ -42,7 +42,7 @@ class _MockSource(BaseSource):
         self.active = 0
         self.max_active = 0
 
-    async def search(self, query, page) -> SearchResult:
+    async def search(self, query, page, sort="date") -> SearchResult:
         return SearchResult()
 
     async def get_gallery(self, gallery_id) -> GalleryDetail:

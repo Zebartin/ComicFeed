@@ -12,7 +12,7 @@ class _FakeSource(BaseSource):
     auth_schema = AuthSchema.NONE
     search_results: list[GallerySummary] = []
 
-    async def search(self, query, page) -> SearchResult:
+    async def search(self, query, page, sort="date") -> SearchResult:
         return SearchResult(items=self.search_results, total_pages=1, current_page=1)
 
     async def get_gallery(self, gallery_id):
