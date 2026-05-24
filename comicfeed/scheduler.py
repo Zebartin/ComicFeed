@@ -42,11 +42,18 @@ async def check_subscription(
 
 
 async def run_all_checks(source_manager: SourceManager, download_pool):
-    """遍历所有启用的订阅，检查并下载新画廊。"""
+    """遍历所有启用的订阅，仅检查间隔已到的。"""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     async with get_session() as session:
         subs = (await session.scalars(select(Subscription).where(Subscription.enabled == True))).all()
 
         for sub in subs:
+            # 未到检查间隔，跳过
+            if sub.last_checked_at and sub.interval_minutes > 0:
+                elapsed = (now - sub.last_checked_at).total_seconds() / 60
+                if elapsed < sub.interval_minutes:
+                    continue
+
             source = source_manager.get_source(sub.source_key)
             if source is None:
                 await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "not_found"}))
@@ -73,7 +80,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                     }))
 
 
-def create_scheduler(source_manager: SourceManager, download_pool, interval_minutes: int = 360) -> AsyncIOScheduler:
+def create_scheduler(source_manager: SourceManager, download_pool, interval_minutes: int = 10) -> AsyncIOScheduler:
     """创建 APScheduler 实例，注册定时检查任务。"""
     scheduler = AsyncIOScheduler()
     scheduler.add_job(

@@ -258,15 +258,24 @@ async function delSub(id) { if (confirm('确认删除？')) { await api('/api/su
 
 /* Results */
 async function checkSub(id) {
-  const sub = await api('/api/subscriptions/'+id)
-  const r = await api('/api/subscriptions/'+id+'/check', {method:'POST'})
-  if (r.error) { alert(r.error); return }
-  results = r.new_galleries || []; current = r.subscription; picked.clear()
+  // 立即弹出面板，显示加载状态
+  $('res-title').textContent = '检查中…'
+  $('res-meta').textContent = ''
+  $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&hellip;</div><h3>正在搜索</h3><p>请稍候…</p></div>'
+  $('overlay').classList.add('on')
+  $('sel-info').textContent = ''
+  picked.clear(); results = []
 
-  $('res-title').textContent = '检查结果'
-  $('res-meta').textContent = `${r.subscription.name} · ${r.subscription.source_key} · 查询: ${r.subscription.query || '(空)'}`
+  try {
+    const sub = await api('/api/subscriptions/'+id)
+    $('res-meta').textContent = `${sub.name} · ${sub.source_key} · 查询: ${sub.query || '(空)'}`
+    const r = await api('/api/subscriptions/'+id+'/check', {method:'POST'})
+    if (r.error) { $('res-title').textContent = '出错了'; $('res-body').innerHTML = '<div class="empty-state"><p>'+r.error+'</p></div>'; return }
+    results = r.new_galleries || []; current = r.subscription; picked.clear()
 
-  if (!results.length) {
+    $('res-title').textContent = '检查结果'
+
+    if (!results.length) {
     $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&para;</div><h3>没有新发现</h3><p>所有匹配的画廊都已下载</p></div>'
   } else {
     $('res-body').innerHTML = results.map((g,i) => `\n        <div class="g-card" id="gc-${i}">
@@ -283,7 +292,11 @@ async function checkSub(id) {
         </div>
       </div>`).join('')
   }
-  $('overlay').classList.add('on'); updateSel()
+  updateSel()
+  } catch(e) {
+    $('res-title').textContent = '出错了'
+    $('res-body').innerHTML = '<div class="empty-state"><p style="color:var(--red)">'+e.message+'</p></div>'
+  }
 }
 
 function openNhentai(ev, nid) {

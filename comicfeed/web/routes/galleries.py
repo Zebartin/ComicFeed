@@ -16,6 +16,7 @@ class DownloadRequest(BaseModel):
 
 _SORT_FIELDS = {
     "date": Gallery.downloaded_at,
+    "id": Gallery.id,
     "pages": Gallery.reported_pages,
     "favorites": Gallery.num_favorites,
     "title": Gallery.display_title,

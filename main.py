@@ -50,10 +50,17 @@ def main():
     from comicfeed.komga import register_komga_hook
     register_komga_hook()
 
+    from comicfeed.downloader import DownloadPool
+    from comicfeed.scheduler import create_scheduler
+    download_pool = DownloadPool(max_workers=5)
+    scheduler = create_scheduler(source_mgr, download_pool)
+    scheduler.start()
+
     config = {"auth_username": args.auth_user, "auth_password": args.auth_pass}
     app = create_app(config, source_manager=source_mgr)
 
     print(f"ComicFeed 启动: http://{args.host}:{args.port}")
+    print(f"  定时检查: 每 10 分钟 (按订阅间隔执行)")
     if args.auth_pass:
         print(f"  用户名: {args.auth_user}")
 
