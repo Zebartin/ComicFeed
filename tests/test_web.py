@@ -99,3 +99,21 @@ async def test_page_routes_return_html(transport, auth):
             resp = await client.get(path, auth=auth)
             assert resp.status_code == 200
             assert "text/html" in resp.headers["content-type"]
+
+
+async def test_check_subscription_now(transport, auth, db_tables):
+    """手动触发订阅检查。"""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post("/api/subscriptions", json={"name": "测试", "source_key": "nhentai", "query": "test", "mode": "SEARCH"}, auth=auth)
+        sub_id = r.json()["id"]
+        r2 = await client.post(f"/api/subscriptions/{sub_id}/check", auth=auth)
+        assert r2.status_code == 200
+        data = r2.json()
+        assert "new_galleries" in data or "error" in data
+
+
+async def test_download_by_id(transport, auth, db_tables):
+    """按 Gallery ID 手动下载。"""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.post("/api/galleries/download", json={"source_key": "nhentai", "gallery_id": "325160"}, auth=auth)
+        assert r.status_code in (200, 202)  # 200=完成 202=后台排队

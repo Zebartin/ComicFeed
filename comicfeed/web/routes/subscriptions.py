@@ -88,6 +88,22 @@ async def delete_subscription(sub_id: int):
         await session.commit()
 
 
+@router.post("/{sub_id}/check")
+async def check_subscription_now(sub_id: int):
+    from comicfeed.web.app import get_source_manager
+    async with get_session() as session:
+        sub = await session.get(Subscription, sub_id)
+        if sub is None:
+            raise HTTPException(404, "未找到")
+        mgr = get_source_manager()
+        source = mgr.get_source(sub.source_key) if mgr else None
+        if source is None:
+            return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
+        from comicfeed.scheduler import check_subscription
+        new = await check_subscription(session, sub_id, source)
+        return {"new_galleries": [{"native_id": g.native_id, "title": g.title} for g in new]}
+
+
 def _sub_to_dict(s: Subscription) -> dict:
     return {
         "id": s.id, "name": s.name, "source_key": s.source_key,
