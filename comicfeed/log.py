@@ -1,51 +1,50 @@
 """项目日志模块：同时输出到控制台和数据库。"""
 import logging
+import sqlite3
 import sys
+import threading
 from datetime import datetime
 
-_sqlite_handler = None
+_db_path: str | None = None
 
-# 控制台 handler
 _console = logging.StreamHandler(sys.stdout)
-_console.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"))
+_console.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"
+))
 
 
 class DBLogHandler(logging.Handler):
-    """将 WARNING 及以上日志写入数据库。"""
+    """将 WARNING 及以上日志写入数据库（独立连接，避免事件循环问题）。"""
 
     def emit(self, record):
+        if _db_path is None:
+            return
         try:
-            from comicfeed.database import get_session
-            from comicfeed.models import SystemLog
-            import asyncio
-
-            async def _write():
-                async with get_session() as s:
-                    s.add(SystemLog(
-                        timestamp=datetime.utcnow(),
-                        level=record.levelname,
-                        source=record.name,
-                        message=self.format(record),
-                    ))
-                    await s.commit()
-
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(_write())
-            except RuntimeError:
-                pass
+            conn = sqlite3.connect(_db_path)
+            conn.execute(
+                "INSERT INTO system_log (timestamp, level, source, message) VALUES (?, ?, ?, ?)",
+                (datetime.now().isoformat(), record.levelname, record.name, self.format(record)),
+            )
+            conn.commit()
+            conn.close()
         except Exception:
             pass
 
 
-def setup(level: int = logging.INFO):
+def setup(level: int = logging.INFO, db_path: str | None = None):
+    global _db_path
+    _db_path = db_path
+
     root = logging.getLogger()
     root.setLevel(level)
+    root.handlers.clear()
     root.addHandler(_console)
-    db = DBLogHandler()
-    db.setLevel(logging.WARNING)
-    db.setFormatter(logging.Formatter("%(message)s"))
-    root.addHandler(db)
+
+    if db_path:
+        db = DBLogHandler()
+        db.setLevel(logging.WARNING)
+        db.setFormatter(logging.Formatter("%(message)s"))
+        root.addHandler(db)
 
 
 def get(name: str) -> logging.Logger:

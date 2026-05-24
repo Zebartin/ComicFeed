@@ -70,7 +70,7 @@ async def download_gallery(
     from comicfeed.database import get_session
     from comicfeed.models import Gallery
     import json
-    now = datetime.utcnow()
+    now = datetime.now()
     async with get_session() as session:
         g = await session.get(Gallery, full_gid)
         if g is None:

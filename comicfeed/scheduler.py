@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
@@ -38,7 +38,7 @@ async def check_subscription(
         if f"{source.key}:{item.native_id}" not in existing:
             new.append(item)
 
-    sub.last_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    sub.last_checked_at = datetime.now()
     await session.commit()
 
     _log.info("订阅 [%s] 检查完成: %d 个新画廊", sub.name, len(new))
@@ -47,7 +47,7 @@ async def check_subscription(
 
 async def run_all_checks(source_manager: SourceManager, download_pool):
     """遍历所有启用的订阅，仅检查间隔已到的。"""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now()
     async with get_session() as session:
         subs = (await session.scalars(select(Subscription).where(Subscription.enabled == True))).all()
 

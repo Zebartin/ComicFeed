@@ -92,7 +92,7 @@ class SystemLog(Base):
     __tablename__ = "system_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     level: Mapped[str] = mapped_column(String(16))
     source: Mapped[str] = mapped_column(String(64))
     message: Mapped[str] = mapped_column(Text)

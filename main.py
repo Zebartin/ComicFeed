@@ -26,8 +26,9 @@ def main():
     args = parser.parse_args()
 
     from comicfeed.log import setup
-    setup()
     init_db(args.db)
+    # 日志模块用独立 SQLite 连接写库，避免异步事件循环问题
+    setup(db_path=args.db if args.db != ":memory:" else None)
     asyncio.run(create_tables())
 
     # 初始化加密密钥（持久化到数据库）
