@@ -16,6 +16,8 @@ class GallerySummary:
     title: str
     cover_url: str
     page_count: int
+    tag_ids: list[int] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass

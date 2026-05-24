@@ -58,11 +58,16 @@ class NhentaiSource(BaseSource):
         for item in data.get("result", []):
             thumbnail = item.get("thumbnail", "")
             cover_url = self._make_image_url("https://t.nhentai.net", thumbnail) if thumbnail else ""
+            from comicfeed.nhentai_tags import get_tag_name as _tn
+            tids = item.get("tag_ids", [])
+            tags = [_tn(t) for t in tids]
             items.append(GallerySummary(
                 native_id=str(item.get("id", "")),
                 title=item.get("japanese_title") or item.get("english_title", ""),
                 cover_url=cover_url,
-                page_count=item.get("num_pages", 0),
+                page_count=0,
+                tag_ids=tids,
+                tags=[t for t in tags if t],
             ))
         return SearchResult(
             items=items,

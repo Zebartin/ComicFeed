@@ -104,20 +104,15 @@ async def check_subscription_now(sub_id: int):
         if source is None:
             return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
         from comicfeed.scheduler import check_subscription
-        import asyncio
         new = await check_subscription(session, sub_id, source)
-        # 并行获取每个新画廊的详情（标签、收藏数、准确页数）
-        details = await asyncio.gather(*[source.get_gallery(g.native_id) for g in new], return_exceptions=True)
-        galleries = []
-        for i, g in enumerate(new):
-            d = details[i]
-            if isinstance(d, Exception):
-                galleries.append({"native_id": g.native_id, "title": g.title, "page_count": g.page_count, "cover_url": g.cover_url, "favorites": 0, "tags": []})
-            else:
-                galleries.append({"native_id": d.native_id, "title": d.title, "page_count": d.reported_pages, "cover_url": d.cover_url, "favorites": getattr(d, "num_favorites", 0), "tags": d.tags, "web_url": d.web_url})
         return {
             "subscription": {"id": sub.id, "name": sub.name, "source_key": sub.source_key, "query": sub.query},
-            "new_galleries": galleries,
+            "new_galleries": [{
+                "native_id": g.native_id, "title": g.title,
+                "page_count": g.page_count, "cover_url": g.cover_url,
+                "tags": g.tags[:6],
+                "web_url": f"https://nhentai.net/g/{g.native_id}/",
+            } for g in new],
         }
 
 

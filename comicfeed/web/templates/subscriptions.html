@@ -275,7 +275,7 @@ async function checkSub(id) {
           <div class="no-img" style="${g.cover_url?'display:none':'display:flex'}">&mdash;</div>
           <div class="sel"></div>
         </div>
-        <div class="info" onclick="event.stopPropagation();window.open('${g.web_url||'https://nhentai.net/g/'+g.native_id}','_blank')" style="cursor:pointer" title="在 nhentai 打开">
+        <div class="info" onclick="openNhentai(event,this.dataset.nid)" data-nid="${g.native_id}" style="cursor:pointer" title="在 nhentai 打开">
           <div class="gid">#${esc(g.native_id)}</div>
           <div class="title">${esc(g.title)}</div>
           <div class="meta"><span>${g.page_count} 页</span><span class="dot"></span><span>${g.favorites||0} 收藏</span></div>
@@ -284,6 +284,11 @@ async function checkSub(id) {
       </div>`).join('')
   }
   $('overlay').classList.add('on'); updateSel()
+}
+
+function openNhentai(ev, nid) {
+  ev.stopPropagation()
+  window.open('https://nhentai.net/g/' + nid + '/', '_blank')
 }
 
 function toggleCard(id, idx) {
