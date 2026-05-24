@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>源管理</h2>
+<div id="list"><p>加载中...</p></div>
+<script>
+async function load() {
+    const r = await fetch('/api/sources')
+    const srcs = await r.json()
+    document.getElementById('list').innerHTML = '<table>' +
+        '<tr><th>Key</th><th>名称</th><th>版本</th><th>域名</th><th>认证方式</th></tr>' +
+        srcs.map(s => `<tr><td>${s.key}</td><td>${s.name}</td><td>${s.version}</td><td>${s.domains.join(', ')}</td><td>${s.auth_schema}</td></tr>`).join('') +
+        '</table>'
+}
+load()
+</script>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>全局设置</h2>
+<div id="list"><p>加载中...</p></div>
+<script>
+async function load() {
+    const r = await fetch('/api/settings')
+    const s = await r.json()
+    document.getElementById('list').innerHTML = Object.entries(s).map(([k,v]) =>
+        `<p><label>${k}: <input id="${k}" value="${v||''}"> <button onclick="save('${k}')">保存</button></label></p>`
+    ).join('')
+}
+async function save(key) {
+    await fetch('/api/settings/' + key + '?value=' + encodeURIComponent(document.getElementById(key).value), {method:'PUT'})
+    alert('已保存')
+}
+load()
+</script>
+{% endblock %}

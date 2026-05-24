@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>画廊</h2>
+<div id="list"><p>加载中...</p></div>
+<script>
+async function load() {
+    const r = await fetch('/api/galleries?limit=100')
+    const gals = await r.json()
+    document.getElementById('list').innerHTML = gals.length === 0 ? '<p>暂无</p>' :
+        '<table><tr><th>ID</th><th>源</th><th>标题</th><th>页数</th></tr>' +
+        gals.map(g => `<tr><td>${g.native_id}</td><td>${g.source_key}</td><td>${g.display_title}</td><td>${g.reported_pages}</td></tr>`).join('') +
+        '</table>'
+}
+load()
+</script>
+{% endblock %}

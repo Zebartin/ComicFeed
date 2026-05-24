@@ -73,8 +73,17 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
 
     templates = Jinja2Templates(directory="comicfeed/web/templates")
 
-    @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request):
-        return templates.TemplateResponse("base.html", {"request": request, "active": "subs"})
+    _pages = {
+        "/": "subscriptions.html",
+        "/sources": "sources.html",
+        "/galleries": "galleries.html",
+        "/settings": "settings.html",
+        "/queue": "queue.html",
+        "/logs": "logs.html",
+    }
+    for path, tmpl in _pages.items():
+        @app.get(path, response_class=HTMLResponse, name=f"page_{path.strip('/') or 'index'}")
+        async def _page(request: Request, _tmpl=tmpl):
+            return templates.TemplateResponse(_tmpl, {"request": request})
 
     return app
