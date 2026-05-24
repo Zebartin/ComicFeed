@@ -107,8 +107,12 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
 def create_scheduler(source_manager: SourceManager, download_pool, interval_minutes: int = 10) -> AsyncIOScheduler:
     """创建 APScheduler 实例，注册定时检查任务。"""
     scheduler = AsyncIOScheduler()
+
+    async def _job():
+        await run_all_checks(source_manager, download_pool)
+
     scheduler.add_job(
-        lambda: run_all_checks(source_manager, download_pool),
+        _job,
         "interval",
         minutes=interval_minutes,
         id="check_all_subscriptions",
