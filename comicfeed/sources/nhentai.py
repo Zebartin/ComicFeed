@@ -100,6 +100,7 @@ class NhentaiSource(BaseSource):
             page_urls=page_urls,
             tags=tags,
             reported_pages=len(page_urls),
+            num_favorites=data.get("num_favorites", 0),
         )
 
     async def download_pages(self, gallery_id: str, page_range: slice) -> list[bytes]:

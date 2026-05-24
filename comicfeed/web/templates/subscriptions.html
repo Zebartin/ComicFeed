@@ -58,7 +58,6 @@
 /* ── Gallery Card ── */
 .g-card {
   background: #fcfaf7; border: 2px solid var(--border);
-  border-radius: var(--radius);
   cursor: pointer; transition: all var(--transition);
   position: relative; user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -76,13 +75,8 @@
 
 .g-card .cover {
   position: relative; width: 100%; background: #f0ebe0; line-height: 0;
-  overflow: hidden; border-radius: var(--radius) var(--radius) 0 0;
 }
-.g-card .cover img {
-  display: block; width: 100%; height: auto;
-  transition: transform .4s cubic-bezier(.22,1,.36,1);
-}
-.g-card:hover .cover img { transform: scale(1.05); }
+.g-card .cover img { display: block; width: 100%; height: auto; }
 .g-card .cover .no-img {
   display: flex; align-items: center; justify-content: center; min-height: 200px;
   font-family: var(--font-serif); font-style: italic;
@@ -130,6 +124,8 @@
   font-size: 11px; color: var(--text-muted); margin-top: 8px;
   display: flex; align-items: center; gap: 6px;
 }
+.tags { display:flex;flex-wrap:wrap;gap:4px;margin-top:8px }
+.tag { font-size:10px;color:var(--cream-dim);background:#f0ebe0;padding:2px 6px;border-radius:3px;white-space:nowrap }
 .g-card .info .meta .dot {
   width: 3px; height: 3px; background: var(--text-muted); border-radius: 50%;
 }
@@ -273,17 +269,17 @@ async function checkSub(id) {
   if (!results.length) {
     $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&para;</div><h3>没有新发现</h3><p>所有匹配的画廊都已下载</p></div>'
   } else {
-    $('res-body').innerHTML = results.map((g,i) => `
-      <div class="g-card" id="gc-${i}" onclick="toggleCard('${g.native_id}',${i})">
-        <div class="cover">
+    $('res-body').innerHTML = results.map((g,i) => `\n        <div class="g-card" id="gc-${i}">
+        <div class="cover" onclick="toggleCard('${g.native_id}',${i})">
           ${g.cover_url ? `<img src="${g.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
           <div class="no-img" style="${g.cover_url?'display:none':'display:flex'}">&mdash;</div>
           <div class="sel"></div>
         </div>
-        <div class="info">
+        <div class="info" onclick="event.stopPropagation();window.open('${g.web_url||'https://nhentai.net/g/'+g.native_id}','_blank')" style="cursor:pointer" title="在 nhentai 打开">
           <div class="gid">#${esc(g.native_id)}</div>
           <div class="title">${esc(g.title)}</div>
-          <div class="meta"><span>${g.page_count} 页</span><span class="dot"></span><span>${current.source_key}</span></div>
+          <div class="meta"><span>${g.page_count} 页</span><span class="dot"></span><span>${g.favorites||0} 收藏</span></div>
+          ${g.tags&&g.tags.length?`<div class="tags">${g.tags.slice(0,6).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
         </div>
       </div>`).join('')
   }

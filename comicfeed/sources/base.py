@@ -34,6 +34,7 @@ class GalleryDetail:
     page_urls: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     reported_pages: int = 0
+    num_favorites: int = 0
 
 
 @dataclass
