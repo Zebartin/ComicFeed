@@ -237,7 +237,7 @@ async function load() {
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 
 /* Form */
-function openForm() { $('sub-id').value=''; $('form').reset(); $('form').classList.add('on') }
+function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages'].forEach(k=>$(k).value=''); $('form').classList.add('on') }
 function closeForm() { $('form').classList.remove('on') }
 async function editSub(id) {
   const s = await api('/api/subscriptions/'+id); $('sub-id').value = id

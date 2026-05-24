@@ -25,12 +25,22 @@ async def list_galleries(source_key: str | None = None, limit: int = 50, offset:
         return [
             {
                 "id": g.id, "source_key": g.source_key, "native_id": g.native_id,
-                "display_title": g.display_title, "normalized_title": g.normalized_title,
+                "display_title": g.display_title, "cover_url": g.cover_url,
+                "tags": _parse_tags(g.tags), "num_favorites": g.num_favorites,
                 "reported_pages": g.reported_pages, "actual_pages": g.actual_pages,
                 "file_path": g.file_path,
+                "web_url": f"https://nhentai.net/g/{g.native_id}/",
             }
             for g in galleries
         ]
+
+
+def _parse_tags(raw: str) -> list[str]:
+    import json
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
 @router.post("/download", status_code=202)

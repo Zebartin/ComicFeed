@@ -63,16 +63,23 @@ async def download_gallery(
     # 写入数据库
     from comicfeed.database import get_session
     from comicfeed.models import Gallery
+    import json
     async with get_session() as session:
         g = await session.get(Gallery, full_gid)
         if g is None:
             g = Gallery(id=full_gid, source_key=source.key, native_id=gallery_id,
                         normalized_title=title, display_title=title,
+                        cover_url=detail.cover_url,
+                        tags=json.dumps(detail.tags, ensure_ascii=False),
+                        num_favorites=detail.num_favorites,
                         reported_pages=total, actual_pages=downloaded)
             session.add(g)
         else:
             g.actual_pages = downloaded
             g.reported_pages = total
+            g.cover_url = detail.cover_url
+            g.tags = json.dumps(detail.tags, ensure_ascii=False)
+            g.num_favorites = detail.num_favorites
         g.file_path = result.files[0] if result.files else None
         await session.commit()
 

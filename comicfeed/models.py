@@ -50,6 +50,9 @@ class Gallery(Base):
     native_id: Mapped[str] = mapped_column(String(128))
     normalized_title: Mapped[str] = mapped_column(Text)
     display_title: Mapped[str] = mapped_column(Text)
+    cover_url: Mapped[str] = mapped_column(Text, default="")
+    tags: Mapped[str] = mapped_column(Text, default="")  # JSON 字符串
+    num_favorites: Mapped[int] = mapped_column(Integer, default=0)
     reported_pages: Mapped[int] = mapped_column(Integer, default=0)
     actual_pages: Mapped[int] = mapped_column(Integer, default=0)
     file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
