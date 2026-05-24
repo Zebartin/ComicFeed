@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.setup-intro { text-align: center; padding: 40px 0 32px; }
+.setup-intro h1 { font-family: var(--font-serif); font-style: italic; font-size: 28px; color: var(--text); margin-bottom: 8px; }
+.setup-intro p { color: var(--text-muted); font-size: 14px; }
+.checklist { max-width: 560px; margin: 0 auto; }
+.check-item { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.check-item .icon { font-size: 20px; flex-shrink: 0; width: 32px; text-align: center; }
+.check-item .icon.ok { color: var(--accent); }
+.check-item .icon.no { color: var(--text-muted); }
+.check-item .info { flex: 1; }
+.check-item .info .label { font-size: 14px; font-weight: 500; color: var(--text); }
+.check-item .info .hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.check-item .action a { font-size: 12px; color: var(--gold); text-decoration: none; font-weight: 500; }
+.check-item .action a:hover { text-decoration: underline; }
+.done-banner { text-align: center; padding: 32px; margin-top: 24px; background: var(--accent-light); border-radius: var(--radius-lg); }
+.done-banner h2 { font-size: 18px; color: var(--accent); margin-bottom: 6px; }
+.done-banner p { font-size: 13px; color: var(--text-muted); }
+.done-banner a { color: var(--gold); font-weight: 500; }
+</style>
+
+<div class="setup-intro">
+  <h1>欢迎使用 ComicFeed</h1>
+  <p>完成以下配置后即可开始订阅和下载漫画</p>
+</div>
+
+<div class="checklist" id="checklist"></div>
+<div id="done"></div>
+
+<script>
+const STEPS = [
+  { key: 'download_path', label: '下载路径', hint: 'CBZ 文件的保存位置', link: '/settings' },
+  { key: 'source_credentials', label: '源凭证', hint: 'nhentai 等源需要的 Cookie 或 Token', link: '/sources' },
+  { key: 'komga', label: 'Komga 集成', hint: '下载后自动触发 Komga 扫描', link: '/settings' },
+  { key: 'notifications', label: '通知', hint: 'Webhook 或 Email 通知', link: '/notifications' },
+]
+
+async function load() {
+  const r = await fetch('/api/setup/status'); const s = await r.json()
+  let html = ''
+  for (const step of STEPS) {
+    const ok = s[step.key]
+    html += `<div class="check-item">
+      <div class="icon ${ok?'ok':'no'}">${ok?'&#10003;':'&#9679;'}</div>
+      <div class="info"><div class="label">${step.label}</div><div class="hint">${step.hint}</div></div>
+      <div class="action">${ok ? '' : `<a href="${step.link}">去配置</a>`}</div>
+    </div>`
+  }
+  document.getElementById('checklist').innerHTML = html
+
+  if (s.all_done) {
+    document.getElementById('done').innerHTML = '<div class="done-banner"><h2>&#10003; 全部就绪</h2><p>所有配置已完成，<a href="/">开始使用</a></p></div>'
+  }
+}
+load()
+</script>
+{% endblock %}

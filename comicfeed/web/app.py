@@ -16,6 +16,7 @@ from comicfeed.web.routes.galleries import router as gallery_router
 from comicfeed.web.routes.logs import router as log_router
 from comicfeed.web.routes.queue import router as queue_router
 from comicfeed.web.routes.settings import router as settings_router
+from comicfeed.web.routes.setup import router as setup_router
 from comicfeed.web.routes.sources import router as src_router
 from comicfeed.web.routes.subscriptions import router as sub_router
 
@@ -110,6 +111,7 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     app.include_router(log_router)
     app.include_router(queue_router)
     app.include_router(settings_router)
+    app.include_router(setup_router)
 
     templates = Jinja2Templates(directory="comicfeed/web/templates")
 
@@ -132,6 +134,10 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     @app.get("/queue", response_class=HTMLResponse)
     async def page_queue(request: Request):
         return templates.TemplateResponse(request, "queue.html")
+
+    @app.get("/setup", response_class=HTMLResponse)
+    async def page_setup(request: Request):
+        return templates.TemplateResponse(request, "setup.html")
 
     @app.get("/notifications", response_class=HTMLResponse)
     async def page_notifications(request: Request):
