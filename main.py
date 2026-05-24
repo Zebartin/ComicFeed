@@ -46,9 +46,9 @@ def main():
         import os as _os
         sources_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "comicfeed", "sources")
         keys = source_mgr.load_sources(sources_dir)
-        print(f"  已加载源: {', '.join(keys) if keys else '(无)'}")
+        get("main").info("已加载源: %s", ', '.join(keys) if keys else '(无)')
     except Exception as e:
-        print(f"  源加载失败: {e}")
+        get("main").error("源加载失败: %s", e)
 
     from comicfeed.komga import register_komga_hook
     register_komga_hook()

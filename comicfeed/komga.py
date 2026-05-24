@@ -2,6 +2,9 @@ import httpx
 
 from comicfeed.config import get_setting
 from comicfeed.hooks import bus, Event
+from comicfeed.log import get
+
+_log = get(__name__)
 
 
 async def _call_komga_scan(event: Event):
@@ -13,6 +16,7 @@ async def _call_komga_scan(event: Event):
     if not base_url or not library_id:
         return
 
+    _log.info("触发 Komga 扫描: library=%s", library_id)
     headers = {}
     if api_key:
         headers["X-API-Key"] = api_key

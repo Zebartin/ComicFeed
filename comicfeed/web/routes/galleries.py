@@ -3,7 +3,10 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from comicfeed.database import get_session
+from comicfeed.log import get
 from comicfeed.models import Gallery
+
+_log = get(__name__)
 
 router = APIRouter(prefix="/api/galleries", tags=["galleries"])
 
@@ -104,4 +107,5 @@ async def download_by_id(req: DownloadRequest):
     import asyncio
     from comicfeed.downloader import download_gallery
     asyncio.create_task(download_gallery(source, gid, out_dir, tracker=tracker))
+    _log.info("提交下载: %s:%s", req.source_key, gid)
     return {"status": "accepted", "gallery_id": f"{req.source_key}:{gid}"}

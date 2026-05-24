@@ -2,7 +2,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from comicfeed.database import get_session
+from comicfeed.log import get
 from comicfeed.models import Subscription
+
+_log = get(__name__)
 
 router = APIRouter(prefix="/api/subscriptions", tags=["subscriptions"])
 
@@ -55,6 +58,7 @@ async def create_subscription(data: SubCreate):
         session.add(sub)
         await session.commit()
         await session.refresh(sub)
+        _log.info("创建订阅: %s [%s] query=%s", sub.name, sub.source_key, sub.query)
         return _sub_to_dict(sub)
 
 
@@ -77,6 +81,7 @@ async def update_subscription(sub_id: int, data: SubUpdate):
             setattr(sub, field, value)
         await session.commit()
         await session.refresh(sub)
+        _log.info("更新订阅: #%d %s", sub_id, sub.name)
         return _sub_to_dict(sub)
 
 
@@ -87,6 +92,7 @@ async def delete_subscription(sub_id: int):
         if sub is None:
             raise HTTPException(404, "未找到")
         await session.delete(sub)
+        _log.info("删除订阅: #%d %s", sub_id, sub.name)
         await session.commit()
 
 
@@ -104,7 +110,9 @@ async def check_subscription_now(sub_id: int):
         if source is None:
             return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
         from comicfeed.scheduler import check_subscription
+        _log.info("手动检查订阅: %s [%s]", sub.name, sub.source_key)
         new = await check_subscription(session, sub_id, source)
+        _log.info("检查完成: 发现 %d 个新画廊", len(new))
         return {
             "subscription": {"id": sub.id, "name": sub.name, "source_key": sub.source_key, "query": sub.query},
             "new_galleries": [{

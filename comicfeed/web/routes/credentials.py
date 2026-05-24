@@ -3,7 +3,10 @@ from pydantic import BaseModel
 
 from comicfeed.credentials import encrypt_value, get_source_credentials
 from comicfeed.database import get_session
+from comicfeed.log import get
 from comicfeed.models import SourceCredential
+
+_log = get(__name__)
 
 router = APIRouter(prefix="/api/credentials", tags=["credentials"])
 
@@ -34,4 +37,5 @@ async def set_credentials(source_key: str, data: CredentialSet):
                 encrypted_value=encrypt_value(value),
             ))
         await session.commit()
+    _log.info("更新凭证: %s (%d 项)", source_key, len(data.credentials))
     return {"status": "ok", "count": len(data.credentials)}
