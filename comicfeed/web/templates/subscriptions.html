@@ -21,25 +21,29 @@
 <script>
 async function api(path, opts={}) {
     const r = await fetch(path, opts)
+    if (!r.ok && r.status !== 204) throw new Error(`${path}: ${r.status}`)
     if (r.status === 204) return null
     return r.json()
 }
 async function load() {
-    const subs = await api('/api/subscriptions')
-    const srcs = await api('/api/sources')
-    document.getElementById('source_key').innerHTML = srcs.map(s => `<option>${s.key}</option>`).join('')
-    document.getElementById('list').innerHTML = subs.length === 0 ? '<p>暂无订阅</p>' :
-        `<table><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th>操作</th></tr>
-        ${subs.map(s => `<tr>
-            <td>${s.name}</td><td>${s.source_key}</td><td>${s.query}</td>
-            <td>${s.interval_minutes}分</td>
-            <td>${s.enabled ? '启用' : '停用'}</td>
-            <td>
-                <button class="btn-sm" onclick="editSub(${s.id})">编辑</button>
-                <button class="btn-sm" onclick="checkSub(${s.id})">检查</button>
-                <button class="btn-sm btn-danger" onclick="delSub(${s.id})">删除</button>
-            </td>
-        </tr>`).join('')}</table>`
+    try {
+        const [subs, srcs] = await Promise.all([api('/api/subscriptions'), api('/api/sources')])
+        document.getElementById('source_key').innerHTML = srcs.map(s => `<option>${s.key}</option>`).join('')
+        document.getElementById('list').innerHTML = subs.length === 0 ? '<p>暂无订阅</p>' :
+            `<table><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th>操作</th></tr>
+            ${subs.map(s => `<tr>
+                <td>${s.name}</td><td>${s.source_key}</td><td>${s.query}</td>
+                <td>${s.interval_minutes}分</td>
+                <td>${s.enabled ? '启用' : '停用'}</td>
+                <td>
+                    <button class="btn-sm" onclick="editSub(${s.id})">编辑</button>
+                    <button class="btn-sm" onclick="checkSub(${s.id})">检查</button>
+                    <button class="btn-sm btn-danger" onclick="delSub(${s.id})">删除</button>
+                </td>
+            </tr>`).join('')}</table>`
+    } catch(e) {
+        document.getElementById('list').innerHTML = `<p style="color:red">加载失败: ${e.message}</p>`
+    }
 }
 async function showCreate() {
     document.getElementById('sub-id').value = ''
