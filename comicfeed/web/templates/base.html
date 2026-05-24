@@ -4,29 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ComicFeed</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg: #1a1d23;
+            --card: #242830;
+            --border: #2e323a;
+            --text: #c8c0b4;
+            --text-dim: #6b6560;
+            --teal: #0ea5a0;
+            --accent: #f0a500;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #333; }
-        nav { background: #2c3e50; color: white; padding: 0 1rem; display: flex; gap: 1rem; }
-        nav a { color: #ecf0f1; text-decoration: none; padding: 1rem 0.5rem; }
-        nav a:hover, nav a.active { background: #3498db; }
-        .container { max-width: 1200px; margin: 1rem auto; padding: 0 1rem; }
-        .card { background: white; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #eee; }
-        th { background: #f8f9fa; }
-        button { padding: 0.4rem 0.8rem; border: none; border-radius: 4px; cursor: pointer; }
-        .btn-primary { background: #3498db; color: white; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .btn-sm { font-size: 0.85rem; padding: 0.2rem 0.5rem; }
-        input, select { padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px; }
+        body {
+            font-family: 'Geist', system-ui, sans-serif;
+            background: var(--bg); color: var(--text); min-height: 100vh;
+        }
+        nav {
+            display: flex; align-items: center; gap: 0.25rem;
+            padding: 0 1.5rem; background: #14161a;
+            border-bottom: 1px solid var(--border); height: 50px;
+        }
+        nav .brand {
+            font-family: 'Instrument Serif', Georgia, serif; font-style: italic;
+            font-size: 1.2rem; color: #e8e0d5; margin-right: 1.5rem; letter-spacing: 0.02em;
+        }
+        nav a {
+            color: var(--text-dim); text-decoration: none; padding: 0.5rem 0.85rem;
+            border-radius: 6px; font-size: 0.84rem; font-weight: 500; transition: all 0.15s;
+        }
+        nav a:hover, nav a.active { color: #e8e0d5; background: var(--card); }
+        .container { max-width: 1100px; margin: 1.5rem auto; padding: 0 1.25rem; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
     </style>
 </head>
 <body>
     <nav>
+        <span class="brand">ComicFeed</span>
         <a href="/">订阅</a>
         <a href="/sources">源管理</a>
         <a href="/galleries">画廊</a>
+        <a href="/queue">队列</a>
         <a href="/settings">设置</a>
     </nav>
     <div class="container">

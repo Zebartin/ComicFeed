@@ -1,51 +1,316 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>订阅管理</h2>
-<button class="btn-primary" onclick="showCreate()">+ 新建订阅</button>
-<div id="list"><p>加载中...</p></div>
 
-<form id="form" class="card" style="display:none">
+<style>
+:root {
+    --bg: #1a1d23;
+    --card: #242830;
+    --border: #2e323a;
+    --text: #c8c0b4;
+    --text-dim: #6b6560;
+    --accent: #f0a500;
+    --accent-glow: rgba(240, 165, 0, 0.15);
+    --teal: #0ea5a0;
+    --red: #e0556a;
+    --radius: 10px;
+}
+
+.sub-header {
+    display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;
+}
+.sub-header h2 { margin: 0; font-size: 1.4rem; font-weight: 600; color: #e8e0d5; }
+.sub-header .count { font-size: 0.78rem; color: var(--text-dim); background: var(--card); padding: 0.2rem 0.6rem; border-radius: 99px; }
+
+.btn { padding: 0.45rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.15s; }
+.btn-primary { background: var(--teal); color: #fff; }
+.btn-primary:hover { filter: brightness(1.15); }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--card); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-sm { font-size: 0.75rem; padding: 0.25rem 0.55rem; }
+.btn-accent { background: var(--accent); color: #1a1d23; font-weight: 600; }
+.btn-accent:hover { background: #ffb520; }
+
+.sub-table { width: 100%; border-collapse: collapse; }
+.sub-table th { text-align: left; padding: 0.55rem 0.75rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+.sub-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.88rem; color: var(--text); }
+.sub-table tr:hover td { background: rgba(255,255,255,0.02); }
+.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 0.35rem; }
+.status-on { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.4); }
+.status-off { background: var(--text-dim); }
+
+/* Form */
+.form-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1.5rem; }
+.form-card label { display: block; margin-bottom: 0.6rem; font-size: 0.82rem; color: var(--text-dim); }
+.form-card input, .form-card select { width: 100%; padding: 0.5rem 0.7rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; }
+.form-card input:focus, .form-card select:focus { outline: none; border-color: var(--teal); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+/* Overlay */
+.overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease;
+}
+.overlay.active { display: flex; align-items: flex-start; justify-content: center; padding-top: 4vh; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.overlay-panel {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
+    width: min(900px, 95vw); max-height: 85vh; overflow-y: auto;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+.panel-header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.25rem; background: var(--bg); border-bottom: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+}
+.panel-header h3 { margin: 0; font-size: 1.05rem; color: #e8e0d5; }
+.panel-header .sub-info { font-size: 0.75rem; color: var(--text-dim); }
+
+.gallery-grid { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--border); }
+.gallery-item {
+    display: flex; align-items: center; gap: 0.9rem;
+    padding: 0.75rem 1.25rem; background: var(--card);
+    transition: background 0.15s;
+}
+.gallery-item:hover { background: #292e38; }
+.gallery-item.selected { background: var(--accent-glow); border-left: 3px solid var(--accent); padding-left: calc(1.25rem - 3px); }
+
+.gallery-cover {
+    width: 64px; height: 90px; object-fit: cover; border-radius: 5px;
+    background: var(--bg); flex-shrink: 0;
+}
+.gallery-cover[src=""], .gallery-cover:not([src]) { display: none; }
+.gallery-cover-placeholder {
+    width: 64px; height: 90px; border-radius: 5px; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); font-size: 0.65rem; flex-shrink: 0;
+}
+
+.gallery-info { flex: 1; min-width: 0; }
+.gallery-info .gid { font-size: 0.68rem; color: var(--teal); font-family: monospace; margin-bottom: 0.15rem; }
+.gallery-info .title { font-size: 0.88rem; color: #d8d0c8; line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gallery-info .meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+.gallery-check { flex-shrink: 0; }
+.gallery-check input[type="checkbox"] { display: none; }
+.gallery-check label {
+    display: block; width: 22px; height: 22px; border-radius: 6px;
+    border: 2px solid var(--border); cursor: pointer; transition: all 0.15s;
+}
+.gallery-check input:checked + label {
+    background: var(--accent); border-color: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+.gallery-check input:checked + label::after {
+    content: ''; display: block; width: 6px; height: 11px;
+    border: solid #1a1d23; border-width: 0 2px 2px 0;
+    transform: rotate(45deg); margin: 3px auto 0;
+}
+
+.panel-footer {
+    position: sticky; bottom: 0; z-index: 10;
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.75rem 1.25rem; background: var(--bg); border-top: 1px solid var(--border);
+    border-radius: 0 0 14px 14px;
+}
+.panel-footer .selected-count { font-size: 0.78rem; color: var(--text-dim); margin-right: auto; }
+
+.dl-progress { font-size: 0.78rem; color: var(--teal); display: none; }
+.dl-progress.active { display: inline; }
+</style>
+
+<div class="sub-header">
+    <h2>订阅管理</h2>
+    <span class="count" id="sub-count"></span>
+    <button class="btn btn-primary" onclick="showCreate()" style="margin-left:auto">+ 新建订阅</button>
+</div>
+
+<div id="list"><p style="color:var(--text-dim)">加载中...</p></div>
+
+<form id="form" class="form-card" style="display:none">
     <input type="hidden" id="sub-id">
-    <p><label>名称: <input id="name" required></label></p>
-    <p><label>源: <select id="source_key"></select></label></p>
-    <p><label>查询串: <input id="query" required></label></p>
-    <p><label>模式: <select id="mode"><option>SEARCH</option><option>SPECIFIC_GALLERY</option></select></label></p>
-    <p><label>排序: <select id="sort"><option value="date">最新</option><option value="popular-today">今日热门</option><option value="popular-week">本周热门</option><option value="popular">全部热门</option></select></label></p>
-    <p><label>检查间隔(分钟): <input id="interval" type="number" value="360"></label></p>
-    <p><label>CBZ分卷上限: <input id="cbz_max_pages" type="number" value="30"> (0=不分卷)</label></p>
-    <p><label>启用: <input id="enabled" type="checkbox" checked></label></p>
-    <button class="btn-primary" onclick="saveSub()">保存</button>
-    <button type="button" onclick="hideForm()">取消</button>
+    <div class="form-row">
+        <label>名称 <input id="name" required></label>
+        <label>源 <select id="source_key"></select></label>
+    </div>
+    <label>查询串 <input id="query" required></label>
+    <div class="form-row">
+        <label>模式 <select id="mode"><option>SEARCH</option><option>SPECIFIC_GALLERY</option></select></label>
+        <label>排序 <select id="sort"><option value="date">最新</option><option value="popular-today">今日热门</option><option value="popular-week">本周热门</option><option value="popular">全部热门</option></select></label>
+    </div>
+    <div class="form-row">
+        <label>检查间隔(分钟) <input id="interval" type="number" value="360"></label>
+        <label>CBZ分卷上限 <input id="cbz_max_pages" type="number" value="30"> <small style="color:var(--text-dim)">0=不分卷</small></label>
+    </div>
+    <label><input id="enabled" type="checkbox" checked> 启用</label>
+    <div style="margin-top:0.75rem;display:flex;gap:0.5rem">
+        <button type="button" class="btn btn-primary" onclick="saveSub()">保存</button>
+        <button type="button" class="btn btn-ghost" onclick="hideForm()">取消</button>
+    </div>
 </form>
 
+<!-- Results Overlay -->
+<div class="overlay" id="overlay">
+    <div class="overlay-panel">
+        <div class="panel-header">
+            <div>
+                <h3 id="panel-title">搜索结果</h3>
+                <span class="sub-info" id="panel-sub"></span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="closeOverlay()">&times; 关闭</button>
+        </div>
+        <div class="gallery-grid" id="gallery-grid"></div>
+        <div class="panel-footer">
+            <span class="selected-count" id="selected-count">未选择</span>
+            <span class="dl-progress" id="dl-progress"></span>
+            <button class="btn btn-ghost btn-sm" onclick="toggleAll()">全选/取消</button>
+            <button class="btn btn-accent btn-sm" onclick="downloadSelected()">下载选中</button>
+        </div>
+    </div>
+</div>
+
 <script>
+let _currentResults = null;
+let _currentSub = null;
+let _selected = new Set();
+
 async function api(path, opts={}) {
     const r = await fetch(path, opts)
     if (!r.ok && r.status !== 204) throw new Error(`${path}: ${r.status}`)
     if (r.status === 204) return null
     return r.json()
 }
+
 async function load() {
     try {
         const [subs, srcs] = await Promise.all([api('/api/subscriptions'), api('/api/sources')])
         document.getElementById('source_key').innerHTML = srcs.map(s => `<option>${s.key}</option>`).join('')
-        document.getElementById('list').innerHTML = subs.length === 0 ? '<p>暂无订阅</p>' :
-            `<table><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th>操作</th></tr>
+        document.getElementById('sub-count').textContent = `${subs.length} 个订阅`
+        document.getElementById('list').innerHTML = subs.length === 0 ? '<p style="color:var(--text-dim)">暂无订阅 — 点击右上角新建</p>' :
+            `<table class="sub-table"><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th>操作</th></tr>
             ${subs.map(s => `<tr>
-                <td>${s.name}</td><td>${s.source_key}</td><td>${s.query}</td>
+                <td>${esc(s.name)}</td><td>${s.source_key}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.query)}</td>
                 <td>${s.interval_minutes}分</td>
-                <td>${s.enabled ? '启用' : '停用'}</td>
+                <td><span class="status-dot ${s.enabled ? 'status-on' : 'status-off'}"></span>${s.enabled ? '启用' : '停用'}</td>
                 <td>
-                    <button class="btn-sm" onclick="editSub(${s.id})">编辑</button>
-                    <button class="btn-sm" onclick="checkSub(${s.id})">检查</button>
-                    <button class="btn-sm btn-danger" onclick="delSub(${s.id})">删除</button>
+                    <button class="btn btn-ghost btn-sm" onclick="editSub(${s.id})">编辑</button>
+                    <button class="btn btn-primary btn-sm" onclick="checkSub(${s.id})">检查</button>
+                    <button class="btn btn-danger btn-sm" onclick="delSub(${s.id})">删除</button>
                 </td>
             </tr>`).join('')}</table>`
     } catch(e) {
-        document.getElementById('list').innerHTML = `<p style="color:red">加载失败: ${e.message}</p>`
+        document.getElementById('list').innerHTML = `<p style="color:var(--red)">加载失败: ${e.message}</p>`
     }
 }
-async function showCreate() {
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
+
+async function checkSub(id) {
+    const sub = await api('/api/subscriptions/' + id)
+    const r = await api('/api/subscriptions/' + id + '/check', {method:'POST'})
+    if (r.error) { alert('检查失败: ' + r.error); return }
+
+    _currentResults = r.new_galleries
+    _currentSub = r.subscription
+    _selected = new Set()
+
+    document.getElementById('panel-title').textContent = `检查结果`
+    document.getElementById('panel-sub').textContent = `${r.subscription.name} · ${r.subscription.source_key}`
+    document.getElementById('overlay').classList.add('active')
+    document.getElementById('dl-progress').classList.remove('active')
+    updateGrid()
+}
+
+function updateGrid() {
+    const grid = document.getElementById('gallery-grid')
+    const items = _currentResults || []
+
+    if (items.length === 0) {
+        grid.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-dim)">没有发现新画廊</div>`
+    } else {
+        grid.innerHTML = items.map((g, i) => `
+            <div class="gallery-item ${_selected.has(g.native_id) ? 'selected' : ''}" id="item-${i}">
+                ${g.cover_url
+                    ? `<img class="gallery-cover" src="${g.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+                    : ''}
+                <div class="gallery-cover-placeholder" style="${g.cover_url ? '' : 'display:flex'}">?</div>
+                <div class="gallery-info">
+                    <div class="gid">#${esc(g.native_id)}</div>
+                    <div class="title" title="${esc(g.title)}">${esc(g.title)}</div>
+                    <div class="meta">${g.page_count} 页</div>
+                </div>
+                <div class="gallery-check">
+                    <input type="checkbox" id="chk-${i}" ${_selected.has(g.native_id) ? 'checked' : ''} onchange="toggleItem('${g.native_id}', ${i})">
+                    <label for="chk-${i}"></label>
+                </div>
+            </div>
+        `).join('')
+    }
+    updateSelectedCount()
+}
+
+function toggleItem(nativeId, idx) {
+    if (_selected.has(nativeId)) {
+        _selected.delete(nativeId)
+        document.getElementById('item-' + idx)?.classList.remove('selected')
+    } else {
+        _selected.add(nativeId)
+        document.getElementById('item-' + idx)?.classList.add('selected')
+    }
+    updateSelectedCount()
+}
+
+function toggleAll() {
+    const items = _currentResults || []
+    if (_selected.size === items.length) {
+        _selected.clear()
+    } else {
+        items.forEach(g => _selected.add(g.native_id))
+    }
+    updateGrid()
+}
+
+function updateSelectedCount() {
+    const el = document.getElementById('selected-count')
+    if (_selected.size === 0) el.textContent = '未选择'
+    else el.textContent = `已选 ${_selected.size} / ${(_currentResults||[]).length}`
+}
+
+async function downloadSelected() {
+    if (_selected.size === 0) return
+    const ids = [..._selected]
+    const prog = document.getElementById('dl-progress')
+    prog.classList.add('active')
+
+    for (let i = 0; i < ids.length; i++) {
+        prog.textContent = `下载中 ${i+1}/${ids.length} ...`
+        try {
+            await api('/api/galleries/download', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({source_key: _currentSub.source_key, gallery_id: ids[i]})
+            })
+        } catch(e) {
+            console.error('下载失败:', ids[i], e)
+        }
+    }
+    prog.textContent = `完成 ${ids.length} 个`
+    setTimeout(() => { prog.classList.remove('active'); closeOverlay(); load() }, 1500)
+}
+
+function closeOverlay() {
+    document.getElementById('overlay').classList.remove('active')
+    _currentResults = null; _currentSub = null; _selected.clear()
+}
+
+// Form CRUD
+function showCreate() {
     document.getElementById('sub-id').value = ''
     document.getElementById('form').reset()
     document.getElementById('form').style.display = 'block'
@@ -80,14 +345,10 @@ async function saveSub() {
     else await api('/api/subscriptions', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
     hideForm(); load()
 }
-async function checkSub(id) {
-    const r = await api('/api/subscriptions/' + id + '/check', {method:'POST'})
-    if (r.error) alert('检查失败: ' + r.error)
-    else alert('发现 ' + r.new_galleries.length + ' 个新画廊:\n' + r.new_galleries.map(g => g.title).join('\n'))
-}
 async function delSub(id) {
     if (confirm('确认删除？')) { await api('/api/subscriptions/' + id, {method:'DELETE'}); load() }
 }
+
 load()
 </script>
 {% endblock %}

@@ -105,7 +105,13 @@ async def check_subscription_now(sub_id: int):
             return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
         from comicfeed.scheduler import check_subscription
         new = await check_subscription(session, sub_id, source)
-        return {"new_galleries": [{"native_id": g.native_id, "title": g.title} for g in new]}
+        return {
+            "subscription": {"id": sub.id, "name": sub.name, "source_key": sub.source_key},
+            "new_galleries": [
+                {"native_id": g.native_id, "title": g.title, "page_count": g.page_count, "cover_url": g.cover_url}
+                for g in new
+            ],
+        }
 
 
 def _sub_to_dict(s: Subscription) -> dict:

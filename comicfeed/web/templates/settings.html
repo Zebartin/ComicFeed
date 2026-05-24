@@ -1,19 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>全局设置</h2>
-<div id="list"><p>加载中...</p></div>
-<script>
-async function load() {
-    const r = await fetch('/api/settings')
-    const s = await r.json()
-    document.getElementById('list').innerHTML = Object.entries(s).map(([k,v]) =>
-        `<p><label>${k}: <input id="${k}" value="${v||''}"> <button onclick="save('${k}')">保存</button></label></p>`
-    ).join('')
-}
-async function save(key) {
-    await fetch('/api/settings/' + key + '?value=' + encodeURIComponent(document.getElementById(key).value), {method:'PUT'})
-    alert('已保存')
-}
-load()
-</script>
+<style>.row{margin-bottom:0.6rem;display:flex;align-items:center;gap:0.5rem}.row label{font-size:0.82rem;color:var(--text-dim);min-width:160px}.row input{flex:1;padding:0.4rem 0.6rem;background:var(--card);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:0.85rem}.btn{padding:0.35rem 0.75rem;border:none;border-radius:5px;cursor:pointer;font-size:0.8rem}.btn-primary{background:var(--teal);color:#fff}</style>
+<h2 style="font-size:1.3rem;color:#e8e0d5;margin-bottom:1rem">全局设置</h2>
+<div id="list"><p style="color:var(--text-dim)">加载中...</p></div>
+<script>async function load(){const r=await fetch('/api/settings');const s=await r.json();document.getElementById('list').innerHTML=Object.entries(s).map(([k,v])=>`<div class="row"><label>${k}</label><input id="${k}" value="${v||''}"><button class="btn btn-primary" onclick="save('${k}')">保存</button></div>`).join('')}
+async function save(key){await fetch('/api/settings/'+key+'?value='+encodeURIComponent(document.getElementById(key).value),{method:'PUT'});alert('已保存')}load()</script>
 {% endblock %}
