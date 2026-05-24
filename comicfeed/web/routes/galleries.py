@@ -49,12 +49,18 @@ async def list_galleries(source_key: str | None = None, sort: str = "date",
                     "display_title": g.display_title, "cover_url": g.cover_url,
                     "tags": _parse_tags(g.tags), "num_favorites": g.num_favorites,
                     "reported_pages": g.reported_pages, "actual_pages": g.actual_pages,
-                    "file_path": g.file_path,
+                    "file_path": g.file_path, "downloaded_at": _fmt_time(g.downloaded_at),
                     "web_url": _web_url(g.source_key, g.native_id),
                 }
                 for g in galleries
             ],
         }
+
+
+def _fmt_time(dt) -> str:
+    if dt is None:
+        return ""
+    return dt.strftime("%Y-%m-%d")
 
 
 def _web_url(source_key: str, native_id: str) -> str:

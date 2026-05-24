@@ -61,9 +61,11 @@ async def download_gallery(
     }))
 
     # 写入数据库
+    from datetime import datetime
     from comicfeed.database import get_session
     from comicfeed.models import Gallery
     import json
+    now = datetime.utcnow()
     async with get_session() as session:
         g = await session.get(Gallery, full_gid)
         if g is None:
@@ -72,7 +74,8 @@ async def download_gallery(
                         cover_url=detail.cover_url,
                         tags=json.dumps(detail.tags, ensure_ascii=False),
                         num_favorites=detail.num_favorites,
-                        reported_pages=total, actual_pages=downloaded)
+                        reported_pages=total, actual_pages=downloaded,
+                        downloaded_at=now)
             session.add(g)
         else:
             g.actual_pages = downloaded
@@ -80,6 +83,7 @@ async def download_gallery(
             g.cover_url = detail.cover_url
             g.tags = json.dumps(detail.tags, ensure_ascii=False)
             g.num_favorites = detail.num_favorites
+            g.downloaded_at = now
         g.file_path = result.files[0] if result.files else None
         await session.commit()
 
