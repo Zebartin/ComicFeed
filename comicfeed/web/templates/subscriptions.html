@@ -1,288 +1,316 @@
 {% extends "base.html" %}
 {% block content %}
-
 <style>
-.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-.toolbar .count { font-size: 12px; color: var(--cream-dim); letter-spacing: .03em; }
+/* ── Page Layout ── */
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.toolbar .stat { font-size: 12px; color: var(--text-muted); letter-spacing: .04em; }
 
-/* table refinements */
-.mono { font-family: var(--font-mono); font-size: 11px; color: var(--cream-dim); }
-.query-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Status badges */
+.badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 99px; letter-spacing: .02em; }
+.badge-on  { background: var(--accent-light); color: var(--accent); }
+.badge-off { background: #f5f3f0; color: var(--text-muted); }
 
-/* form */
+/* ── Form Panel ── */
 .form-panel {
-  background: var(--paper); border: 1px solid #1e2128; border-radius: 8px;
-  padding: 20px; margin-bottom: 20px; display: none;
-  animation: slideIn .25s cubic-bezier(.16,1,.3,1);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 28px; margin-bottom: 24px; display: none;
+  box-shadow: var(--shadow-md);
+  animation: slide-up .3s cubic-bezier(.22,1,.36,1);
 }
 .form-panel.on { display: block; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
-.form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--cream-dim); text-transform: uppercase; letter-spacing: .04em; }
-.form-full { grid-column: 1 / -1; }
-.form-actions { margin-top: 16px; display: flex; gap: 8px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; }
+.form-grid label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.form-grid label.full { grid-column: 1 / -1; }
+.form-grid label.inline { flex-direction: row; align-items: center; gap: 10px; }
+.form-actions { margin-top: 22px; display: flex; gap: 10px; }
 
-/* results modal */
-.results-panel {
-  background: var(--ink); border: 1px solid #1e2128; border-radius: 12px;
-  width: min(960px, 96vw); max-height: 86vh; display: flex; flex-direction: column;
-  animation: slideIn .3s cubic-bezier(.16,1,.3,1); overflow: hidden;
+/* ── Results Modal ── */
+.results-dialog {
+  background: var(--surface); border-radius: var(--radius-lg);
+  width: min(1080px, 96vw); max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06);
+  animation: slide-up .35s cubic-bezier(.22,1,.36,1);
+  overflow: hidden;
 }
-.results-header {
+.results-dialog header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid #1e2128; flex-shrink: 0;
+  padding: 22px 28px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.results-header h2 { font-family: var(--font-display); font-style: italic; font-size: 18px; font-weight: 400; color: var(--cream); }
-.results-header .meta { font-size: 12px; color: var(--cream-dim); }
+.results-dialog header h2 {
+  font-family: var(--font-serif); font-weight: 500; font-style: italic;
+  font-size: 22px; color: var(--text); letter-spacing: .01em;
+}
+.results-dialog header .sub {
+  font-size: 12px; color: var(--text-muted); margin-top: 3px;
+}
 
 .results-body {
-  flex: 1; overflow-y: auto; padding: 16px 20px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 14px; align-content: start;
+  flex: 1; overflow-y: auto; padding: 24px 28px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 18px; align-content: start;
 }
 
-.gallery-card {
-  background: var(--paper); border: 2px solid transparent; border-radius: 8px;
-  overflow: hidden; cursor: pointer; transition: all .15s;
-  position: relative;
+/* ── Gallery Card ── */
+.g-card {
+  background: #fcfaf7; border: 2px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  cursor: pointer; transition: all var(--transition);
+  position: relative; user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.gallery-card:hover { background: var(--paper-light); }
-.gallery-card.picked { border-color: var(--gold); box-shadow: 0 0 12px var(--gold-dim); }
+.g-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 16px rgba(0,0,0,.06);
+  transform: translateY(-2px);
+}
+.g-card.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glow), 0 4px 16px rgba(0,0,0,.06);
+  background: #fefcf5;
+}
 
-.gallery-card .cover-wrap {
-  position: relative; aspect-ratio: 3/4; overflow: hidden; background: #14161a;
+.g-card .cover {
+  position: relative; aspect-ratio: 2/3; background: #f0ebe0;
   display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
 }
-.gallery-card .cover-wrap img {
+.g-card .cover img {
   width: 100%; height: 100%; object-fit: cover;
-  transition: transform .3s;
+  transition: transform .4s cubic-bezier(.22,1,.36,1);
 }
-.gallery-card:hover .cover-wrap img { transform: scale(1.04); }
-.gallery-card .cover-wrap .no-cover {
-  color: var(--cream-dim); font-family: var(--font-mono); font-size: 28px; opacity: .3;
+.g-card:hover .cover img { transform: scale(1.05); }
+.g-card .cover .no-img {
+  font-family: var(--font-serif); font-style: italic;
+  font-size: 36px; color: var(--text-muted); opacity: .25;
 }
 
-.gallery-card .check-overlay {
-  position: absolute; top: 8px; left: 8px; z-index: 2;
-  width: 26px; height: 26px; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.35); background: rgba(0,0,0,.4);
+/* Selection indicator on cover */
+.g-card .sel {
+  position: absolute; top: 12px; left: 12px; z-index: 5;
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.8);
+  background: rgba(0,0,0,.25); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center;
-  transition: all .15s; cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
 }
-.gallery-card .check-overlay:hover { border-color: var(--gold); background: var(--gold-dim); }
-.gallery-card.picked .check-overlay {
+.g-card.selected .sel {
   background: var(--gold); border-color: var(--gold);
-  box-shadow: 0 0 10px var(--gold-dim);
+  box-shadow: 0 4px 16px var(--gold-glow);
+  transform: scale(1.1);
 }
-.gallery-card .check-overlay::after {
-  content: ''; display: none; width: 7px; height: 12px;
-  border: solid #111; border-width: 0 2px 2px 0;
-  transform: rotate(45deg); margin-top: -2px;
+.g-card .sel::after {
+  content: ''; display: none;
+  width: 8px; height: 14px;
+  border: solid #fff; border-width: 0 3px 3px 0;
+  transform: rotate(45deg) translateY(-1px);
 }
-.gallery-card.picked .check-overlay::after { display: block; }
+.g-card.selected .sel::after { display: block; }
 
-.gallery-card .info { padding: 10px 11px; }
-.gallery-card .info .gid { font-family: var(--font-mono); font-size: 10px; color: var(--teal); margin-bottom: 3px; }
-.gallery-card .info .title {
-  font-size: 12px; line-height: 1.35; display: -webkit-box;
-  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; color: var(--cream);
+.g-card .info { padding: 14px; }
+.g-card .info .gid {
+  font-family: var(--font-mono); font-size: 10px; color: var(--gold);
+  margin-bottom: 6px; letter-spacing: .02em;
 }
-.gallery-card .info .pages { font-size: 11px; color: var(--cream-dim); margin-top: 4px; }
+.g-card .info .title {
+  font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.g-card .info .meta {
+  font-size: 11px; color: var(--text-muted); margin-top: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.g-card .info .meta .dot {
+  width: 3px; height: 3px; background: var(--text-muted); border-radius: 50%;
+}
 
-.results-footer {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 20px; border-top: 1px solid #1e2128; flex-shrink: 0;
+/* Footer */
+.results-dialog footer {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 28px; border-top: 1px solid var(--border);
+  flex-shrink: 0; background: #faf8f5;
 }
-.results-footer .sel-info { font-size: 12px; color: var(--cream-dim); margin-right: auto; }
-.empty-state { text-align: center; padding: 48px 20px; color: var(--cream-dim); grid-column: 1 / -1; }
-.empty-state p { font-size: 14px; margin-bottom: 4px; }
-.empty-state span { font-size: 12px; opacity: .6; }
+.results-dialog footer .sel-count {
+  font-size: 13px; color: var(--text-secondary); margin-right: auto;
+}
+.results-dialog footer .sel-count strong { color: var(--gold); }
+
+/* Empty state */
+.empty-state {
+  grid-column: 1 / -1; text-align: center; padding: 64px 28px;
+}
+.empty-state .icon {
+  font-family: var(--font-serif); font-style: italic; font-size: 48px;
+  color: var(--text-muted); opacity: .25; margin-bottom: 16px;
+}
+.empty-state h3 { font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+.empty-state p { font-size: 13px; color: var(--text-muted); }
 </style>
 
-<div class="toolbar">
-  <h1 class="page-title">订阅</h1>
-  <span class="count" id="sub-count"></span>
-  <button class="btn btn-primary" onclick="openForm()" style="margin-left:auto">+ 新建</button>
+<div class="page-header">
+  <h1>订阅</h1>
+  <span class="stat" id="sub-stat"></span>
+  <button class="btn btn-primary" onclick="openForm()" style="margin-left:auto">新建订阅</button>
 </div>
 
-<div id="list"></div>
+<div id="sub-list"></div>
 
+<!-- Create / Edit form -->
 <div class="form-panel" id="form">
   <div class="form-grid">
     <label>名称 <input id="name"></label>
     <label>源 <select id="source_key"></select></label>
-    <label>查询串 <input id="query"></label>
-    <label>模式 <select id="mode"><option>SEARCH</option><option>SPECIFIC_GALLERY</option></select></label>
+    <label class="full">查询串 <input id="query"></label>
+    <label>模式 <select id="mode"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
     <label>排序 <select id="sort"><option value="date">最新</option><option value="popular-today">今日热门</option><option value="popular-week">本周热门</option><option value="popular">全部热门</option></select></label>
-    <label>检查间隔(分钟) <input id="interval" type="number" value="360"></label>
-    <label>CBZ分卷 <input id="cbz_max_pages" type="number" value="0">
-      <span style="font-size:10px;color:var(--cream-dim);margin-top:2px">0=不分卷</span>
-    </label>
-    <label class="form-full" style="flex-direction:row;align-items:center;gap:8px">
-      <input id="enabled" type="checkbox" checked style="width:auto"> 启用
-    </label>
+    <label>间隔 (分钟) <input id="interval" type="number" value="360"></label>
+    <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
+    <label class="inline"><input id="enabled" type="checkbox" checked> 启用</label>
   </div>
   <input type="hidden" id="sub-id">
   <div class="form-actions">
-    <button class="btn btn-primary" onclick="saveSub()">保存</button>
+    <button class="btn btn-primary" onclick="saveSub()">保存订阅</button>
     <button class="btn btn-ghost" onclick="closeForm()">取消</button>
   </div>
 </div>
 
+<!-- Results Modal -->
 <div class="modal-overlay" id="overlay">
-  <div class="results-panel">
-    <div class="results-header">
+  <div class="results-dialog">
+    <header>
       <div>
         <h2 id="res-title">检查结果</h2>
-        <div class="meta" id="res-meta"></div>
+        <div class="sub" id="res-meta"></div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="closeResults()">关闭</button>
-    </div>
+    </header>
     <div class="results-body" id="res-body"></div>
-    <div class="results-footer">
-      <span class="sel-info" id="sel-info">点击卡片选择</span>
-      <button class="btn btn-ghost btn-sm" onclick="toggleAll()">全选</button>
+    <footer>
+      <span class="sel-count" id="sel-info">点选画廊卡片即可选择</span>
+      <button class="btn btn-ghost btn-sm" onclick="toggleAll()">全选 / 取消</button>
       <button class="btn btn-gold btn-sm" onclick="downloadPicked()">下载选中</button>
-    </div>
+    </footer>
   </div>
 </div>
 
 <script>
-let picked = new Set(), results = [], currentSub = null;
-
+let picked = new Set(), results = [], current = null;
 const $ = id => document.getElementById(id)
 
 async function api(p, o={}) {
   const r = await fetch(p, o)
-  if (!r.ok && r.status !== 204) throw new Error(`${p}: ${r.status}`)
-  if (r.status === 204) return null
-  return r.json()
+  if (!r.ok && r.status !== 204) throw new Error(r.status)
+  return r.status === 204 ? null : r.json()
 }
 
 async function load() {
   try {
     const [subs, srcs] = await Promise.all([api('/api/subscriptions'), api('/api/sources')])
     $('source_key').innerHTML = srcs.map(s => `<option>${s.key}</option>`).join('')
-    $('sub-count').textContent = `${subs.length} 个订阅`
-    if (subs.length === 0) {
-      $('list').innerHTML = '<p style="color:var(--cream-dim);padding:32px 0;text-align:center">暂无订阅</p>'
+    $('sub-stat').textContent = `${subs.length} 个订阅`
+    if (!subs.length) {
+      $('sub-list').innerHTML = '<p style="color:var(--text-muted);padding:40px 0;text-align:center">暂无订阅 — 点击右上角"新建订阅"开始</p>'
     } else {
-      $('list').innerHTML = `<table>
-        <tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th style="width:180px">操作</th></tr>
-        ${subs.map(s => `<tr>
-          <td>${esc(s.name)}</td>
-          <td class="mono">${s.source_key}</td>
-          <td class="query-cell">${esc(s.query)}</td>
-          <td>${s.interval_minutes}分</td>
-          <td>${s.enabled ? '<span style="color:#6a9;">● 启用</span>' : '<span style="color:var(--cream-dim)">○ 停用</span>'}</td>
+      $('sub-list').innerHTML = `<table>
+        <thead><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th style="width:200px">操作</th></tr></thead>
+        <tbody>${subs.map(s => `<tr>
+          <td style="font-weight:500">${esc(s.name)}</td>
+          <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">${esc(s.source_key)}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.query)}</td>
+          <td>${s.interval_minutes} 分</td>
+          <td>${s.enabled ? '<span class="badge badge-on">启用</span>' : '<span class="badge badge-off">停用</span>'}</td>
           <td>
             <button class="btn btn-ghost btn-xs" onclick="editSub(${s.id})">编辑</button>
             <button class="btn btn-primary btn-xs" onclick="checkSub(${s.id})">检查</button>
             <button class="btn btn-danger btn-xs" onclick="delSub(${s.id})">删除</button>
           </td>
-        </tr>`).join('')}</table>`
+        </tr>`).join('')}</tbody></table>`
     }
-  } catch(e) { $('list').innerHTML = `<p style="color:var(--red)">加载失败: ${e.message}</p>` }
+  } catch(e) { $('sub-list').innerHTML = `<p style="color:var(--red)">加载失败: ${e.message}</p>` }
 }
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
-
-// ── Form ──
+/* Form */
 function openForm() { $('sub-id').value=''; $('form').reset(); $('form').classList.add('on') }
 function closeForm() { $('form').classList.remove('on') }
 async function editSub(id) {
-  const s = await api('/api/subscriptions/' + id)
-  $('sub-id').value = id
-  for (const k of ['name','source_key','query','mode','interval','cbz_max_pages','sort'])
-    $(k).value = s[k] ?? ''
-  $('enabled').checked = s.enabled
-  $('form').classList.add('on')
+  const s = await api('/api/subscriptions/'+id); $('sub-id').value = id
+  for (const k of ['name','source_key','query','mode','interval','cbz_max_pages','sort']) $(k).value = s[k] ?? ''
+  $('enabled').checked = s.enabled; $('form').classList.add('on')
 }
 async function saveSub() {
-  const id = $('sub-id').value
-  const body = {
+  const id = $('sub-id').value, body = {
     name: $('name').value, source_key: $('source_key').value, query: $('query').value,
     mode: $('mode').value, interval_minutes: +$('interval').value,
     cbz_max_pages: +$('cbz_max_pages').value, sort: $('sort').value, enabled: $('enabled').checked,
   }
-  if (id) await api('/api/subscriptions/' + id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
-  else await api('/api/subscriptions', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+  if (id) await api('/api/subscriptions/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  else await api('/api/subscriptions', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
   closeForm(); load()
 }
-async function delSub(id) { if (confirm('确认删除？')) { await api('/api/subscriptions/' + id, {method:'DELETE'}); load() } }
+async function delSub(id) { if (confirm('确认删除？')) { await api('/api/subscriptions/'+id, {method:'DELETE'}); load() } }
 
-// ── Results ──
+/* Results */
 async function checkSub(id) {
-  const sub = await api('/api/subscriptions/' + id)
-  const r = await api('/api/subscriptions/' + id + '/check', {method:'POST'})
+  const sub = await api('/api/subscriptions/'+id)
+  const r = await api('/api/subscriptions/'+id+'/check', {method:'POST'})
   if (r.error) { alert(r.error); return }
-  results = r.new_galleries || []
-  currentSub = r.subscription
-  picked = new Set()
+  results = r.new_galleries || []; current = r.subscription; picked.clear()
 
   $('res-title').textContent = '检查结果'
-  $('res-meta').textContent = `${r.subscription.name}  ·  ${r.subscription.source_key}`
+  $('res-meta').textContent = `${r.subscription.name} · ${r.subscription.source_key} · 查询: ${r.subscription.query || '(空)'}`
 
-  const body = $('res-body')
-  if (results.length === 0) {
-    body.innerHTML = '<div class="empty-state"><p>没有发现新画廊</p><span>所有内容都已下载</span></div>'
+  if (!results.length) {
+    $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&para;</div><h3>没有新发现</h3><p>所有匹配的画廊都已下载</p></div>'
   } else {
-    body.innerHTML = results.map((g, i) => `
-      <div class="gallery-card" id="gc-${i}" onclick="pickCard('${g.native_id}', ${i}, event)">
-        <div class="cover-wrap">
-          ${g.cover_url
-            ? `<img src="${g.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-            : ''}
-          <div class="no-cover" style="${g.cover_url ? 'display:none' : 'display:flex'}">?</div>
-          <div class="check-overlay"></div>
+    $('res-body').innerHTML = results.map((g,i) => `
+      <div class="g-card" id="gc-${i}" onclick="toggleCard('${g.native_id}',${i})">
+        <div class="cover">
+          ${g.cover_url ? `<img src="${g.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+          <div class="no-img" style="${g.cover_url?'display:none':'display:flex'}">&mdash;</div>
+          <div class="sel"></div>
         </div>
         <div class="info">
           <div class="gid">#${esc(g.native_id)}</div>
           <div class="title">${esc(g.title)}</div>
-          <div class="pages">${g.page_count} 页</div>
+          <div class="meta"><span>${g.page_count} 页</span><span class="dot"></span><span>${current.source_key}</span></div>
         </div>
       </div>`).join('')
   }
-  $('overlay').classList.add('on')
-  updateSelInfo()
+  $('overlay').classList.add('on'); updateSel()
 }
 
-function pickCard(nativeId, idx, ev) {
-  if (ev) ev.stopPropagation()
-  picked.has(nativeId) ? picked.delete(nativeId) : picked.add(nativeId)
-  const el = document.getElementById('gc-' + idx)
-  if (el) el.classList.toggle('picked', picked.has(nativeId))
-  updateSelInfo()
+function toggleCard(id, idx) {
+  picked.has(id) ? picked.delete(id) : picked.add(id)
+  document.getElementById('gc-'+idx)?.classList.toggle('selected', picked.has(id))
+  updateSel()
 }
-
 function toggleAll() {
-  if (picked.size === results.length) { picked.clear() }
-  else { results.forEach(g => picked.add(g.native_id)) }
-  results.forEach((g, i) => { const el = document.getElementById('gc-' + i); if (el) el.classList.toggle('picked', picked.has(g.native_id)) })
-  updateSelInfo()
+  const all = results.length === picked.size
+  all ? picked.clear() : results.forEach(g => picked.add(g.native_id))
+  results.forEach((g,i) => document.getElementById('gc-'+i)?.classList.toggle('selected', !all))
+  updateSel()
 }
-
-function updateSelInfo() {
-  $('sel-info').textContent = picked.size ? `已选 ${picked.size} / ${results.length}` : '点击卡片选择'
+function updateSel() {
+  $('sel-info').innerHTML = picked.size ? `已选 <strong>${picked.size}</strong> / ${results.length}` : '点选画廊卡片即可选择'
 }
 
 async function downloadPicked() {
   if (!picked.size) return
-  const ids = [...picked]
-  $('sel-info').textContent = `下载中 0/${ids.length} ...`
-  for (let i = 0; i < ids.length; i++) {
-    try {
-      await api('/api/galleries/download', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({source_key: currentSub.source_key, gallery_id: ids[i]})
-      })
-      $('sel-info').textContent = `下载中 ${i+1}/${ids.length} ...`
-    } catch(e) { console.error(e) }
+  const ids = [...picked]; $('sel-info').textContent = `下载中 0/${ids.length} ...`
+  for (let i=0;i<ids.length;i++) {
+    try { await api('/api/galleries/download', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:current.source_key,gallery_id:ids[i]})}) } catch(e) { console.error(e) }
+    $('sel-info').textContent = `下载中 ${i+1}/${ids.length} ...`
   }
-  $('sel-info').textContent = `已提交 ${ids.length} 个下载`
+  $('sel-info').textContent = `已提交 ${ids.length} 个下载任务`
   setTimeout(() => { closeResults(); load() }, 1500)
 }
-
 function closeResults() { $('overlay').classList.remove('on') }
 
 load()

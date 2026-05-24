@@ -4,86 +4,121 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ComicFeed</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --ink: #0d0f12;
-  --paper: #1b1e24;
-  --paper-light: #262a33;
-  --gold: #c9a050;
-  --gold-dim: rgba(201,160,80,.18);
-  --cream: #e2dbcd;
-  --cream-dim: #8a8478;
-  --red: #d45d5d;
-  --teal: #509c8f;
-  --radius: 4px;
+  --bg: #f9f5ee;
+  --surface: #ffffff;
+  --border: #e5ded3;
+  --border-hover: #c7b898;
+  --text: #2c2416;
+  --text-secondary: #8c8270;
+  --text-muted: #b8a992;
+  --gold: #b8860b;
+  --gold-light: #f5e6c8;
+  --gold-glow: rgba(184,134,11,.12);
+  --accent: #3d7867;
+  --accent-light: #e8f4ef;
+  --red: #c0392b;
+  --red-light: #fdf0ee;
   --font: 'Inter', system-ui, sans-serif;
-  --font-display: 'DM Serif Display', Georgia, serif;
-  --font-mono: 'DM Mono', monospace;
+  --font-serif: 'EB Garamond', Georgia, 'Times New Roman', serif;
+  --font-mono: 'DM Mono', 'Consolas', monospace;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.06);
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --transition: .2s cubic-bezier(.4,0,.2,1);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 body {
-  font-family: var(--font); font-size: 15px; line-height: 1.5;
-  background: var(--ink); color: var(--cream);
+  font-family: var(--font); font-size: 15px; line-height: 1.6;
+  background: var(--bg); color: var(--text);
   min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(184,134,11,.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(61,120,103,.02) 0%, transparent 50%);
+  background-attachment: fixed;
 }
+
+/* Navigation */
 nav {
-  display: flex; align-items: center; gap: 2px;
-  height: 48px; padding: 0 20px;
-  background: #111318; border-bottom: 1px solid #1e2128;
+  display: flex; align-items: center; gap: 0;
+  height: 56px; padding: 0 28px;
+  background: rgba(255,255,255,.85); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
 }
 nav .brand {
-  font-family: var(--font-display); font-style: italic; font-size: 18px;
-  color: var(--gold); margin-right: 24px; letter-spacing: .01em;
+  font-family: var(--font-serif); font-weight: 500; font-style: italic;
+  font-size: 20px; color: var(--gold); margin-right: 28px; letter-spacing: .02em;
 }
 nav a {
-  color: var(--cream-dim); text-decoration: none;
-  padding: 6px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500;
-  transition: color .15s, background .15s;
+  color: var(--text-secondary); text-decoration: none;
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; letter-spacing: .01em;
+  transition: all var(--transition);
 }
-nav a:hover, nav a.on { color: var(--cream); background: var(--paper-light); }
-main { max-width: 1040px; margin: 0 auto; padding: 28px 24px 80px; }
+nav a:hover { color: var(--text); background: rgba(0,0,0,.03); }
+nav a.active { color: var(--gold); background: var(--gold-light); }
 
-/* shared */
+main { max-width: 1120px; margin: 0 auto; padding: 36px 28px 100px; }
+
+/* Shared components */
 .btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 16px; border: none; border-radius: var(--radius);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 18px; border: none; border-radius: var(--radius-sm);
   font-family: var(--font); font-size: 13px; font-weight: 500; cursor: pointer;
-  transition: all .12s;
+  transition: all var(--transition); white-space: nowrap;
+  letter-spacing: .01em; line-height: 1.4;
 }
-.btn-primary { background: var(--teal); color: #fff; }
-.btn-primary:hover { filter: brightness(1.12); }
-.btn-gold { background: var(--gold); color: #111; }
-.btn-gold:hover { background: #d4aa55; }
-.btn-ghost { background: transparent; color: var(--cream-dim); border: 1px solid #2a2d35; }
-.btn-ghost:hover { background: var(--paper-light); color: var(--cream); }
+.btn:active { transform: scale(.97); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #356d5b; box-shadow: 0 2px 8px rgba(61,120,103,.25); }
+.btn-gold { background: var(--gold); color: #fff; font-weight: 600; }
+.btn-gold:hover { background: #a0750a; box-shadow: 0 2px 10px var(--gold-glow); }
+.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-ghost:hover { background: #fff; border-color: var(--border-hover); color: var(--text); }
 .btn-danger { background: var(--red); color: #fff; }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
-.btn-xs { padding: 2px 8px; font-size: 11px; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-xs { padding: 3px 10px; font-size: 11px; }
 
 input, select, textarea {
-  font-family: var(--font); font-size: 13px;
-  padding: 7px 10px; background: var(--ink); color: var(--cream);
-  border: 1px solid #2a2d35; border-radius: var(--radius);
-  outline: none; transition: border-color .15s;
+  font-family: var(--font); font-size: 13px; line-height: 1.5;
+  padding: 9px 12px; background: #fff; color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  outline: none; transition: border-color var(--transition);
 }
-input:focus, select:focus, textarea:focus { border-color: var(--gold); }
+input:focus, select:focus, textarea:focus {
+  border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-glow);
+}
 
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--cream-dim); border-bottom: 1px solid #1e2128; font-weight: 500; }
-td { padding: 9px 12px; border-bottom: 1px solid #1a1d22; font-size: 13px; }
-tr:hover td { background: rgba(255,255,255,.015); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+thead { border-bottom: 2px solid var(--border); }
+th { text-align: left; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 600; }
+td { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+tbody tr { transition: background var(--transition); }
+tbody tr:hover { background: rgba(184,134,11,.03); }
 
-.page-title { font-family: var(--font-display); font-style: italic; font-size: 22px; color: var(--cream); margin-bottom: 20px; font-weight: 400; }
+.page-header {
+  display: flex; align-items: baseline; gap: 14px; margin-bottom: 28px;
+}
+.page-header h1 {
+  font-family: var(--font-serif); font-weight: 500; font-style: italic;
+  font-size: 28px; color: var(--text); letter-spacing: .01em;
+}
 
+/* Modal */
 .modal-overlay {
-  display: none; position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0,0,0,.65); backdrop-filter: blur(3px);
-  animation: fadeIn .18s ease;
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(44,36,22,.35); backdrop-filter: blur(6px);
+  animation: fade-in .2s ease;
 }
-.modal-overlay.on { display: flex; align-items: flex-start; justify-content: center; padding-top: 5vh; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideIn { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+.modal-overlay.on { display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(40px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 </style>
 </head>
 <body>

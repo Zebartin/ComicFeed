@@ -1,16 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
-<h1 class="page-title">下载队列</h1>
+<div class="page-header"><h1>下载队列</h1></div>
 <div id="list"></div>
 <script>
-async function load() {
-  const r = await fetch('/api/queue'); const q = await r.json()
-  document.getElementById('list').innerHTML = q.active.length === 0
-    ? '<p style="color:var(--cream-dim);padding:32px 0;text-align:center">无进行中的下载</p>'
-    : `<table><tr><th>Gallery</th><th>标题</th><th>进度</th></tr>
-      ${q.active.map(t => `<tr><td style="font-family:var(--font-mono);font-size:11px">${t.gallery_id}</td><td>${t.title}</td><td>${t.downloaded}/${t.total_pages} (${Math.round(t.downloaded/t.total_pages*100)}%)</td></tr>`).join('')}</table>`
-  setTimeout(load, 2000)
-}
+async function load(){const r=await fetch('/api/queue');const q=await r.json()
+document.getElementById('list').innerHTML=q.active.length===0
+?'<p style="color:var(--text-muted);padding:40px 0;text-align:center">无进行中的下载</p>'
+:`<table><thead><tr><th>Gallery</th><th>标题</th><th>进度</th></tr></thead><tbody>${q.active.map(t=>`<tr><td style="font-family:var(--font-mono);font-size:11px">${t.gallery_id}</td><td>${t.title}</td><td><span style="color:var(--accent)">${t.downloaded}</span> / ${t.total_pages} &middot; ${Math.round(t.downloaded/t.total_pages*100)}%</td></tr>`).join('')}</tbody></table>`
+setTimeout(load,2000)}
 load()
 </script>
 {% endblock %}

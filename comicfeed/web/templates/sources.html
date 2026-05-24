@@ -1,57 +1,55 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-.panel { background: var(--paper); border:1px solid #1e2128; border-radius:8px; padding:20px; margin-bottom:16px; display:none; }
-.panel.on { display:block; animation: slideIn .25s cubic-bezier(.16,1,.3,1); }
-.panel h3 { font-size:14px; color:var(--gold); margin-bottom:12px; font-weight:500; }
-.panel textarea { width:100%; min-height:120px; font-family:var(--font-mono); font-size:12px; }
-.panel .hint { font-size:11px; color:var(--cream-dim); margin-top:4px; }
-.actions { margin-top:12px; display:flex; gap:8px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; margin-bottom:16px; display:none; box-shadow:var(--shadow-sm); }
+.card.on { display:block; animation:slide-up .3s cubic-bezier(.22,1,.36,1); }
+.card h3 { font-size:14px; font-weight:600; color:var(--text); margin-bottom:14px; }
+.card textarea { width:100%; min-height:130px; font-family:var(--font-mono); font-size:12px; }
+.card .hint { font-size:11px; color:var(--text-muted); margin-top:6px; }
+.card .act { margin-top:14px; display:flex; gap:8px; }
 </style>
-<h1 class="page-title">源管理</h1>
+
+<div class="page-header"><h1>源管理</h1></div>
 <div id="list"></div>
 
-<div class="panel" id="cred-panel">
-  <h3>凭证 — <span id="cred-title" style="color:var(--cream)"></span></h3>
+<div class="card" id="cred-panel">
+  <h3>凭证 — <span id="cred-title" style="font-weight:400"></span></h3>
   <div id="cred-body"></div>
-  <div class="actions">
-    <button class="btn btn-primary btn-sm" onclick="saveCreds()">保存</button>
+  <div class="act">
+    <button class="btn btn-primary btn-sm" onclick="saveCreds()">保存凭证</button>
     <button class="btn btn-ghost btn-sm" onclick="$('cred-panel').classList.remove('on')">取消</button>
   </div>
 </div>
 
 <script>
-const $ = id => document.getElementById(id)
-
-async function load() {
-  const r = await fetch('/api/sources'); const srcs = await r.json()
-  $('list').innerHTML = `<table>
-    <tr><th>KEY</th><th>名称</th><th>版本</th><th>域名</th><th>认证</th><th>操作</th></tr>
-    ${srcs.map(s => `<tr>
-      <td style="font-family:var(--font-mono);font-size:12px;color:var(--teal)">${s.key}</td>
-      <td>${s.name}</td><td>${s.version}</td><td>${s.domains.join(', ')}</td>
+const $=id=>document.getElementById(id)
+async function load(){
+  const r=await fetch('/api/sources');const srcs=await r.json()
+  $('list').innerHTML=`<table>
+    <thead><tr><th>KEY</th><th>名称</th><th>版本</th><th>域名</th><th>认证方式</th><th>操作</th></tr></thead>
+    <tbody>${srcs.map(s=>`<tr>
+      <td style="font-family:var(--font-mono);font-size:12px;color:var(--gold)">${s.key}</td>
+      <td style="font-weight:500">${s.name}</td><td>${s.version}</td><td>${s.domains.join(', ')}</td>
       <td>${s.auth_schema}</td>
-      <td>${s.auth_schema !== 'NONE' ? `<button class="btn btn-ghost btn-xs" onclick="editCreds('${s.key}','${s.auth_schema}')">凭证</button>` : '-'}</td>
-    </tr>`).join('')}</table>`
+      <td>${s.auth_schema!=='NONE'?`<button class="btn btn-ghost btn-xs" onclick="editCreds('${s.key}','${s.auth_schema}')">凭证</button>`:'—'}</td>
+    </tr>`).join('')}</tbody></table>`
 }
-async function editCreds(key, schema) {
-  $('cred-title').textContent = key
-  $('cred-panel').dataset.key = key
-  let existing = {}
-  try { const r = await fetch('/api/credentials/'+key); existing = (await r.json()).credentials || {} } catch(_){}
-  if (schema === 'COOKIE') {
-    $('cred-body').innerHTML = '<textarea id="cookie-ta" placeholder="csrftoken=xxx&#10;cf_clearance=yyy">'+Object.entries(existing).map(([k,v])=>`${k}=${v}`).join('\n')+'</textarea><div class="hint">每行 key=value，如 cf_clearance=xxx</div>'
-  } else {
-    $('cred-body').innerHTML = Object.entries(existing).map(([k,v])=>`<p style="margin-bottom:6px">${k}: <input id="cred-${k}" value="${v||''}"></p>`).join('')
+async function editCreds(key,schema){
+  $('cred-title').textContent=key;$('cred-panel').dataset.key=key
+  let e={};try{const r=await fetch('/api/credentials/'+key);e=(await r.json()).credentials||{}}catch(_){}
+  if(schema==='COOKIE'){
+    $('cred-body').innerHTML='<textarea id="cookie-ta" placeholder="csrftoken=xxx&#10;cf_clearance=yyy">'+Object.entries(e).map(([k,v])=>`${k}=${v}`).join('\n')+'</textarea><div class="hint">每行 key=value，如 cf_clearance=xxx</div>'
+  }else{
+    $('cred-body').innerHTML=Object.entries(e).map(([k,v])=>`<p style="margin-bottom:8px">${k}: <input id="cred-${k}" value="${v||''}"></p>`).join('')
   }
   $('cred-panel').classList.add('on')
 }
-async function saveCreds() {
-  const key = $('cred-panel').dataset.key; const creds = {}
-  const ta = document.getElementById('cookie-ta')
-  if (ta) { ta.value.split('\n').filter(l=>l.includes('=')).forEach(l=>{const [k,...v]=l.split('=');creds[k.trim()]=v.join('=').trim()}) }
+async function saveCreds(){
+  const key=$('cred-panel').dataset.key,creds={}
+  const ta=document.getElementById('cookie-ta')
+  if(ta){ta.value.split('\n').filter(l=>l.includes('=')).forEach(l=>{const[k,...v]=l.split('=');creds[k.trim()]=v.join('=').trim()})}
   await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
-  $('cred-panel').classList.remove('on')
+  $('cred-panel').classList.remove('on');load()
 }
 load()
 </script>
