@@ -8,6 +8,9 @@ from comicfeed.sources.base import BaseSource
 class SourceManager:
     REQUIRED_ATTRS = ("key", "name", "version", "domains")
 
+    def __init__(self):
+        self._sources: dict[str, BaseSource] = {}
+
     def validate_source(self, source_cls: type[BaseSource]) -> bool:
         if not issubclass(source_cls, BaseSource):
             return False
@@ -15,6 +18,9 @@ class SourceManager:
             if not getattr(source_cls, attr, None):
                 return False
         return True
+
+    def get_source(self, key: str) -> BaseSource | None:
+        return self._sources.get(key)
 
     def load_sources(self, directory: str) -> list[BaseSource]:
         sources = []
@@ -33,5 +39,7 @@ class SourceManager:
                 if not isinstance(attr, type) or not issubclass(attr, BaseSource) or attr is BaseSource:
                     continue
                 if self.validate_source(attr):
-                    sources.append(attr())
+                    source = attr()
+                    self._sources[source.key] = source
+                    sources.append(source)
         return sources
