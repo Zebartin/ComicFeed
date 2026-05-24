@@ -66,12 +66,16 @@ class TagTranslator:
                      sum(len(v) for v in self._tags.values()))
 
     def translate(self, ns: str, name: str) -> str:
-        """翻译单个标签，返回中文名。不支持则返回原文。"""
+        """翻译单个标签，返回中文名。不支持的返回原文。"""
         cn_ns = self._namespaces.get(ns, ns)
-        if ns in self._tags and name in self._tags[ns]:
-            cn_name = self._tags[ns][name]
-            return f"{cn_ns}：{cn_name}"
-        return f"{cn_ns}：{name}"
+        if ns and ns in self._tags and name in self._tags[ns]:
+            return f"{cn_ns}：{self._tags[ns][name]}"
+        # 无 namespace 时，在所有 namespace 中搜索
+        for tns, tmap in self._tags.items():
+            if name in tmap:
+                cn_ns = self._namespaces.get(tns, tns)
+                return f"{cn_ns}：{tmap[name]}"
+        return f"{cn_ns}：{name}" if ns else name
 
 
 # 全局实例

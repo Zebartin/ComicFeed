@@ -40,3 +40,17 @@ def test_translate_with_namespace():
     result = tt.translate("artist", "inu")
     assert "画师" in result
     assert "犬" in result
+
+
+def test_translate_no_namespace_searches_all():
+    """无 namespace 时全库搜索。"""
+    tt = _make_tt()
+    result = tt.translate("", "full color")
+    assert "全彩" in result
+
+
+def test_translate_no_namespace_not_found():
+    """无 namespace 且找不到时返回原文。"""
+    tt = _make_tt()
+    result = tt.translate("", "nonexistent tag")
+    assert result == "nonexistent tag"

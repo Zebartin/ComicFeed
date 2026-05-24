@@ -59,8 +59,13 @@ class NhentaiSource(BaseSource):
             thumbnail = item.get("thumbnail", "")
             cover_url = self._make_image_url("https://t.nhentai.net", thumbnail) if thumbnail else ""
             from comicfeed.nhentai_tags import get_tag_name as _tn
+            from comicfeed.tag_translator import get_translator as _gt
             tids = item.get("tag_ids", [])
-            tags = [_tn(t) for t in tids]
+            english = [_tn(t) for t in tids]
+            _tt = _gt()
+            # 搜索无 namespace，全库搜索翻译
+            tags = [_tt.translate("", t) for t in english if t]
+            tags = [t for t in tags if t]
             nid = str(item.get("id", ""))
             from comicfeed.cbz import normalize_title
             raw_title = item.get("japanese_title") or item.get("english_title", "")
