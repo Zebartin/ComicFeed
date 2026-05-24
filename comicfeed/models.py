@@ -12,3 +12,10 @@ class Source(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(128))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class GlobalSetting(Base):
+    __tablename__ = "global_setting"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value: Mapped[str] = mapped_column(String(1024))
