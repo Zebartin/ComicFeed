@@ -55,6 +55,9 @@ def main():
     from comicfeed.komga import register_komga_hook
     register_komga_hook()
 
+    from comicfeed.notifications import register_email_hook
+    register_email_hook()
+
     from comicfeed.tag_translator import get_translator
     asyncio.run(get_translator().load())
 

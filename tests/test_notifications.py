@@ -1,7 +1,8 @@
 import json
+from unittest.mock import MagicMock, patch
 
 from comicfeed.hooks import Event
-from comicfeed.notifications import build_payload, send_webhook
+from comicfeed.notifications import build_payload, send_email, send_webhook
 
 
 def test_build_payload():
@@ -42,3 +43,19 @@ async def test_send_webhook_with_mock_client():
 
     assert captured_url == ["https://hook.example.com"]
     assert captured_data[0]["event"] == "gallery.created"
+
+
+async def test_send_email():
+    """send_email 发送 SMTP 邮件。"""
+    event = Event("gallery.created", {
+        "gallery_id": "nhentai:123", "title": "Test Comic", "files": ["a.cbz"],
+    })
+    config = {"host": "smtp.example.com", "port": 587, "user": "u", "password": "p", "to": "me@x.com"}
+
+    with patch("smtplib.SMTP") as mock_smtp:
+        await send_email(config, event)
+        mock_smtp.assert_called_once_with("smtp.example.com", 587)
+        instance = mock_smtp.return_value.__enter__.return_value
+        instance.starttls.assert_called_once()
+        instance.login.assert_called_once_with("u", "p")
+        instance.send_message.assert_called_once()

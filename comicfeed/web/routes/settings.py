@@ -17,6 +17,7 @@ DEFAULTS = {
     "smtp_port": "587",
     "smtp_user": "",
     "smtp_password": "",
+    "smtp_to": "",
     "webhook_url": "",
     "auth_username": "admin",
     "auth_password": "",
