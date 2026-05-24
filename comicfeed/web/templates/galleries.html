@@ -45,6 +45,7 @@
 const PAGE_SIZE = 24
 let currentPage = 0, total = 0, sortDir = 'desc'
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
+async function delGal(id) { if (confirm('删除此画廊记录？文件不受影响。')) { await fetch('/api/galleries/'+id, {method:'DELETE'}); load(currentPage) } }
 
 async function loadSrcs() {
   const r = await fetch('/api/sources'); const srcs = await r.json()
@@ -79,6 +80,7 @@ async function load(page) {
           <div class="title">${esc(x.display_title)}</div>
           <div class="meta"><span>${x.downloaded_at||''}</span><span class="dot"></span><span>${x.reported_pages} 页</span><span class="dot"></span><span>${x.num_favorites||0} 收藏</span></div>
           ${tags.length ? `<div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+          <div style="margin-top:8px"><button class="btn btn-danger btn-xs" onclick="event.stopPropagation();delGal('${x.id}')">删除记录</button></div>
         </div>
       </div>`
     }).join('')

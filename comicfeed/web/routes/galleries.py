@@ -1,10 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from comicfeed.database import get_session
 from comicfeed.log import get
-from comicfeed.models import Gallery
+from comicfeed.models import Gallery, SubscriptionGallery
 
 _log = get(__name__)
 
@@ -71,6 +71,20 @@ def _web_url(source_key: str, native_id: str) -> str:
     if source_key == "nhentai":
         return f"https://nhentai.net/g/{native_id}/"
     return ""
+
+
+@router.delete("/{gallery_id}", status_code=204)
+async def delete_gallery(gallery_id: str):
+    async with get_session() as session:
+        from sqlalchemy import delete
+        g = await session.get(Gallery, gallery_id)
+        if g is None:
+            raise HTTPException(404, "未找到")
+        await session.execute(
+            delete(SubscriptionGallery).where(SubscriptionGallery.gallery_id == gallery_id)
+        )
+        await session.delete(g)
+        await session.commit()
 
 
 def _parse_tags(raw: str) -> list[str]:
