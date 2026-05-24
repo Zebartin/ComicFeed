@@ -51,7 +51,8 @@ def _build_comicinfo(detail: GalleryDetail) -> bytes:
     ET.SubElement(root, "Title").text = detail.title
     ET.SubElement(root, "Number").text = detail.native_id
     ET.SubElement(root, "Tags").text = ", ".join(detail.tags)
-    ET.SubElement(root, "Web").text = f"https://nhentai.net/g/{detail.native_id}/"
+    if detail.web_url:
+        ET.SubElement(root, "Web").text = detail.web_url
     tree = ET.ElementTree(root)
     buf = BytesIO()
     tree.write(buf, encoding="utf-8", xml_declaration=True)

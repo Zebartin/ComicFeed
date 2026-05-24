@@ -91,10 +91,12 @@ class NhentaiSource(BaseSource):
             if path:
                 page_urls.append(self._make_image_url("https://i.nhentai.net", path))
 
+        native_id = str(data.get("id", ""))
         return GalleryDetail(
-            native_id=str(data.get("id", "")),
+            native_id=native_id,
             title=title,
             cover_url=cover_url,
+            web_url=f"https://nhentai.net/g/{native_id}/",
             page_urls=page_urls,
             tags=tags,
             reported_pages=len(page_urls),
