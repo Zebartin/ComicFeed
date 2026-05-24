@@ -1,6 +1,6 @@
 from comicfeed.database import create_tables, get_session, init_db
 from comicfeed.models import SourceCredential
-from comicfeed.credentials import decrypt_value, encrypt_value, get_source_credentials
+from comicfeed.credentials import encrypt_value, get_source_credentials
 
 
 async def test_save_and_load_credentials():
@@ -13,7 +13,7 @@ async def test_save_and_load_credentials():
         cred = SourceCredential(
             source_key="nhentai",
             key="cf_clearance",
-            encrypted_value=encrypt_value("test-clearance-cookie"),
+            encrypted_value=await encrypt_value("test-clearance-cookie"),
         )
         session.add(cred)
         await session.commit()
@@ -37,8 +37,8 @@ async def test_multiple_credentials_per_source():
     await create_tables()
 
     async with get_session() as session:
-        session.add(SourceCredential(source_key="exhentai", key="ipb_member_id", encrypted_value=encrypt_value("12345")))
-        session.add(SourceCredential(source_key="exhentai", key="ipb_pass_hash", encrypted_value=encrypt_value("abcdef")))
+        session.add(SourceCredential(source_key="exhentai", key="ipb_member_id", encrypted_value=await encrypt_value("12345")))
+        session.add(SourceCredential(source_key="exhentai", key="ipb_pass_hash", encrypted_value=await encrypt_value("abcdef")))
         await session.commit()
 
     creds = await get_source_credentials("exhentai")

@@ -31,7 +31,7 @@ async def set_credentials(source_key: str, data: CredentialSet):
             session.add(SourceCredential(
                 source_key=source_key,
                 key=key,
-                encrypted_value=encrypt_value(value),
+                encrypted_value=await encrypt_value(value),
             ))
         await session.commit()
     return {"status": "ok", "count": len(data.credentials)}
