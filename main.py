@@ -28,6 +28,16 @@ def main():
     init_db(args.db)
     asyncio.run(create_tables())
 
+    # 初始化加密密钥（持久化到数据库）
+    from comicfeed.config import get_setting, set_setting
+    from comicfeed.credentials import init as cred_init
+    key = asyncio.run(get_setting("_fernet_key", ""))
+    if not key:
+        from cryptography.fernet import Fernet
+        key = Fernet.generate_key().decode("utf-8")
+        asyncio.run(set_setting("_fernet_key", key))
+    cred_init(key)
+
     source_mgr = SourceManager()
     try:
         import os as _os

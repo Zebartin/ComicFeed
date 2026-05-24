@@ -7,34 +7,24 @@ from comicfeed.models import SourceCredential
 _FERNET: Fernet | None = None
 
 
-async def _get_fernet() -> Fernet:
+def init(key: str):
     global _FERNET
-    if _FERNET is not None:
-        return _FERNET
-
-    from comicfeed.config import get_setting, set_setting
-    key = await get_setting("_fernet_key", "")
-    if not key:
-        key = Fernet.generate_key().decode("utf-8")
-        await set_setting("_fernet_key", key)
-    _FERNET = Fernet(key.encode("utf-8"))
-    return _FERNET
+    _FERNET = Fernet(key.encode("utf-8") if isinstance(key, str) else key)
 
 
-async def encrypt_value(value: str) -> str:
-    f = await _get_fernet()
-    return f.encrypt(value.encode("utf-8")).decode("utf-8")
+def encrypt_value(value: str) -> str:
+    assert _FERNET is not None, "credentials.init() 未调用"
+    return _FERNET.encrypt(value.encode("utf-8")).decode("utf-8")
 
 
-async def decrypt_value(encrypted: str) -> str:
-    f = await _get_fernet()
-    return f.decrypt(encrypted.encode("utf-8")).decode("utf-8")
+def decrypt_value(encrypted: str) -> str:
+    assert _FERNET is not None, "credentials.init() 未调用"
+    return _FERNET.decrypt(encrypted.encode("utf-8")).decode("utf-8")
 
 
 async def get_source_credentials(source_key: str) -> dict[str, str]:
-    """从数据库读取并解密指定源的凭证。"""
     async with get_session() as session:
         stmt = select(SourceCredential).where(SourceCredential.source_key == source_key)
         result = await session.execute(stmt)
         creds = result.scalars().all()
-        return {c.key: await decrypt_value(c.encrypted_value) for c in creds}
+        return {c.key: decrypt_value(c.encrypted_value) for c in creds}
