@@ -33,6 +33,7 @@
     <option value="favorites">收藏数</option>
     <option value="title">标题</option>
   </select>
+  <button class="btn btn-ghost btn-sm" id="dir-btn" onclick="toggleDir()" title="切换升降序">↓ 降序</button>
   <span style="font-size:12px;color:var(--text-muted)" id="total-info"></span>
 </div>
 
@@ -41,7 +42,7 @@
 
 <script>
 const PAGE_SIZE = 24
-let currentPage = 0, total = 0
+let currentPage = 0, total = 0, sortDir = 'desc'
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 
 async function loadSrcs() {
@@ -53,7 +54,7 @@ async function load(page) {
   currentPage = page
   const src = document.getElementById('filter-src').value
   const sort = document.getElementById('sort-by').value
-  const params = new URLSearchParams({limit: PAGE_SIZE, offset: page * PAGE_SIZE, sort})
+  const params = new URLSearchParams({limit: PAGE_SIZE, offset: page * PAGE_SIZE, sort, sort_dir: sortDir})
   if (src) params.set('source_key', src)
 
   const r = await fetch('/api/galleries?' + params)
@@ -84,6 +85,11 @@ async function load(page) {
   renderPager()
 }
 
+function toggleDir() {
+  sortDir = sortDir === 'desc' ? 'asc' : 'desc'
+  document.getElementById('dir-btn').innerHTML = sortDir === 'desc' ? '&darr; 降序' : '&uarr; 升序'
+  load(0)
+}
 function renderPager() {
   const pages = Math.ceil(total / PAGE_SIZE)
   const p = document.getElementById('pager')

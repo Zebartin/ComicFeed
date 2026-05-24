@@ -24,7 +24,7 @@ _SORT_FIELDS = {
 
 @router.get("")
 async def list_galleries(source_key: str | None = None, sort: str = "date",
-                         limit: int = 50, offset: int = 0):
+                         sort_dir: str = "desc", limit: int = 50, offset: int = 0):
     async with get_session() as session:
         # 总数
         count_stmt = select(Gallery.id)
@@ -34,7 +34,7 @@ async def list_galleries(source_key: str | None = None, sort: str = "date",
 
         # 排序
         order_col = _SORT_FIELDS.get(sort, Gallery.downloaded_at)
-        order = order_col.desc() if sort != "title" else order_col.asc()
+        order = order_col.desc() if sort_dir == "desc" else order_col.asc()
 
         stmt = select(Gallery).order_by(order).offset(offset).limit(limit)
         if source_key:
