@@ -1,3 +1,4 @@
+import asyncio
 import os
 from dataclasses import dataclass, field
 
@@ -36,3 +37,39 @@ async def download_gallery(
         result.files.append(fpath)
 
     return result
+
+
+class DownloadPool:
+    """全局 worker 池 + 每源队列控制并发下载。"""
+
+    def __init__(self, max_workers: int = 5):
+        self._global_sem = asyncio.Semaphore(max_workers)
+        self._source_limits: dict[str, asyncio.Semaphore] = {}
+
+    def set_source_limit(self, source_key: str, max_slots: int):
+        self._source_limits[source_key] = asyncio.Semaphore(max_slots)
+
+    def _source_sem(self, source: BaseSource) -> asyncio.Semaphore | None:
+        return self._source_limits.get(source.key)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+    async def download(
+        self,
+        source: BaseSource,
+        gallery_id: str,
+        output_dir: str,
+        cbz_max_pages: int = 0,
+    ) -> DownloadResult:
+        """获取全局和源级信号量后执行下载。"""
+        src_sem = self._source_sem(source)
+        async with self._global_sem:
+            if src_sem:
+                async with src_sem:
+                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages)
+            else:
+                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages)
