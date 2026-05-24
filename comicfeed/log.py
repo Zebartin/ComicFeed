@@ -21,14 +21,16 @@ class DBLogHandler(logging.Handler):
             return
         try:
             conn = sqlite3.connect(_db_path)
+            conn.execute("CREATE TABLE IF NOT EXISTS system_log (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, level TEXT, source TEXT, message TEXT)")
             conn.execute(
                 "INSERT INTO system_log (timestamp, level, source, message) VALUES (?, ?, ?, ?)",
                 (datetime.now().isoformat(), record.levelname, record.name, self.format(record)),
             )
             conn.commit()
             conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
 
 
 def setup(level: int = logging.INFO, db_path: str | None = None):
@@ -42,7 +44,7 @@ def setup(level: int = logging.INFO, db_path: str | None = None):
 
     if db_path:
         db = DBLogHandler()
-        db.setLevel(logging.WARNING)
+        db.setLevel(logging.INFO)
         db.setFormatter(logging.Formatter("%(message)s"))
         root.addHandler(db)
 

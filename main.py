@@ -64,6 +64,9 @@ def main():
 
     print(f"ComicFeed 启动: http://{args.host}:{args.port}")
     print(f"  定时检查: 每 10 分钟 (按订阅间隔执行)")
+
+    from comicfeed.log import get
+    get("main").info("ComicFeed 启动完成")
     if args.auth_pass:
         print(f"  用户名: {args.auth_user}")
 
