@@ -1,9 +1,23 @@
 import base64
 import secrets
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+
+from comicfeed.source_manager import SourceManager
+from comicfeed.web.routes.galleries import router as gallery_router
+from comicfeed.web.routes.settings import router as settings_router
+from comicfeed.web.routes.sources import router as src_router
+from comicfeed.web.routes.subscriptions import router as sub_router
+
+_source_manager: SourceManager | None = None
+
+
+def get_source_manager() -> SourceManager | None:
+    return _source_manager
 
 
 class BasicAuthMiddleware(BaseHTTPMiddleware):
@@ -36,9 +50,11 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def create_app(config: dict | None = None) -> FastAPI:
+def create_app(config: dict | None = None, source_manager: SourceManager | None = None) -> FastAPI:
+    global _source_manager
     if config is None:
         config = {}
+    _source_manager = source_manager or SourceManager()
     app = FastAPI()
 
     auth_user = config.get("auth_username", "")
@@ -50,8 +66,15 @@ def create_app(config: dict | None = None) -> FastAPI:
     async def health():
         return {"status": "ok"}
 
-    @app.get("/api/subscriptions")
-    async def list_subscriptions():
-        return []
+    app.include_router(sub_router)
+    app.include_router(src_router)
+    app.include_router(gallery_router)
+    app.include_router(settings_router)
+
+    templates = Jinja2Templates(directory="comicfeed/web/templates")
+
+    @app.get("/", response_class=HTMLResponse)
+    async def index(request: Request):
+        return templates.TemplateResponse("base.html", {"request": request, "active": "subs"})
 
     return app
