@@ -50,13 +50,17 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
     now = datetime.now()
     async with get_session() as session:
         subs = (await session.scalars(select(Subscription).where(Subscription.enabled == True))).all()
+        _log.info("开始巡检: %d 个启用订阅", len(subs))
 
         for sub in subs:
             # 未到检查间隔，跳过
             if sub.last_checked_at and sub.interval_minutes > 0:
                 elapsed = (now - sub.last_checked_at).total_seconds() / 60
                 if elapsed < sub.interval_minutes:
+                    _log.debug("跳过 [%s]: 距上次检查 %.0f 分钟 (间隔 %d)", sub.name, elapsed, sub.interval_minutes)
                     continue
+
+            _log.info("检查订阅: %s [%s] query=%s", sub.name, sub.source_key, sub.query)
 
             from comicfeed.credentials import get_source_credentials
             creds = await get_source_credentials(sub.source_key)
@@ -68,7 +72,9 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
 
             try:
                 new = await check_subscription(session, sub.id, source)
-            except Exception:
+                _log.info("[%s] 检查完成: %d 个新画廊", sub.name, len(new))
+            except Exception as e:
+                _log.error("[%s] 检查失败: %s", sub.name, e)
                 await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "search_failed"}))
                 continue
 
@@ -76,6 +82,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 try:
                     from comicfeed.config import get_setting
                     out_dir = await get_setting("download_path", ".")
+                    _log.info("开始下载: %s:%s (%s)", source.key, item.native_id, item.title)
                     result = await download_pool.download(source, item.native_id, out_dir)
                     # 写入订阅-画廊关联
                     from comicfeed.models import SubscriptionGallery
@@ -89,7 +96,8 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                         "title": item.title,
                         "files": result.files,
                     }))
-                except Exception:
+                except Exception as e:
+                    _log.error("下载失败: %s:%s - %s", source.key, item.native_id, e)
                     await event_bus.fire(Event("gallery.failed", {
                         "gallery_id": f"{source.key}:{item.native_id}",
                         "title": item.title,

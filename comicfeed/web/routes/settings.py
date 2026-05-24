@@ -5,6 +5,7 @@ from comicfeed.config import get_setting, set_setting
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 DEFAULTS = {
+    "check_interval": "10",
     "download_path": "",
     "global_concurrency": "5",
     "komga_url": "",

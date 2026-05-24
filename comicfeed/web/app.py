@@ -85,7 +85,9 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from comicfeed.scheduler import create_scheduler
-        scheduler = create_scheduler(_source_manager, download_pool)
+        from comicfeed.config import get_setting
+        interval = int(await get_setting("check_interval", "10") or "10")
+        scheduler = create_scheduler(_source_manager, download_pool, interval_minutes=interval)
         scheduler.start()
         yield
         scheduler.shutdown()
