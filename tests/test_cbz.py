@@ -79,3 +79,23 @@ def test_pack_cbz_creates_valid_zip_with_comicinfo():
         assert "Sample Comic" in xml
         assert "455819" in xml
         assert "full color" in xml
+
+
+def test_pack_cbz_respects_start_page():
+    """start_page 参数控制内部页码偏移。"""
+    detail = GalleryDetail(
+        native_id="455819",
+        title="Test",
+        cover_url="",
+        tags=[],
+        reported_pages=2,
+    )
+    pages = [b"\xff\xd8\xff" + b"\x00" * 10, b"\xff\xd8\xff" + b"\x00" * 10]
+    output = BytesIO()
+    pack_cbz(output, "test.cbz", detail, pages, start_page=31)
+
+    output.seek(0)
+    with ZipFile(output) as z:
+        names = sorted(z.namelist())
+        assert "0031.jpg" in names
+        assert "0032.jpg" in names

@@ -58,9 +58,9 @@ def _build_comicinfo(detail: GalleryDetail) -> bytes:
     return buf.getvalue()
 
 
-def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes]):
-    """打包 CBZ 文件到 output。"""
+def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1):
+    """打包 CBZ 文件到 output，页码从 start_page 开始编号。"""
     with ZipFile(output, "w", ZIP_DEFLATED) as z:
-        for i, data in enumerate(pages, 1):
+        for i, data in enumerate(pages, start_page):
             z.writestr(f"{i:04d}.jpg", data)
         z.writestr("ComicInfo.xml", _build_comicinfo(detail))
