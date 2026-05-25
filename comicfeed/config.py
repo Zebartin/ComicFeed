@@ -12,7 +12,7 @@ async def get_setting(key: str, default: str | None = None) -> str | None:
 
 async def get_source_proxy(source_key: str) -> str | None:
     """获取源的代理地址：每源优先（- 表示不走代理），全局兜底。"""
-    per = await get_setting(f"proxy_{source_key}", "") or ""
+    per = await get_setting(f"src.{source_key}.proxy", "") or ""
     if per == "-":
         return None  # 明确不用代理
     if per:

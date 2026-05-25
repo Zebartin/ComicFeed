@@ -27,6 +27,12 @@ class ExhentaiSource(BaseSource):
         super().__init__(proxy=proxy, credentials=credentials)
         self._base = "https://exhentai.org"
 
+    def get_config_schema(self) -> list[dict]:
+        return [
+            {"key": "proxy", "label": "代理", "type": "text", "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
+            {"key": "cookie", "label": "Cookie", "type": "textarea", "placeholder": "ipb_member_id=xxx\nipb_pass_hash=yyy\nigneous=zzz", "hint": "每行 key=value"},
+        ]
+
     def parse_url(self, url: str) -> str | None:
         m = self._URL_PATTERN.match(url)
         if m:
@@ -120,12 +126,9 @@ class ExhentaiSource(BaseSource):
         web_url = ""
 
         # 标题：优先日文 gj，其次英文 gn
-        title = ""
-        for h1 in soup.select("h1#gj, h1#gn"):
-            t = h1.get_text(strip=True)
-            if t:
-                title = t
-                break
+        gj = soup.select_one("h1#gj")
+        gn = soup.select_one("h1#gn")
+        title = (gj.get_text(strip=True) if gj else "") or (gn.get_text(strip=True) if gn else "")
 
         # 封面图
         cover_url = ""

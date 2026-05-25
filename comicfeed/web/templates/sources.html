@@ -4,68 +4,81 @@
 .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; margin-bottom:16px; display:none; box-shadow:var(--shadow-sm); }
 .card.on { display:block; animation:slide-up .3s cubic-bezier(.22,1,.36,1); }
 .card h3 { font-size:14px; font-weight:600; color:var(--text); margin-bottom:14px; }
-.card textarea { width:100%; min-height:130px; font-family:var(--font-mono); font-size:12px; }
-.card .hint { font-size:11px; color:var(--text-muted); margin-top:6px; }
+.card textarea { width:100%; min-height:100px; font-family:var(--font-mono); font-size:12px; }
+.card .hint { font-size:11px; color:var(--text-muted); margin-top:4px; }
 .card .act { margin-top:14px; display:flex; gap:8px; }
 </style>
 
 <div class="page-header"><h1>源管理</h1></div>
 <div id="list"></div>
 
-<div class="card" id="cred-panel">
-  <h3>配置 — <span id="cred-title" style="font-weight:400"></span></h3>
-  <div id="cred-body"></div>
-  <div style="margin-top:14px">
-    <label style="font-size:12px;color:var(--text-muted)">代理 <span style="color:var(--gold)">空=全局</span> <span style="color:var(--accent)">- =直连</span></label>
-    <input id="cred-proxy" placeholder="如 http://localhost:8889" style="width:100%;margin-top:4px">
-  </div>
+<div class="card" id="cfg-panel">
+  <h3 id="cfg-title"></h3>
+  <div id="cfg-body"></div>
   <div class="act">
-    <button class="btn btn-primary btn-sm" onclick="saveCreds()">保存</button>
-    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cred-panel').classList.remove('on')">取消</button>
+    <button class="btn btn-primary btn-sm" onclick="saveCfg()">保存</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cfg-panel').classList.remove('on')">取消</button>
   </div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id)
+let _srcs=[]
 
 async function load() {
-  const r=await fetch('/api/sources');const srcs=await r.json()
+  const r=await fetch('/api/sources');_srcs=await r.json()
   $('list').innerHTML=`<table>
-    <thead><tr><th>KEY</th><th>名称</th><th>版本</th><th>域名</th><th>认证方式</th><th>操作</th></tr></thead>
-    <tbody>${srcs.map(s=>`<tr>
+    <thead><tr><th>KEY</th><th>名称</th><th>版本</th><th>域名</th><th>操作</th></tr></thead>
+    <tbody>${_srcs.map(s=>`<tr>
       <td style="font-family:var(--font-mono);font-size:12px;color:var(--gold)">${s.key}</td>
       <td style="font-weight:500">${s.name}</td><td>${s.version}</td><td>${s.domains.join(', ')}</td>
-      <td>${s.auth_schema}</td>
-      <td>${s.auth_schema!=='NONE'?`<button class="btn btn-ghost btn-xs" onclick="editCreds('${s.key}','${s.auth_schema}')">配置</button>`:'—'}</td>
+      <td>${s.config.length?`<button class="btn btn-ghost btn-xs" onclick="openCfg('${s.key}')">配置</button>`:'—'}</td>
     </tr>`).join('')}</tbody></table>`
 }
 
-async function editCreds(key, schema) {
-  $('cred-title').textContent=key;$('cred-panel').dataset.key=key
-  let e={}
-  try { const r=await fetch('/api/credentials/'+key);e=(await r.json()).credentials||{} } catch(_) {}
+async function openCfg(key) {
+  const s=_srcs.find(x=>x.key===key); if(!s)return
+  $('cfg-title').textContent='配置 — '+s.name
+  $('cfg-panel').dataset.key=key
 
-  if (schema==='COOKIE') {
-    $('cred-body').innerHTML='<textarea id="cookie-ta" placeholder="csrftoken=xxx&#10;cf_clearance=yyy">'+Object.entries(e).map(([k,v])=>k+'='+v).join('\n')+'</textarea><div class="hint">每行 key=value</div>'
-  } else {
-    $('cred-body').innerHTML=Object.entries(e).map(([k,v])=>`<p style="margin-bottom:8px">${k}: <input id="cred-${k}" value="${v||''}"></p>`).join('')
+  // 加载现有值
+  let vals={}
+  try { const r=await fetch('/api/settings'); const all=await r.json()
+    for (const f of s.config) vals[f.key] = all['src.'+key+'.'+f.key] || ''
+  } catch(_){}
+
+  // 根据 schema 渲染
+  let html=''
+  for (const f of s.config) {
+    html += `<div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text-muted)">${f.label}</label>`
+    if (f.type==='textarea') {
+      html += `<textarea id="cfg-${f.key}" placeholder="${f.placeholder||''}">${vals[f.key]||''}</textarea>`
+    } else {
+      html += `<input id="cfg-${f.key}" type="${f.type||'text'}" placeholder="${f.placeholder||''}" value="${vals[f.key]||''}" style="width:100%;margin-top:4px">`
+    }
+    if (f.hint) html += `<div class="hint">${f.hint}</div>`
+    html += '</div>'
   }
-
-  // 加载每源代理
-  try { const r=await fetch('/api/settings'); $('cred-proxy').value=(await r.json())['proxy_'+key]||'' } catch(_) {}
-
-  $('cred-panel').classList.add('on')
+  $('cfg-body').innerHTML=html
+  $('cfg-panel').classList.add('on')
 }
 
-async function saveCreds() {
-  const key=$('cred-panel').dataset.key,creds={}
-  const ta=document.getElementById('cookie-ta')
-  if (ta) { ta.value.split('\n').filter(l=>l.includes('=')).forEach(l=>{const[k,...v]=l.split('=');creds[k.trim()]=v.join('=').trim()}) }
-  await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
-  // 保存代理
-  const pv = $('cred-proxy').value||''
-  await fetch('/api/settings/proxy_'+key+'?value='+encodeURIComponent(pv),{method:'PUT'})
-  $('cred-panel').classList.remove('on');load()
+async function saveCfg() {
+  const key=$('cfg-panel').dataset.key
+  const s=_srcs.find(x=>x.key===key); if(!s)return
+  for (const f of s.config) {
+    const el=document.getElementById('cfg-'+f.key)
+    // 对 textarea 类型的 cookie，同时写入 credentials 表
+    if (f.key==='cookie' && el && s.auth_schema==='COOKIE') {
+      const creds={}
+      el.value.split('\n').filter(l=>l.includes('=')).forEach(l=>{
+        const[k,...v]=l.split('=');creds[k.trim()]=v.join('=').trim()
+      })
+      await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
+    }
+    if (el) await fetch('/api/settings/src.'+key+'.'+f.key+'?value='+encodeURIComponent(el.value||''),{method:'PUT'})
+  }
+  $('cfg-panel').classList.remove('on')
 }
 load()
 </script>

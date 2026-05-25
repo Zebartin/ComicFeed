@@ -22,6 +22,12 @@ class NhentaiSource(BaseSource):
     _URL_PATTERN = re.compile(r"https?://(?:www\.)?nhentai\.net/g/(\d+)")
     _BASE = "https://nhentai.net"
 
+    def get_config_schema(self) -> list[dict]:
+        return [
+            {"key": "proxy", "label": "代理", "type": "text", "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
+            {"key": "cookie", "label": "Cookie", "type": "textarea", "placeholder": "csrftoken=xxx\ncf_clearance=yyy", "hint": "每行 key=value"},
+        ]
+
     def parse_url(self, url: str) -> str | None:
         m = self._URL_PATTERN.match(url)
         if m:

@@ -61,6 +61,12 @@ class BaseSource(ABC):
         self.proxy = proxy
         self.credentials = credentials or {}
 
+    def get_config_schema(self) -> list[dict]:
+        """返回源的自定义配置项列表，WebUI 据此渲染表单。
+        每项: {key, label, type: 'text'|'textarea'|'password', placeholder, hint}
+        """
+        return []
+
     @abstractmethod
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult: ...
 
