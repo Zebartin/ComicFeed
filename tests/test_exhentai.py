@@ -14,23 +14,32 @@ def test_parse_url():
 _SAMPLE_SEARCH_HTML = """
 <table class="itg">
 <tr>
-  <td class="gl1c glcat"></td>
-  <td class="gl2c" style="background:url(https://s.exhentai.org/g/1234567/abc1/cover.jpg) -32px -64px"></td>
-  <td class="gl3c glname"><a href="https://exhentai.org/g/1234567/aabbcc11/"><div class="glink">Test Gallery Title</div><div>chinesetranslated</div></a></td>
-  <td class="gl4c glhide">Uploader · 32 pages</td>
+  <td class="gl1e"><img src="https://ehgt.org/g/1234567/abc1/cover.jpg"/></td>
+  <td class="gl2e">
+    <a href="https://exhentai.org/g/1234567/aabbcc11/">ryukisakuya</a>
+    <div>Doujinshi</div><div>2026-05-25 10:55</div><div>ryukisakuya</div><div>32 pages</div>
+    <div>Test Gallery Title</div>
+    <div class="gt">language:</div><div class="gtl"><div>chinese</div><div>translated</div></div>
+  </td>
+  <td class="tc">language:</td><td><div>chinese</div><div>translated</div></td>
+  <td class="tc">artist:</td><td><div>ryukisakuya</div></td>
 </tr>
 <tr>
-  <td class="gl1c glcat"></td>
-  <td class="gl2c"></td>
-  <td class="gl3c glname"><a href="https://exhentai.org/g/7654321/bbccdd22/"><div class="glink">Another Gallery</div><div>english</div></a></td>
-  <td class="gl4c glhide">Uploader2 · 16 pages</td>
+  <td class="gl1e"></td>
+  <td class="gl2e">
+    <a href="https://exhentai.org/g/7654321/bbccdd22/">artist2</a>
+    <div>Manga</div><div>2026-05-24</div><div>artist2</div><div>16 pages</div>
+    <div>Another Gallery</div>
+    <div class="gt">language:</div><div class="gtl"><div>english</div></div>
+  </td>
+  <td class="tc">language:</td><td><div>english</div></td>
 </tr>
 </table>
 """
 
 
 def test_parse_search_html():
-    """解析搜索页面 HTML 返回 GallerySummary。"""
+    """解析扩展模式搜索页面 HTML。"""
     s = ExhentaiSource()
     result = s._parse_search_html(_SAMPLE_SEARCH_HTML, page=0)
     assert len(result.items) == 2
@@ -38,10 +47,9 @@ def test_parse_search_html():
     assert result.items[0].title == "Test Gallery Title"
     assert "ehgt.org" in result.items[0].cover_url
     assert result.items[0].page_count == 32
-    assert result.items[0].web_url  # web_url 非空
-    # 无封面的行构造占位 URL
+    assert "/g/1234567/" in result.items[0].web_url
+    assert len(result.items[0].tags) >= 2  # chinese, translated, artist:ryukisakuya
     assert result.items[1].page_count == 16
-    assert "ehgt.org" in result.items[1].cover_url
 
 
 _SAMPLE_GALLERY_HTML = """

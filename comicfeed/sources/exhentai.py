@@ -56,78 +56,92 @@ class ExhentaiSource(BaseSource):
         async with self._client() as client:
             resp = await client.get(
                 f"{self._base}/",
-                params={"f_search": query, "page": page},
+                params={"f_search": query, "page": page, "inline_set": "dm_e"},
             )
             resp.raise_for_status()
+            # with open(f"debug_exh_search_{page}.html", "w", encoding="utf-8") as f:
+            #     f.write(resp.text)
             return self._parse_search_html(resp.text, page)
 
     def _parse_search_html(self, html: str, page: int) -> SearchResult:
         soup = BeautifulSoup(html, "lxml")
         items = []
         for row in soup.select("tr"):
-            link = row.select_one("td.glname a, td.gl3c a")
-            if not link:
+            gl1e = row.select_one("td.gl1e")
+            gl2e = row.select_one("td.gl2e")
+            if not gl1e or not gl2e:
                 continue
-            href = link.get("href", "")
-            m = self._GALLERY_LINK.search(href)
-            if not m:
-                continue
-            # 标题取 div.glink 文本，不取整个 a（避免 tag 混入）
-            glink = link.select_one("div.glink")
-            title = glink.get_text(strip=True) if glink else link.get_text(strip=True)
 
-            # 标签：第二个 div 的文本按空格和命名空间前缀拆分
-            tag_names = []
-            for d in link.select("div:not(.glink)"):
-                raw = d.get_text(strip=True)
-                # e-hentai 搜索标签是连在一起的，按模式拆分
-                # 格式: word|f:word|m:word|multi word name
-                parts = re.split(r"(?=[fm]:)", raw)
-                for p in parts:
-                    p = p.strip()
-                    if not p:
-                        continue
-                    from comicfeed.tag_translator import get_translator
-                    _tt = get_translator()
-                    if p.startswith("f:"):
-                        tag_names.append(_tt.translate("female", p[2:]))
-                    elif p.startswith("m:"):
-                        tag_names.append(_tt.translate("male", p[2:]))
-                    else:
-                        # 一般标签（language, category 等），无 namespace
-                        tag_names.append(_tt.translate("", p))
-
-            # 封面：找 img 或 CSS background-image
+            # 封面图
             cover = ""
-            img = row.select_one("img")
+            img = gl1e.select_one("img")
             if img:
                 cover = img.get("src", "")
-            # 如果是 CSS background，尝试从 style 提取
-            if not cover:
-                for td in row.select("td"):
-                    style = td.get("style", "")
-                    bg = re.search(r"url\(([^)]+)\)", style)
-                    if bg:
-                        cover = bg.group(1)
-                        break
-            # 替换不可直连的 CDN 域名
+                if "ehgt.org" not in cover and cover:
+                    cover = cover.replace("ehgt.org", cover.split("/")[2]) if "/" in cover else cover
+                    cover = cover if "ehgt.org" in cover else f"https://ehgt.org{cover}" if cover.startswith("/") else cover
             cover = cover.replace("s.exhentai.org", "ehgt.org")
-            # 无封面时构造占位 URL
-            if not cover:
-                cover = f"https://ehgt.org/g/{m.group(1)}/{m.group(2)[:4]}.jpg"
 
-            # 页数：从同行的 gld4/gld5/gld6 或文本中找
+            # Gallery 链接和 ID
+            gid = ""
+            token = ""
+            for a in gl2e.select("a"):
+                m = self._GALLERY_LINK.search(a.get("href", ""))
+                if m:
+                    gid = m.group(1)
+                    token = m.group(2)
+                    break
+            if not gid:
+                continue
+
+            # 标题：取 gl2e 中非元数据的最长 div 文本
+            title = ""
+            candidates = []
+            for d in gl2e.select("div:not(.gt)"):
+                t = d.get_text(strip=True)
+                if not t:
+                    continue
+                low = t.lower()
+                # 跳过元数据行
+                if re.match(r"^\d{4}-\d{2}-\d{2}", t):  # 日期
+                    continue
+                if re.match(r"^\d+\s*pages?", low):  # 页数
+                    continue
+                if t in ("Doujinshi", "Manga", "Artist CG", "Game CG", "Western", "Non-H", "Image Set", "Cosplay", "Asian Porn", "Misc"):
+                    continue
+                if any(ns in low for ns in ["language:", "parody:", "character:", "artist:", "group:", "female:", "male:"]):
+                    continue
+                candidates.append(t)
+            if candidates:
+                title = max(candidates, key=len)
+
+            # 页数：逐 div 查找，避免文本拼接干扰
             pg_count = 0
-            for td in row.select("td"):
-                text = td.get_text()
-                m2 = re.search(r"(\d+)\s*pages?", text, re.IGNORECASE)
-                if m2:
-                    pg_count = int(m2.group(1))
+            for d in gl2e.select("div"):
+                m_pg = re.search(r"(\d+)\s*pages?", d.get_text(strip=True), re.IGNORECASE)
+                if m_pg:
+                    pg_count = int(m_pg.group(1))
                     break
 
-            web = href if href.startswith("http") else f"https://e-hentai.org{href}"
+            # 标签：td.tc + 紧邻的 td 成对解析
+            tag_names = []
+            tds = row.select("td")
+            from comicfeed.tag_translator import get_translator
+            _tt = get_translator()
+            for i, td in enumerate(tds):
+                if "tc" in (td.get("class") or []):
+                    ns = td.get_text(strip=True).rstrip(":")
+                    # 下一个 td 中的 div 是标签值
+                    next_td = tds[i + 1] if i + 1 < len(tds) else None
+                    if next_td:
+                        for d in next_td.select("div"):
+                            name = d.get_text(strip=True)
+                            if name and ns:
+                                tag_names.append(_tt.translate(ns, name))
+
+            web = f"https://e-hentai.org/g/{gid}/{token}/"
             items.append(GallerySummary(
-                native_id=m.group(1),
+                native_id=gid,
                 title=title,
                 cover_url=cover,
                 web_url=web,
