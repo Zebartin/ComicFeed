@@ -41,13 +41,13 @@ async function openCfg(key) {
   $('cfg-title').textContent='配置 — '+s.name
   $('cfg-panel').dataset.key=key
 
-  // 加载现有值：proxy 从 settings，其他从 credentials
+  // 加载现有值：credential 字段从 credentials，其余从 settings
   let vals={}
-  try { const r=await fetch('/api/settings'); const all=await r.json()
-    vals['proxy'] = all['src.'+key+'.proxy'] || ''
-  } catch(_){}
   try { const r=await fetch('/api/credentials/'+key); const d=await r.json()
     Object.assign(vals, d.credentials||{})
+  } catch(_){}
+  try { const r=await fetch('/api/settings'); const all=await r.json()
+    for (const f of s.config) if (!f.credential) vals[f.key] = all['src.'+key+'.'+f.key] || ''
   } catch(_){}
 
   // 根据 schema 渲染
@@ -74,15 +74,12 @@ async function saveCfg() {
     const el=document.getElementById('cfg-'+f.key)
     if (!el) continue
     const v = el.value||''
-    // proxy 字段存到 settings
-    if (f.key==='proxy') {
-      await fetch('/api/settings/src.'+key+'.proxy?value='+encodeURIComponent(v),{method:'PUT'})
-    } else if (s.auth_schema==='COOKIE') {
-      // 其他字段作为凭证，收集后统一写入
+    if (f.credential) {
       if (v) creds[f.key] = v
+    } else {
+      await fetch('/api/settings/src.'+key+'.'+f.key+'?value='+encodeURIComponent(v),{method:'PUT'})
     }
   }
-  // 批量写入凭证
   if (Object.keys(creds).length) {
     await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
   }

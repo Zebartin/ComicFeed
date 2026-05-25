@@ -63,7 +63,8 @@ class BaseSource(ABC):
 
     def get_config_schema(self) -> list[dict]:
         """返回源的自定义配置项列表，WebUI 据此渲染表单。
-        每项: {key, label, type: 'text'|'textarea'|'password', placeholder, hint}
+        每项: {key, label, type: 'text'|'textarea'|'password', credential: bool, placeholder, hint}
+        credential=True 的字段存入加密凭证表，其余存入全局设置表。
         """
         return []
 
