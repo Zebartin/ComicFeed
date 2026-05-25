@@ -139,10 +139,6 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     async def page_setup(request: Request):
         return templates.TemplateResponse(request, "setup.html")
 
-    @app.get("/notifications", response_class=HTMLResponse)
-    async def page_notifications(request: Request):
-        return templates.TemplateResponse(request, "notifications.html")
-
     @app.get("/logs", response_class=HTMLResponse)
     async def page_logs(request: Request):
         return templates.TemplateResponse(request, "logs.html")

@@ -13,7 +13,7 @@
 <div id="list"></div>
 
 <div class="card" id="cred-panel">
-  <h3>凭证 — <span id="cred-title" style="font-weight:400"></span></h3>
+  <h3>配置 — <span id="cred-title" style="font-weight:400"></span></h3>
   <div id="cred-body"></div>
   <div style="margin-top:14px">
     <label style="font-size:12px;color:var(--text-muted)">代理 <span style="color:var(--gold)">空=全局</span> <span style="color:var(--accent)">- =直连</span></label>
@@ -36,7 +36,7 @@ async function load() {
       <td style="font-family:var(--font-mono);font-size:12px;color:var(--gold)">${s.key}</td>
       <td style="font-weight:500">${s.name}</td><td>${s.version}</td><td>${s.domains.join(', ')}</td>
       <td>${s.auth_schema}</td>
-      <td>${s.auth_schema!=='NONE'?`<button class="btn btn-ghost btn-xs" onclick="editCreds('${s.key}','${s.auth_schema}')">凭证</button>`:'—'}</td>
+      <td>${s.auth_schema!=='NONE'?`<button class="btn btn-ghost btn-xs" onclick="editCreds('${s.key}','${s.auth_schema}')">配置</button>`:'—'}</td>
     </tr>`).join('')}</tbody></table>`
 }
 
