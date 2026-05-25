@@ -98,7 +98,7 @@ async def delete_subscription(sub_id: int):
 
 class CheckRequest(BaseModel):
     max_search_pages: int = 5
-    page: int = 0
+    page: int = 1
     exclude_ids: list[str] = []
     existing_titles: list[str] = []
     next_url: str = ""

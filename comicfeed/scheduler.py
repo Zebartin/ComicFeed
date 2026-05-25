@@ -21,7 +21,7 @@ async def check_subscription(
     max_search_pages: int = 1,
     exclude_ids: set[str] | None = None,
     existing_titles: list[str] | None = None,
-    start_page: int = 0,
+    start_page: int = 1,
 ) -> tuple[list[GallerySummary], bool]:
     """检查一个订阅，返回 (新画廊列表, 是否还有更多页)。"""
     sub = await session.get(Subscription, subscription_id)
@@ -87,7 +87,7 @@ async def check_subscription(
             break
 
     # 仅在首次非追加检查时更新时间
-    if start_page == 0:
+    if start_page <= 1:
         sub.last_checked_at = datetime.now()
         await session.commit()
 
