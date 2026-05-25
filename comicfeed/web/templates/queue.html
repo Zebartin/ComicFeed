@@ -24,8 +24,9 @@ async function load() {
   } else {
     document.getElementById('list').innerHTML = q.active.map(t => {
       const pct = t.total_pages ? Math.round(t.downloaded/t.total_pages*100) : 0
+      const wu = t.web_url || ''
       return `<div class="q-item">
-        ${t.cover_url ? `<img class="q-cover" src="${t.cover_url}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+        ${t.cover_url ? `<a href="${wu}" target="_blank"><img class="q-cover" src="${t.cover_url}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></a>` : ''}
         <div class="q-cover-placeholder" style="${t.cover_url?'display:none':'display:flex'}">?</div>
         <div class="q-info">
           <div class="gid">${esc(t.gallery_id)}</div>

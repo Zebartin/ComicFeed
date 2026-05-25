@@ -297,7 +297,7 @@ async function checkSub(id) {
         <div class="info" onclick="openNhentai(event,'${g.web_url||''}','${g.native_id}')" style="cursor:pointer" title="在源站打开">
           <div class="gid">#${esc(g.native_id)}</div>
           <div class="title">${esc(g.title)}</div>
-          <div class="meta"><span>${g.page_count} 页</span><span class="dot"></span><span>${g.num_favorites||0} 收藏</span></div>
+          <div class="meta"><span>${g.page_count} 页</span>${g.num_favorites?`<span class="dot"></span><span>${g.num_favorites} 收藏</span>`:''}</div>
           ${g.tags&&g.tags.length?`<div class="tags">${g.tags.slice(0,6).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
         </div>
       </div>`).join('')

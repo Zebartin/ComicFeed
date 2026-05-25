@@ -33,7 +33,7 @@ async def download_gallery(
 
     full_gid = f"{source.key}:{gallery_id}"
     if tracker:
-        tracker.started(full_gid, title, total, cover_url=detail.cover_url)
+        tracker.started(full_gid, title, total, cover_url=detail.cover_url, web_url=detail.web_url)
 
     result = DownloadResult(gallery_id=full_gid)
     downloaded = 0
@@ -138,11 +138,11 @@ class DownloadTracker:
     def __init__(self):
         self._tasks: dict[str, dict] = {}
 
-    def started(self, gallery_id: str, title: str, total_pages: int, cover_url: str = ""):
+    def started(self, gallery_id: str, title: str, total_pages: int, cover_url: str = "", web_url: str = ""):
         self._tasks[gallery_id] = {
             "gallery_id": gallery_id, "title": title,
             "total_pages": total_pages, "downloaded": 0,
-            "cover_url": cover_url,
+            "cover_url": cover_url, "web_url": web_url,
         }
 
     def progress(self, gallery_id: str, downloaded: int):
