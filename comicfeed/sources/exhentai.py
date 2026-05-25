@@ -59,9 +59,12 @@ class ExhentaiSource(BaseSource):
                 params={"f_search": query, "page": page, "inline_set": "dm_e"},
             )
             resp.raise_for_status()
-            # with open(f"debug_exh_search_{page}.html", "w", encoding="utf-8") as f:
-            #     f.write(resp.text)
             return self._parse_search_html(resp.text, page)
+
+    @staticmethod
+    def _make_thumbnail_url(path: str) -> str:
+        """修改缩略图URL，使其能够正常显示。"""
+        return path.replace("s.exhentai.org", "ehgt.org")
 
     def _parse_search_html(self, html: str, page: int) -> SearchResult:
         soup = BeautifulSoup(html, "lxml")
@@ -73,14 +76,7 @@ class ExhentaiSource(BaseSource):
                 continue
 
             # 封面图
-            cover = ""
-            img = gl1e.select_one("img")
-            if img:
-                cover = img.get("src", "")
-                if "ehgt.org" not in cover and cover:
-                    cover = cover.replace("ehgt.org", cover.split("/")[2]) if "/" in cover else cover
-                    cover = cover if "ehgt.org" in cover else f"https://ehgt.org{cover}" if cover.startswith("/") else cover
-            cover = cover.replace("s.exhentai.org", "ehgt.org")
+            cover = self._make_thumbnail_url(gl1e.select_one("img").get("src", ""))
 
             # Gallery 链接和 ID
             gid = ""
@@ -94,30 +90,12 @@ class ExhentaiSource(BaseSource):
             if not gid:
                 continue
 
-            # 标题：取 gl2e 中非元数据的最长 div 文本
-            title = ""
-            candidates = []
-            for d in gl2e.select("div:not(.gt)"):
-                t = d.get_text(strip=True)
-                if not t:
-                    continue
-                low = t.lower()
-                # 跳过元数据行
-                if re.match(r"^\d{4}-\d{2}-\d{2}", t):  # 日期
-                    continue
-                if re.match(r"^\d+\s*pages?", low):  # 页数
-                    continue
-                if t in ("Doujinshi", "Manga", "Artist CG", "Game CG", "Western", "Non-H", "Image Set", "Cosplay", "Asian Porn", "Misc"):
-                    continue
-                if any(ns in low for ns in ["language:", "parody:", "character:", "artist:", "group:", "female:", "male:"]):
-                    continue
-                candidates.append(t)
-            if candidates:
-                title = max(candidates, key=len)
+            # 标题：取 div.glink
+            title = gl2e.select_one("div.glink").get_text(strip=True)
 
             # 页数：逐 div 查找，避免文本拼接干扰
             pg_count = 0
-            for d in gl2e.select("div"):
+            for d in gl2e.select("div.gl3e > div"):
                 m_pg = re.search(r"(\d+)\s*pages?", d.get_text(strip=True), re.IGNORECASE)
                 if m_pg:
                     pg_count = int(m_pg.group(1))
@@ -139,7 +117,8 @@ class ExhentaiSource(BaseSource):
                             if name and ns:
                                 tag_names.append(_tt.translate(ns, name))
 
-            web = f"https://e-hentai.org/g/{gid}/{token}/"
+            # Web URL：select a标签，提取href
+            web = row.select_one("td.gl2e > div > a").get("href", "")
             items.append(GallerySummary(
                 native_id=gid,
                 title=title,
@@ -256,7 +235,7 @@ class ExhentaiSource(BaseSource):
         return GalleryDetail(
             native_id=gallery_id,
             title=title,
-            cover_url=cover_url,
+            cover_url=self._make_thumbnail_url(cover_url),
             web_url=web_url,
             tags=tags,
             page_urls=page_urls,

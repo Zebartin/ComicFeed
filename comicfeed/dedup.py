@@ -3,7 +3,7 @@ from itertools import combinations
 
 from comicfeed.cbz import normalize_title
 
-_DEDUP_THRESHOLD = 0.8
+_DEDUP_THRESHOLD = 0.9
 
 
 def _similarity(a: str, b: str) -> float:
