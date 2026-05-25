@@ -12,11 +12,19 @@ def test_parse_url():
 
 
 _SAMPLE_SEARCH_HTML = """
-<table class="itg gltc">
-<tr><td class="gl1e"><img src="https://ehgt.org/t/cover.jpg"/></td>
-<td class="gl3c glname"><a href="https://exhentai.org/g/1234567/aabbcc11/">Test Gallery Title</a></td></tr>
-<tr><td class="gl1e"><img src="https://ehgt.org/t/cover2.jpg"/></td>
-<td class="gl3c glname"><a href="https://exhentai.org/g/7654321/bbccdd22/">Another Gallery</a></td></tr>
+<table class="itg">
+<tr>
+  <td class="gl1c glcat"></td>
+  <td class="gl2c" style="background:url(https://s.exhentai.org/g/1234567/abc1/cover.jpg) -32px -64px"></td>
+  <td class="gl3c glname"><a href="https://exhentai.org/g/1234567/aabbcc11/">Test Gallery Title</a></td>
+  <td class="gl4c glhide">Uploader · 32 pages</td>
+</tr>
+<tr>
+  <td class="gl1c glcat"></td>
+  <td class="gl2c"></td>
+  <td class="gl3c glname"><a href="https://exhentai.org/g/7654321/bbccdd22/">Another Gallery</a></td>
+  <td class="gl4c glhide">Uploader2 · 16 pages</td>
+</tr>
 </table>
 """
 
@@ -28,7 +36,12 @@ def test_parse_search_html():
     assert len(result.items) == 2
     assert result.items[0].native_id == "1234567"
     assert result.items[0].title == "Test Gallery Title"
-    assert "cover" in result.items[0].cover_url
+    assert "ehgt.org" in result.items[0].cover_url
+    assert result.items[0].page_count == 32
+    assert result.items[0].web_url  # web_url 非空
+    # 无封面的行构造占位 URL
+    assert result.items[1].page_count == 16
+    assert "ehgt.org" in result.items[1].cover_url
 
 
 _SAMPLE_GALLERY_HTML = """

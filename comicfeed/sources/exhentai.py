@@ -88,6 +88,11 @@ class ExhentaiSource(BaseSource):
                     if bg:
                         cover = bg.group(1)
                         break
+            # 替换不可直连的 CDN 域名
+            cover = cover.replace("s.exhentai.org", "ehgt.org")
+            # 无封面时构造占位 URL
+            if not cover:
+                cover = f"https://ehgt.org/g/{m.group(1)}/{m.group(2)[:4]}.jpg"
 
             # 页数：从同行的 gld4/gld5/gld6 或文本中找
             pg_count = 0
