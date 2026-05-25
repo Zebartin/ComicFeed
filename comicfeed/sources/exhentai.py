@@ -64,21 +64,47 @@ class ExhentaiSource(BaseSource):
     def _parse_search_html(self, html: str, page: int) -> SearchResult:
         soup = BeautifulSoup(html, "lxml")
         items = []
-        for a in soup.select("td.gl3c a, td.glname a"):
-            href = a.get("href", "")
+        for row in soup.select("tr"):
+            link = row.select_one("td.glname a, td.gl3c a")
+            if not link:
+                continue
+            href = link.get("href", "")
             m = self._GALLERY_LINK.search(href)
             if not m:
                 continue
-            title = a.get_text(strip=True)
-            # 封面：从同 tr 中找 img
-            tr = a.find_parent("tr")
-            img = tr.select_one("img") if tr else None
-            cover = img.get("src", "") if img else ""
+            # 标题取 a 标签文本（不是整个 cell）
+            title = link.get_text(strip=True)
+
+            # 封面：找 img 或 CSS background-image
+            cover = ""
+            img = row.select_one("img")
+            if img:
+                cover = img.get("src", "")
+            # 如果是 CSS background，尝试从 style 提取
+            if not cover:
+                for td in row.select("td"):
+                    style = td.get("style", "")
+                    bg = re.search(r"url\(([^)]+)\)", style)
+                    if bg:
+                        cover = bg.group(1)
+                        break
+
+            # 页数：从同行的 gld4/gld5/gld6 或文本中找
+            pg_count = 0
+            for td in row.select("td"):
+                text = td.get_text()
+                m2 = re.search(r"(\d+)\s*pages?", text, re.IGNORECASE)
+                if m2:
+                    pg_count = int(m2.group(1))
+                    break
+
+            web = href if href.startswith("http") else f"https://e-hentai.org{href}"
             items.append(GallerySummary(
                 native_id=m.group(1),
                 title=title,
                 cover_url=cover,
-                page_count=0,
+                web_url=web,
+                page_count=pg_count,
             ))
         return SearchResult(items=items, current_page=page)
 
