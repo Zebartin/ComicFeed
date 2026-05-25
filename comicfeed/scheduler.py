@@ -35,7 +35,7 @@ async def check_subscription(
 
     for page_offset in range(max_search_pages):
         page = start_page + page_offset
-        result = await source.search(sub.query, page=page_offset if page_offset > 0 else page, sort=sub.sort)
+        result = await source.search(sub.query, page=page, sort=sub.sort)
         if not result.items:
             break
 

@@ -101,6 +101,7 @@ class CheckRequest(BaseModel):
     page: int = 0
     exclude_ids: list[str] = []
     existing_titles: list[str] = []
+    next_url: str = ""
 
 
 @router.post("/{sub_id}/check")
@@ -120,6 +121,8 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
         source = mgr.get_source(sub.source_key, credentials=creds, proxy=proxy) if mgr else None
         if source is None:
             return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
+        if req.next_url and hasattr(source, '_next_url'):
+            source._next_url = req.next_url
         from comicfeed.scheduler import check_subscription
         _log.info("手动检查订阅: %s [%s]", sub.name, sub.source_key)
         new, has_more = await check_subscription(
@@ -140,6 +143,7 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
             } for g in new],
             "has_more": has_more,
             "current_page": req.page + req.max_search_pages,
+            "next_url": getattr(source, '_next_url', ''),
         }
 
 
