@@ -197,6 +197,7 @@
     <div class="results-body" id="res-body"></div>
     <footer>
       <span class="sel-count" id="sel-info">点选画廊卡片即可选择</span>
+      <button class="btn btn-ghost btn-sm" id="load-more-btn" onclick="loadMore()" style="display:none">加载更多</button>
       <button class="btn btn-ghost btn-sm" onclick="toggleAll()">全选 / 取消</button>
       <button class="btn btn-gold btn-sm" onclick="downloadPicked()">下载选中</button>
     </footer>
@@ -205,6 +206,7 @@
 
 <script>
 let picked = new Set(), results = [], current = null;
+let checkPage = 0, checkHasMore = false, checkExcludeIds = [], checkTitles = [];
 const $ = id => document.getElementById(id)
 
 async function api(p, o={}) {
@@ -260,36 +262,59 @@ async function saveSub() {
     mode: $('mode').value, interval_minutes: +$('interval').value,
     cbz_max_pages: +$('cbz_max_pages').value, sort: $('sort').value, enabled: $('enabled').checked,
   }
-  if (id) await api('/api/subscriptions/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-  else await api('/api/subscriptions', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  if (id) {
+    await api('/api/subscriptions/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  } else {
+    const r = await api('/api/subscriptions', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    id = r.id
+  }
   closeForm(); load()
+  if (id) checkSub(id)  // 新建/编辑后自动检查
 }
 async function delSub(id) { if (confirm('确认删除？')) { await api('/api/subscriptions/'+id, {method:'DELETE'}); load() } }
 
 /* Results */
-async function checkSub(id) {
-  // 立即弹出面板，显示加载状态
-  $('res-title').textContent = '检查中…'
-  $('res-meta').textContent = ''
-  $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&hellip;</div><h3>正在搜索</h3><p>请稍候…</p></div>'
-  $('overlay').classList.add('on')
-  $('sel-info').textContent = ''
-  picked.clear(); results = []
+async function checkSub(id, loadMore=false) {
+  if (!loadMore) {
+    // 首次检查：显示加载状态
+    $('res-title').textContent = '检查中…'
+    $('res-meta').textContent = ''
+    $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&hellip;</div><h3>正在搜索</h3><p>请稍候…</p></div>'
+    $('overlay').classList.add('on')
+    $('sel-info').textContent = ''
+    picked.clear(); results = []
+    checkPage = 0; checkExcludeIds = []; checkTitles = []
+  } else {
+    $('load-more-btn').textContent = '加载中…'
+    $('load-more-btn').disabled = true
+  }
 
   try {
     const sub = await api('/api/subscriptions/'+id)
     $('res-meta').textContent = `${sub.name} · ${sub.source_key} · 查询: ${sub.query || '(空)'}`
-    const r = await api('/api/subscriptions/'+id+'/check', {method:'POST'})
+    const body = loadMore
+      ? {max_search_pages: 5, page: checkPage, exclude_ids: checkExcludeIds, existing_titles: checkTitles}
+      : {max_search_pages: 5}
+    const r = await api('/api/subscriptions/'+id+'/check', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     if (r.error) { $('res-title').textContent = '出错了'; $('res-body').innerHTML = '<div class="empty-state"><p>'+r.error+'</p></div>'; return }
-    results = r.new_galleries || []; current = r.subscription; picked.clear()
+    const newGals = r.new_galleries || []; current = r.subscription
+    checkHasMore = r.has_more; checkPage = r.current_page
 
-    $('res-title').textContent = '检查结果'
+    // 收集去重信息
+    newGals.forEach(g => { checkExcludeIds.push(g.native_id); checkTitles.push(g.title) })
 
-    if (!results.length) {
-    $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&para;</div><h3>没有新发现</h3><p>所有匹配的画廊都已下载</p></div>'
-  } else {
-    $('res-body').innerHTML = results.map((g,i) => `\n        <div class="g-card" id="gc-${i}">
-        <div class="cover" onclick="toggleCard('${g.native_id}',${i})">
+    if (!loadMore) {
+      results = newGals; picked.clear()
+      $('res-title').textContent = '检查结果'
+      $('res-body').innerHTML = newGals.length ? '' : '<div class="empty-state"><div class="icon">&para;</div><h3>没有新发现</h3><p>所有匹配的画廊都已下载</p></div>'
+    }
+    // 渲染卡片（追加或全量）
+    if (newGals.length) {
+      const startIdx = results.length - newGals.length
+      const html = newGals.map((g,i) => {
+        const idx = startIdx + i
+        return `<div class="g-card" id="gc-${idx}">
+        <div class="cover" onclick="toggleCard('${g.native_id}',${idx})">
           ${g.cover_url ? `<img src="${g.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
           <div class="no-img" style="${g.cover_url?'display:none':'display:flex'}">&mdash;</div>
           <div class="sel"></div>
@@ -300,13 +325,27 @@ async function checkSub(id) {
           <div class="meta"><span>${g.page_count} 页</span>${g.num_favorites?`<span class="dot"></span><span>${g.num_favorites} 收藏</span>`:''}</div>
           ${g.tags&&g.tags.length?`<div class="tags">${g.tags.slice(0,6).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>`:''}
         </div>
-      </div>`).join('')
-  }
-  updateSel()
+      </div>`
+      }).join('')
+      if (loadMore) {
+        $('res-body').insertAdjacentHTML('beforeend', html)
+      } else {
+        $('res-body').innerHTML = html
+      }
+    }
+    updateSel()
+    $('load-more-btn').style.display = checkHasMore ? '' : 'none'
+    $('load-more-btn').textContent = '加载更多'
+    $('load-more-btn').disabled = false
   } catch(e) {
     $('res-title').textContent = '出错了'
     $('res-body').innerHTML = '<div class="empty-state"><p style="color:var(--red)">'+e.message+'</p></div>'
   }
+}
+
+async function loadMore() {
+  if (!current) return
+  await checkSub(current.id, true)
 }
 
 function openSource(ev, url) {
