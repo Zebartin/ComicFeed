@@ -8,7 +8,6 @@ DEFAULTS = {
     "check_interval": "10",
     "download_path": "",
     "proxy": "",
-    "proxy_nhentai": "",
     "global_concurrency": "5",
     "komga_url": "",
     "komga_api_key": "",

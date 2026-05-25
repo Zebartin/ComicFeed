@@ -15,15 +15,20 @@
 <div class="card" id="cred-panel">
   <h3>凭证 — <span id="cred-title" style="font-weight:400"></span></h3>
   <div id="cred-body"></div>
+  <div style="margin-top:14px">
+    <label style="font-size:12px;color:var(--text-muted)">代理 <span style="color:var(--gold)">空=全局</span> <span style="color:var(--accent)">- =直连</span></label>
+    <input id="cred-proxy" placeholder="如 http://localhost:8889" style="width:100%;margin-top:4px">
+  </div>
   <div class="act">
-    <button class="btn btn-primary btn-sm" onclick="saveCreds()">保存凭证</button>
-    <button class="btn btn-ghost btn-sm" onclick="$('cred-panel').classList.remove('on')">取消</button>
+    <button class="btn btn-primary btn-sm" onclick="saveCreds()">保存</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('cred-panel').classList.remove('on')">取消</button>
   </div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id)
-async function load(){
+
+async function load() {
   const r=await fetch('/api/sources');const srcs=await r.json()
   $('list').innerHTML=`<table>
     <thead><tr><th>KEY</th><th>名称</th><th>版本</th><th>域名</th><th>认证方式</th><th>操作</th></tr></thead>
@@ -34,21 +39,32 @@ async function load(){
       <td>${s.auth_schema!=='NONE'?`<button class="btn btn-ghost btn-xs" onclick="editCreds('${s.key}','${s.auth_schema}')">凭证</button>`:'—'}</td>
     </tr>`).join('')}</tbody></table>`
 }
-async function editCreds(key,schema){
+
+async function editCreds(key, schema) {
   $('cred-title').textContent=key;$('cred-panel').dataset.key=key
-  let e={};try{const r=await fetch('/api/credentials/'+key);e=(await r.json()).credentials||{}}catch(_){}
-  if(schema==='COOKIE'){
-    $('cred-body').innerHTML='<textarea id="cookie-ta" placeholder="csrftoken=xxx&#10;cf_clearance=yyy">'+Object.entries(e).map(([k,v])=>`${k}=${v}`).join('\n')+'</textarea><div class="hint">每行 key=value，如 cf_clearance=xxx</div>'
-  }else{
+  let e={}
+  try { const r=await fetch('/api/credentials/'+key);e=(await r.json()).credentials||{} } catch(_) {}
+
+  if (schema==='COOKIE') {
+    $('cred-body').innerHTML='<textarea id="cookie-ta" placeholder="csrftoken=xxx&#10;cf_clearance=yyy">'+Object.entries(e).map(([k,v])=>k+'='+v).join('\n')+'</textarea><div class="hint">每行 key=value</div>'
+  } else {
     $('cred-body').innerHTML=Object.entries(e).map(([k,v])=>`<p style="margin-bottom:8px">${k}: <input id="cred-${k}" value="${v||''}"></p>`).join('')
   }
+
+  // 加载每源代理
+  try { const r=await fetch('/api/settings'); $('cred-proxy').value=(await r.json())['proxy_'+key]||'' } catch(_) {}
+
   $('cred-panel').classList.add('on')
 }
-async function saveCreds(){
+
+async function saveCreds() {
   const key=$('cred-panel').dataset.key,creds={}
   const ta=document.getElementById('cookie-ta')
-  if(ta){ta.value.split('\n').filter(l=>l.includes('=')).forEach(l=>{const[k,...v]=l.split('=');creds[k.trim()]=v.join('=').trim()})}
+  if (ta) { ta.value.split('\n').filter(l=>l.includes('=')).forEach(l=>{const[k,...v]=l.split('=');creds[k.trim()]=v.join('=').trim()}) }
   await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
+  // 保存代理
+  const pv = $('cred-proxy').value||''
+  await fetch('/api/settings/proxy_'+key+'?value='+encodeURIComponent(pv),{method:'PUT'})
   $('cred-panel').classList.remove('on');load()
 }
 load()

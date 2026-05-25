@@ -1,12 +1,49 @@
 {% extends "base.html" %}
 {% block content %}
-<style>.row{display:flex;align-items:center;gap:10px;margin-bottom:10px}.row label{font-size:12px;color:var(--text-muted);min-width:180px;text-align:right}.row input{flex:1;max-width:420px}</style>
+<style>
+.fields { max-width: 520px; }
+.field { margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+.field label { font-size: 12px; color: var(--text-muted); min-width: 160px; text-align: right; }
+.field input { flex: 1; }
+.field .desc { font-size: 10px; color: var(--text-muted); margin-top: 3px; margin-left: 170px; }
+</style>
+
 <div class="page-header"><h1>全局设置</h1></div>
-<div id="list"></div>
+
+<div class="fields">
+  <div class="field"><label>下载路径</label><input id="download_path" placeholder="留空=当前目录"></div>
+  <div class="field"><label>巡检间隔(分钟)</label><input id="check_interval"></div>
+  <div class="field"><label>代理</label><input id="proxy" placeholder="http://localhost:8889"><div class="desc">留空=不使用代理。每源代理在源管理页配置</div></div>
+  <div class="field"><label>全局并发数</label><input id="global_concurrency"></div>
+  <div class="field"><label>Komga URL</label><input id="komga_url" placeholder="http://localhost:25600"></div>
+  <div class="field"><label>Komga Library ID</label><input id="komga_library_id"></div>
+  <div class="field"><label>Komga API Key</label><input id="komga_api_key"></div>
+  <div class="field"><label>Webhook URL</label><input id="webhook_url" placeholder="https://hooks.example.com/notify"></div>
+  <div class="field"><label>SMTP 主机</label><input id="smtp_host"></div>
+  <div class="field"><label>SMTP 端口</label><input id="smtp_port"></div>
+  <div class="field"><label>SMTP 用户名</label><input id="smtp_user"></div>
+  <div class="field"><label>SMTP 密码</label><input id="smtp_password" type="password"></div>
+  <div class="field"><label>SMTP 收件人</label><input id="smtp_to"></div>
+  <div class="field"><label>登录用户名</label><input id="auth_username"></div>
+  <div class="field"><label>登录密码</label><input id="auth_password" type="password" placeholder="留空=无需认证"></div>
+  <div style="margin-top:18px"><button class="btn btn-primary" onclick="saveAll()">保存所有设置</button></div>
+</div>
+
 <script>
-async function load(){const r=await fetch('/api/settings');const s=await r.json()
-document.getElementById('list').innerHTML=Object.entries(s).map(([k,v])=>`<div class="row"><label>${k}</label><input id="${k}" value="${v||''}"><button class="btn btn-primary btn-sm" onclick="save('${k}')">保存</button></div>`).join('')}
-async function save(k){await fetch('/api/settings/'+k+'?value='+encodeURIComponent(document.getElementById(k).value),{method:'PUT'})}
+async function load() {
+  const r = await fetch('/api/settings'); const s = await r.json()
+  for (const k of Object.keys(s)) {
+    const el = document.getElementById(k); if (el) el.value = s[k] || ''
+  }
+}
+async function saveAll() {
+  const r = await fetch('/api/settings'); const s = await r.json()
+  for (const k of Object.keys(s)) {
+    const v = document.getElementById(k)?.value
+    if (v !== undefined) await fetch('/api/settings/'+k+'?value='+encodeURIComponent(v||''), {method:'PUT'})
+  }
+  alert('已保存')
+}
 load()
 </script>
 {% endblock %}
