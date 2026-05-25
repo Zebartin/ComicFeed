@@ -76,9 +76,26 @@ class ExhentaiSource(BaseSource):
             glink = link.select_one("div.glink")
             title = glink.get_text(strip=True) if glink else link.get_text(strip=True)
 
-            # 标签：第二个 div 的文本（可能需要按命名空间解析）
-            tag_divs = link.select("div:not(.glink)")
-            tag_text = " ".join(d.get_text(strip=True) for d in tag_divs)
+            # 标签：第二个 div 的文本按空格和命名空间前缀拆分
+            tag_names = []
+            for d in link.select("div:not(.glink)"):
+                raw = d.get_text(strip=True)
+                # e-hentai 搜索标签是连在一起的，按模式拆分
+                # 格式: word|f:word|m:word|multi word name
+                parts = re.split(r"(?=[fm]:)", raw)
+                for p in parts:
+                    p = p.strip()
+                    if not p:
+                        continue
+                    from comicfeed.tag_translator import get_translator
+                    _tt = get_translator()
+                    if p.startswith("f:"):
+                        tag_names.append(_tt.translate("female", p[2:]))
+                    elif p.startswith("m:"):
+                        tag_names.append(_tt.translate("male", p[2:]))
+                    else:
+                        # 一般标签（language, category 等），无 namespace
+                        tag_names.append(_tt.translate("", p))
 
             # 封面：找 img 或 CSS background-image
             cover = ""
@@ -115,6 +132,7 @@ class ExhentaiSource(BaseSource):
                 cover_url=cover,
                 web_url=web,
                 page_count=pg_count,
+                tags=tag_names,
             ))
         return SearchResult(items=items, current_page=page)
 
