@@ -56,19 +56,19 @@ class ExhentaiSource(BaseSource):
     def _parse_search_html(self, html: str, page: int) -> SearchResult:
         soup = BeautifulSoup(html, "lxml")
         items = []
-        for row in soup.select("tr.gtr0, tr.gtr1"):
-            link = row.select_one("div.gltc a, div.gl3t a")
-            if not link:
-                continue
-            href = link.get("href", "")
+        for a in soup.select("td.gl3c a, td.glname a"):
+            href = a.get("href", "")
             m = self._GALLERY_LINK.search(href)
             if not m:
                 continue
-            img = row.select_one("img")
+            title = a.get_text(strip=True)
+            # 封面：从同 tr 中找 img
+            tr = a.find_parent("tr")
+            img = tr.select_one("img") if tr else None
             cover = img.get("src", "") if img else ""
             items.append(GallerySummary(
                 native_id=m.group(1),
-                title=link.get_text(strip=True),
+                title=title,
                 cover_url=cover,
                 page_count=0,
             ))
@@ -79,10 +79,28 @@ class ExhentaiSource(BaseSource):
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
-            return self._parse_gallery_html(resp.text, gallery_id)
+            detail = self._parse_gallery_html(resp.text, gallery_id)
+
+            # 收集所有页面的 viewer URL（遍历 gallery 分页）
+            if detail.page_urls:
+                all_urls = list(detail.page_urls)
+                page_idx = 1
+                while len(all_urls) < detail.reported_pages:
+                    paged_url = gurl.rstrip("/") + f"?p={page_idx}"
+                    r = await client.get(paged_url)
+                    r.raise_for_status()
+                    soup = BeautifulSoup(r.text, "lxml")
+                    more = [a.get("href", "") for a in soup.select("div#gdt a") if a.get("href")]
+                    if not more:
+                        break
+                    all_urls.extend(more)
+                    page_idx += 1
+                detail.page_urls = all_urls
+
+            return detail
 
     async def _get_gallery_url(self, gallery_id: str) -> str:
-        """通过搜索 API 找到 gallery 的完整 URL（含 token）。"""
+        """通过搜索找到 gallery 的完整 URL（含 token）。"""
         async with self._client() as client:
             resp = await client.get(
                 f"{self._base}/",
@@ -90,21 +108,24 @@ class ExhentaiSource(BaseSource):
             )
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
-            for link in soup.select("div.gltc a, div.gl3t a"):
-                href = link.get("href", "")
+            for a in soup.select("td.gl3c a, td.glname a"):
+                href = a.get("href", "")
                 m = self._GALLERY_LINK.search(href)
                 if m and m.group(1) == gallery_id:
                     return href
-            # 如果搜索不到，尝试直接构造（某些情况可能失败）
             return f"{self._base}/g/{gallery_id}/"
 
     def _parse_gallery_html(self, html: str, gallery_id: str) -> GalleryDetail:
         soup = BeautifulSoup(html, "lxml")
+        web_url = ""
 
-        # 标题：优先日文
-        gj = soup.select_one("h1#gj")
-        gn = soup.select_one("h1#gn")
-        title = gj.get_text(strip=True) if gj else (gn.get_text(strip=True) if gn else "")
+        # 标题：优先日文 gj，其次英文 gn
+        title = ""
+        for h1 in soup.select("h1#gj, h1#gn"):
+            t = h1.get_text(strip=True)
+            if t:
+                title = t
+                break
 
         # 封面图
         cover_url = ""
@@ -138,20 +159,26 @@ class ExhentaiSource(BaseSource):
                 reported_pages = int(re.sub(r"\D", "", text) or "0")
                 break
 
-        # 页面 URL
+        # 页面 URL（从当前 viewer 页的缩略图提取）
         page_urls = []
         for a in soup.select("div#gdt a"):
             href = a.get("href", "")
-            if href and "/g/" in href:
+            if href:
                 page_urls.append(href)
 
+        # web_url 用于后续翻页
+
         # 获取 gallery URL
-        web_url = ""
-        for a in soup.select("a"):
-            m = self._GALLERY_LINK.search(a.get("href", ""))
-            if m and m.group(1) == gallery_id:
-                web_url = a.get("href", "")
+        for a in soup.select("h1#gn a"):
+            web_url = a.get("href", "")
+            if web_url:
                 break
+        if not web_url:
+            for a in soup.select("a"):
+                m = self._GALLERY_LINK.search(a.get("href", ""))
+                if m and m.group(1) == gallery_id:
+                    web_url = a.get("href", "")
+                    break
 
         return GalleryDetail(
             native_id=gallery_id,

@@ -12,20 +12,11 @@ def test_parse_url():
 
 
 _SAMPLE_SEARCH_HTML = """
-<table class="itg">
-<tr class="gtr0"><td class="gl1e">
-  <a href="https://exhentai.org/g/1234567/aabbcc11/">
-    <img src="https://ehgt.org/t/cover.jpg" style="height:200px;width:142px"/>
-  </a>
-  <div class="gl3t"><a href="https://exhentai.org/g/1234567/aabbcc11/">Test Gallery Title</a></div>
-  <div class="gld5"><div class="cs6c" style="background-position:0 -21px"></div><a href="/tag/language:chinese">chinese</a></div>
-</td></tr>
-<tr class="gtr1"><td class="gl1e">
-  <a href="https://exhentai.org/g/7654321/bbccdd22/">
-    <img src="https://ehgt.org/t/cover2.jpg" style="height:200px;width:142px"/>
-  </a>
-  <div class="gl3t"><a href="https://exhentai.org/g/7654321/bbccdd22/">Another Gallery</a></div>
-</td></tr>
+<table class="itg gltc">
+<tr><td class="gl1e"><img src="https://ehgt.org/t/cover.jpg"/></td>
+<td class="gl3c glname"><a href="https://exhentai.org/g/1234567/aabbcc11/">Test Gallery Title</a></td></tr>
+<tr><td class="gl1e"><img src="https://ehgt.org/t/cover2.jpg"/></td>
+<td class="gl3c glname"><a href="https://exhentai.org/g/7654321/bbccdd22/">Another Gallery</a></td></tr>
 </table>
 """
 
