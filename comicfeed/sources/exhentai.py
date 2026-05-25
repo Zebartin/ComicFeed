@@ -30,7 +30,9 @@ class ExhentaiSource(BaseSource):
     def get_config_schema(self) -> list[dict]:
         return [
             {"key": "proxy", "label": "代理", "type": "text", "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
-            {"key": "cookie", "label": "Cookie", "type": "textarea", "placeholder": "ipb_member_id=xxx\nipb_pass_hash=yyy\nigneous=zzz", "hint": "每行 key=value"},
+            {"key": "ipb_member_id", "label": "ipb_member_id", "type": "text", "placeholder": "从浏览器 Cookie 中获取"},
+            {"key": "ipb_pass_hash", "label": "ipb_pass_hash", "type": "text", "placeholder": "从浏览器 Cookie 中获取"},
+            {"key": "igneous", "label": "igneous", "type": "text", "placeholder": "从浏览器 Cookie 中获取"},
         ]
 
     def parse_url(self, url: str) -> str | None:

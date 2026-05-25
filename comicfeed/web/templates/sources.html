@@ -41,10 +41,13 @@ async function openCfg(key) {
   $('cfg-title').textContent='配置 — '+s.name
   $('cfg-panel').dataset.key=key
 
-  // 加载现有值
+  // 加载现有值：proxy 从 settings，其他从 credentials
   let vals={}
   try { const r=await fetch('/api/settings'); const all=await r.json()
-    for (const f of s.config) vals[f.key] = all['src.'+key+'.'+f.key] || ''
+    vals['proxy'] = all['src.'+key+'.proxy'] || ''
+  } catch(_){}
+  try { const r=await fetch('/api/credentials/'+key); const d=await r.json()
+    Object.assign(vals, d.credentials||{})
   } catch(_){}
 
   // 根据 schema 渲染
@@ -66,17 +69,22 @@ async function openCfg(key) {
 async function saveCfg() {
   const key=$('cfg-panel').dataset.key
   const s=_srcs.find(x=>x.key===key); if(!s)return
+  const creds={}
   for (const f of s.config) {
     const el=document.getElementById('cfg-'+f.key)
-    // 对 textarea 类型的 cookie，同时写入 credentials 表
-    if (f.key==='cookie' && el && s.auth_schema==='COOKIE') {
-      const creds={}
-      el.value.split('\n').filter(l=>l.includes('=')).forEach(l=>{
-        const[k,...v]=l.split('=');creds[k.trim()]=v.join('=').trim()
-      })
-      await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
+    if (!el) continue
+    const v = el.value||''
+    // proxy 字段存到 settings
+    if (f.key==='proxy') {
+      await fetch('/api/settings/src.'+key+'.proxy?value='+encodeURIComponent(v),{method:'PUT'})
+    } else if (s.auth_schema==='COOKIE') {
+      // 其他字段作为凭证，收集后统一写入
+      if (v) creds[f.key] = v
     }
-    if (el) await fetch('/api/settings/src.'+key+'.'+f.key+'?value='+encodeURIComponent(el.value||''),{method:'PUT'})
+  }
+  // 批量写入凭证
+  if (Object.keys(creds).length) {
+    await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
   }
   $('cfg-panel').classList.remove('on')
 }

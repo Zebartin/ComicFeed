@@ -25,7 +25,8 @@ class NhentaiSource(BaseSource):
     def get_config_schema(self) -> list[dict]:
         return [
             {"key": "proxy", "label": "代理", "type": "text", "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
-            {"key": "cookie", "label": "Cookie", "type": "textarea", "placeholder": "csrftoken=xxx\ncf_clearance=yyy", "hint": "每行 key=value"},
+            {"key": "csrftoken", "label": "csrftoken", "type": "text", "placeholder": "从浏览器 Cookie 中获取"},
+            {"key": "cf_clearance", "label": "cf_clearance", "type": "text", "placeholder": "从浏览器 Cookie 中获取"}
         ]
 
     def parse_url(self, url: str) -> str | None:
