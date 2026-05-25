@@ -23,6 +23,11 @@ def decrypt_value(encrypted: str) -> str:
 
 
 async def get_source_credentials(source_key: str) -> dict[str, str]:
+    from comicfeed.config import get_source_config
+    cfg = await get_source_config(source_key)
+    if cfg:
+        return {k: v for k, v in cfg.items() if k != "proxy" and v}
+    # 回退旧格式
     async with get_session() as session:
         stmt = select(SourceCredential).where(SourceCredential.source_key == source_key)
         result = await session.execute(stmt)

@@ -41,14 +41,9 @@ async function openCfg(key) {
   $('cfg-title').textContent='配置 — '+s.name
   $('cfg-panel').dataset.key=key
 
-  // 加载现有值：credential 字段从 credentials，其余从 settings
+  // 加载配置 JSON
   let vals={}
-  try { const r=await fetch('/api/credentials/'+key); const d=await r.json()
-    Object.assign(vals, d.credentials||{})
-  } catch(_){}
-  try { const r=await fetch('/api/settings'); const all=await r.json()
-    for (const f of s.config) if (!f.credential) vals[f.key] = all['src.'+key+'.'+f.key] || ''
-  } catch(_){}
+  try { const r=await fetch('/api/sources/'+key+'/config'); vals=await r.json() } catch(_){}
 
   // 根据 schema 渲染
   let html=''
@@ -69,20 +64,13 @@ async function openCfg(key) {
 async function saveCfg() {
   const key=$('cfg-panel').dataset.key
   const s=_srcs.find(x=>x.key===key); if(!s)return
-  const creds={}
+  const cfg={}
   for (const f of s.config) {
     const el=document.getElementById('cfg-'+f.key)
     if (!el) continue
-    const v = el.value||''
-    if (f.credential) {
-      if (v) creds[f.key] = v
-    } else {
-      await fetch('/api/settings/src.'+key+'.'+f.key+'?value='+encodeURIComponent(v),{method:'PUT'})
-    }
+    cfg[f.key] = el.value||''
   }
-  if (Object.keys(creds).length) {
-    await fetch('/api/credentials/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({credentials:creds})})
-  }
+  await fetch('/api/sources/'+key+'/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)})
   $('cfg-panel').classList.remove('on')
 }
 load()

@@ -17,6 +17,7 @@ from comicfeed.web.routes.logs import router as log_router
 from comicfeed.web.routes.queue import router as queue_router
 from comicfeed.web.routes.settings import router as settings_router
 from comicfeed.web.routes.setup import router as setup_router
+from comicfeed.web.routes.source_config import router as sc_router
 from comicfeed.web.routes.sources import router as src_router
 from comicfeed.web.routes.subscriptions import router as sub_router
 
@@ -105,6 +106,7 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
         return {"status": "ok"}
 
     app.include_router(sub_router)
+    app.include_router(sc_router)
     app.include_router(src_router)
     app.include_router(gallery_router)
     app.include_router(cred_router)
