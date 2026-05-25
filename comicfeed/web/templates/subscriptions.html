@@ -292,9 +292,10 @@ async function checkSub(id, loadMore=false) {
   try {
     const sub = await api('/api/subscriptions/'+id)
     $('res-meta').textContent = `${sub.name} · ${sub.source_key} · 查询: ${sub.query || '(空)'}`
+    const pages = loadMore ? 5 : 1
     const body = loadMore
-      ? {max_search_pages: 5, page: checkPage, exclude_ids: checkExcludeIds, existing_titles: checkTitles, next_url: checkNextUrl}
-      : {max_search_pages: 5}
+      ? {max_search_pages: pages, page: checkPage, exclude_ids: checkExcludeIds, existing_titles: checkTitles, next_url: checkNextUrl}
+      : {max_search_pages: pages}
     const r = await api('/api/subscriptions/'+id+'/check', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     if (r.error) { $('res-title').textContent = '出错了'; $('res-body').innerHTML = '<div class="empty-state"><p>'+r.error+'</p></div>'; return }
     const newGals = r.new_galleries || []; current = r.subscription
@@ -339,6 +340,10 @@ async function checkSub(id, loadMore=false) {
     $('load-more-btn').style.display = checkHasMore ? '' : 'none'
     $('load-more-btn').textContent = '加载更多'
     $('load-more-btn').disabled = false
+    // 首次检查后自动继续加载剩余页
+    if (!loadMore && checkHasMore) {
+      setTimeout(() => loadMore(), 300)
+    }
   } catch(e) {
     $('res-title').textContent = '出错了'
     $('res-body').innerHTML = '<div class="empty-state"><p style="color:var(--red)">'+e.message+'</p></div>'
