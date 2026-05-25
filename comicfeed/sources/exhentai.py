@@ -55,9 +55,14 @@ class ExhentaiSource(BaseSource):
 
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
         async with self._client() as client:
-            if page == 0:
+            if page <= 1 and not self._next_url:
+                # 首页：构造搜索 URL（e-hentai 用 page=0）
                 self._next_url = ""
-            if self._next_url:
+                resp = await client.get(
+                    f"{self._base}/",
+                    params={"f_search": query, "page": 0, "inline_set": "dm_e"},
+                )
+            elif self._next_url:
                 resp = await client.get(self._next_url)
             else:
                 resp = await client.get(
