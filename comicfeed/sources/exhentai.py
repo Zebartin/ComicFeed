@@ -72,8 +72,13 @@ class ExhentaiSource(BaseSource):
             m = self._GALLERY_LINK.search(href)
             if not m:
                 continue
-            # 标题取 a 标签文本（不是整个 cell）
-            title = link.get_text(strip=True)
+            # 标题取 div.glink 文本，不取整个 a（避免 tag 混入）
+            glink = link.select_one("div.glink")
+            title = glink.get_text(strip=True) if glink else link.get_text(strip=True)
+
+            # 标签：第二个 div 的文本（可能需要按命名空间解析）
+            tag_divs = link.select("div:not(.glink)")
+            tag_text = " ".join(d.get_text(strip=True) for d in tag_divs)
 
             # 封面：找 img 或 CSS background-image
             cover = ""

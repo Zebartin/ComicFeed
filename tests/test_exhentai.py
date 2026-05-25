@@ -16,13 +16,13 @@ _SAMPLE_SEARCH_HTML = """
 <tr>
   <td class="gl1c glcat"></td>
   <td class="gl2c" style="background:url(https://s.exhentai.org/g/1234567/abc1/cover.jpg) -32px -64px"></td>
-  <td class="gl3c glname"><a href="https://exhentai.org/g/1234567/aabbcc11/">Test Gallery Title</a></td>
+  <td class="gl3c glname"><a href="https://exhentai.org/g/1234567/aabbcc11/"><div class="glink">Test Gallery Title</div><div>chinesetranslated</div></a></td>
   <td class="gl4c glhide">Uploader · 32 pages</td>
 </tr>
 <tr>
   <td class="gl1c glcat"></td>
   <td class="gl2c"></td>
-  <td class="gl3c glname"><a href="https://exhentai.org/g/7654321/bbccdd22/">Another Gallery</a></td>
+  <td class="gl3c glname"><a href="https://exhentai.org/g/7654321/bbccdd22/"><div class="glink">Another Gallery</div><div>english</div></a></td>
   <td class="gl4c glhide">Uploader2 · 16 pages</td>
 </tr>
 </table>
