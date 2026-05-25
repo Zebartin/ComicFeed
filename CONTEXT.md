@@ -54,6 +54,7 @@ Gallery 中的一张图片。系统在内存中下载和处理单页，不落磁
   - **特定画廊** (`SPECIFIC_GALLERY`)：追踪特定 Gallery ID 的更新。exhentai 上表现为"newer versions available"检测 + 逐页 ID 对比；nhentai 上为一次性下载无后续更新
   - **特定作者** (`SPECIFIC_ARTIST`)：搜索条件的特化，query 固定为 `artist:xxx`
 - **检查间隔**：多久检查一次（默认全局间隔，可覆盖）
+- **搜索深度** (`max_search_pages`)：一次检查最多翻多少页搜索结果。0 表示只翻第 1 页。新建订阅后首次检查翻全部（5 页 + 可继续加载），后续定时巡检只翻第 1 页
 - **跨源去重开关** (`cross_source_dedup`)：是否与其它订阅/源做去重
 - **CBZ 分卷上限** (`cbz_max_pages`，记作 N)：单个 CBZ 文件最多包含的页数
 - **输出目录**：可覆盖默认下载路径，直接指向 Komga library 目录

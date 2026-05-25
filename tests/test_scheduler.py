@@ -49,9 +49,10 @@ async def test_check_subscription_finds_new_galleries():
     ]
 
     async with get_session() as session:
-        new = await check_subscription(session, sub_id, source)
+        new, has_more = await check_subscription(session, sub_id, source)
         assert len(new) == 1
         assert new[0].native_id == "2"
+        assert has_more is False
 
 
 async def test_dedup_within_batch():
@@ -73,7 +74,7 @@ async def test_dedup_within_batch():
     ]
 
     async with get_session() as session:
-        new = await check_subscription(session, sub_id, source)
+        new, has_more = await check_subscription(session, sub_id, source)
         # 1 和 2 相似 → 保留页数多的 #1；3 不同 → 保留
         assert len(new) == 2
         ids = {g.native_id for g in new}

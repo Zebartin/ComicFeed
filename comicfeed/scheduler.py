@@ -18,45 +18,81 @@ async def check_subscription(
     session: AsyncSession,
     subscription_id: int,
     source: BaseSource,
-) -> list[GallerySummary]:
-    """检查一个订阅，返回新发现的画廊摘要列表。"""
+    max_search_pages: int = 1,
+    exclude_ids: set[str] | None = None,
+    existing_titles: list[str] | None = None,
+    start_page: int = 0,
+) -> tuple[list[GallerySummary], bool]:
+    """检查一个订阅，返回 (新画廊列表, 是否还有更多页)。"""
     sub = await session.get(Subscription, subscription_id)
     if sub is None:
-        return []
+        return [], False
 
-    result = await source.search(sub.query, page=1, sort=sub.sort)
-    if not result.items:
-        return []
+    exclude_ids = exclude_ids or set()
+    existing_titles = existing_titles or []
+    all_new: list[GallerySummary] = []
+    has_more = False
 
-    # 查询 DB 中已存在于该源的画廊 ID
-    ids = [f"{source.key}:{item.native_id}" for item in result.items]
-    stmt = select(Gallery.id).where(Gallery.id.in_(ids))
-    existing = {row[0] for row in (await session.execute(stmt)).fetchall()}
+    for page_offset in range(max_search_pages):
+        page = start_page + page_offset
+        result = await source.search(sub.query, page=page_offset if page_offset > 0 else page, sort=sub.sort)
+        if not result.items:
+            break
 
-    new = []
-    for item in result.items:
-        if f"{source.key}:{item.native_id}" not in existing:
-            new.append(item)
+        # 排掉 exclude_ids
+        raw_items = [g for g in result.items if g.native_id not in exclude_ids]
+        if not raw_items:
+            has_more = bool(result.next_url or (result.total_pages > page + 1))
+            continue
 
-    # 同批次内标题去重
-    if len(new) > 1:
-        from comicfeed.dedup import find_similar_groups, resolve_duplicates
-        all_keep: set[str] = {g.native_id for g in new}
-        groups = find_similar_groups(new)
-        for group in groups:
-            candidates = [(g.native_id, g.page_count) for g in group]
-            keep = resolve_duplicates(candidates)
-            # 移除重复项
-            all_keep -= {g.native_id for g in group}
-            all_keep |= keep
-        new = [g for g in new if g.native_id in all_keep]
-        _log.info("去重: %d 组候选 → 保留 %d 个", len(groups), len(new))
+        # 查询 DB 中去重
+        ids = [f"{source.key}:{item.native_id}" for item in raw_items]
+        stmt = select(Gallery.id).where(Gallery.id.in_(ids))
+        db_existing = {row[0] for row in (await session.execute(stmt)).fetchall()}
+        new = [g for g in raw_items if f"{source.key}:{g.native_id}" not in db_existing]
 
-    sub.last_checked_at = datetime.now()
-    await session.commit()
+        # 标题去重：排除与 existing_titles 相似的
+        from comicfeed.cbz import normalize_title
+        from comicfeed.dedup import _similarity
+        filtered = []
+        for g in new:
+            nt = normalize_title(g.title)
+            if any(_similarity(nt, et) > 0.8 for et in existing_titles):
+                continue
+            filtered.append(g)
+            existing_titles.append(nt)
+        new = filtered
 
-    _log.info("订阅 [%s] 检查完成: %d 个新画廊", sub.name, len(new))
-    return new
+        # 批次内标题去重
+        if len(new) > 1:
+            from comicfeed.dedup import find_similar_groups, resolve_duplicates
+            groups = find_similar_groups(new)
+            if groups:
+                all_keep: set[str] = {g.native_id for g in new}
+                for group in groups:
+                    candidates = [(g.native_id, g.page_count) for g in group]
+                    keep = resolve_duplicates(candidates)
+                    all_keep -= {g.native_id for g in group}
+                    all_keep |= keep
+                new = [g for g in new if g.native_id in all_keep]
+                _log.info("去重: %d 组候选 → 保留 %d 个", len(groups), len(new))
+
+        all_new.extend(new)
+        for g in new:
+            exclude_ids.add(g.native_id)
+
+        # 判断是否还有更多页
+        has_more = bool(result.next_url or (result.total_pages > page + 1))
+        if not has_more:
+            break
+
+    # 仅在首次非追加检查时更新时间
+    if start_page == 0:
+        sub.last_checked_at = datetime.now()
+        await session.commit()
+
+    _log.info("订阅 [%s] 检查完成: %d 个新画廊 (翻 %d 页, has_more=%s)", sub.name, len(all_new), max_search_pages, has_more)
+    return all_new, has_more
 
 
 async def run_all_checks(source_manager: SourceManager, download_pool):
@@ -87,7 +123,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 continue
 
             try:
-                new = await check_subscription(session, sub.id, source)
+                new, _ = await check_subscription(session, sub.id, source, max_search_pages=1)
                 _log.info("[%s] 检查完成: %d 个新画廊", sub.name, len(new))
             except Exception as e:
                 _log.error("[%s] 检查失败: %s", sub.name, e)

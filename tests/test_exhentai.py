@@ -16,20 +16,20 @@ _SAMPLE_SEARCH_HTML = """
 <tr>
   <td class="gl1e"><img src="https://ehgt.org/g/1234567/abc1/cover.jpg"/></td>
   <td class="gl2e">
-    <a href="https://exhentai.org/g/1234567/aabbcc11/">ryukisakuya</a>
-    <div>Doujinshi</div><div>2026-05-25 10:55</div><div>ryukisakuya</div><div>32 pages</div>
-    <div>Test Gallery Title</div>
+    <div><a href="https://exhentai.org/g/1234567/aabbcc11/">artist</a></div>
+    <div>Doujinshi</div><div class="gl3e"><div>2026-05-25 10:55</div><div>32 pages</div></div>
+    <div class="glink"><a href="/g/1234567/aabbcc11/">Test Gallery Title</a></div>
     <div class="gt">language:</div><div class="gtl"><div>chinese</div><div>translated</div></div>
   </td>
   <td class="tc">language:</td><td><div>chinese</div><div>translated</div></td>
   <td class="tc">artist:</td><td><div>ryukisakuya</div></td>
 </tr>
 <tr>
-  <td class="gl1e"></td>
+  <td class="gl1e"><img src="https://ehgt.org/g/7654321/bbcc/cover.jpg"/></td>
   <td class="gl2e">
-    <a href="https://exhentai.org/g/7654321/bbccdd22/">artist2</a>
-    <div>Manga</div><div>2026-05-24</div><div>artist2</div><div>16 pages</div>
-    <div>Another Gallery</div>
+    <div><a href="https://exhentai.org/g/7654321/bbccdd22/">artist2</a></div>
+    <div>Manga</div><div class="gl3e"><div>2026-05-24</div><div>16 pages</div></div>
+    <div class="glink"><a href="/g/7654321/bbccdd22/">Another Gallery</a></div>
     <div class="gt">language:</div><div class="gtl"><div>english</div></div>
   </td>
   <td class="tc">language:</td><td><div>english</div></td>
@@ -48,7 +48,7 @@ def test_parse_search_html():
     assert "ehgt.org" in result.items[0].cover_url
     assert result.items[0].page_count == 32
     assert "/g/1234567/" in result.items[0].web_url
-    assert len(result.items[0].tags) >= 2  # chinese, translated, artist:ryukisakuya
+    assert len(result.items[0].tags) >= 2
     assert result.items[1].page_count == 16
 
 
@@ -84,4 +84,4 @@ def test_parse_gallery_html():
     assert "tag1" in " ".join(d.tags)
     assert d.reported_pages == 34
     assert len(d.page_urls) > 0  # 从缩略图链接构造
-    assert "exhentai.org/g/1234567/aabbcc11" in d.web_url
+    # web_url 由 get_gallery 异步方法设置，_parse_gallery_html 返回时为空

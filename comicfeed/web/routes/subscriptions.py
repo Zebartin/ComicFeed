@@ -96,8 +96,17 @@ async def delete_subscription(sub_id: int):
         await session.commit()
 
 
+class CheckRequest(BaseModel):
+    max_search_pages: int = 5
+    page: int = 0
+    exclude_ids: list[str] = []
+    existing_titles: list[str] = []
+
+
 @router.post("/{sub_id}/check")
-async def check_subscription_now(sub_id: int):
+async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
+    if req is None:
+        req = CheckRequest()
     from comicfeed.web.app import get_source_manager
     async with get_session() as session:
         sub = await session.get(Subscription, sub_id)
@@ -113,8 +122,14 @@ async def check_subscription_now(sub_id: int):
             return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
         from comicfeed.scheduler import check_subscription
         _log.info("手动检查订阅: %s [%s]", sub.name, sub.source_key)
-        new = await check_subscription(session, sub_id, source)
-        _log.info("检查完成: 发现 %d 个新画廊", len(new))
+        new, has_more = await check_subscription(
+            session, sub_id, source,
+            max_search_pages=req.max_search_pages,
+            exclude_ids=set(req.exclude_ids),
+            existing_titles=req.existing_titles,
+            start_page=req.page,
+        )
+        _log.info("检查完成: 发现 %d 个新画廊, has_more=%s", len(new), has_more)
         return {
             "subscription": {"id": sub.id, "name": sub.name, "source_key": sub.source_key, "query": sub.query},
             "new_galleries": [{
@@ -123,6 +138,8 @@ async def check_subscription_now(sub_id: int):
                 "web_url": g.web_url, "num_favorites": g.num_favorites,
                 "tags": g.tags[:6],
             } for g in new],
+            "has_more": has_more,
+            "current_page": req.page + req.max_search_pages,
         }
 
 

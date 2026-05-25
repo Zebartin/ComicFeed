@@ -26,6 +26,7 @@ class ExhentaiSource(BaseSource):
     def __init__(self, proxy=None, credentials=None):
         super().__init__(proxy=proxy, credentials=credentials)
         self._base = "https://exhentai.org"
+        self._next_url: str = ""  # 游标制翻页
 
     def get_config_schema(self) -> list[dict]:
         return [
@@ -54,12 +55,19 @@ class ExhentaiSource(BaseSource):
 
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
         async with self._client() as client:
-            resp = await client.get(
-                f"{self._base}/",
-                params={"f_search": query, "page": page, "inline_set": "dm_e"},
-            )
+            if page == 0:
+                self._next_url = ""
+            if self._next_url:
+                resp = await client.get(self._next_url)
+            else:
+                resp = await client.get(
+                    f"{self._base}/",
+                    params={"f_search": query, "page": page, "inline_set": "dm_e"},
+                )
             resp.raise_for_status()
-            return self._parse_search_html(resp.text, page)
+            result = self._parse_search_html(resp.text, page)
+            self._next_url = result.next_url
+            return result
 
     @staticmethod
     def _make_thumbnail_url(path: str) -> str:
@@ -127,7 +135,14 @@ class ExhentaiSource(BaseSource):
                 page_count=pg_count,
                 tags=tag_names,
             ))
-        return SearchResult(items=items, current_page=page)
+        # 提取下一页链接（游标制翻页）
+        next_url = ""
+        for a in soup.select("a"):
+            if "Next" in a.get_text(strip=True):
+                next_url = a.get("href", "")
+                break
+
+        return SearchResult(items=items, current_page=page, next_url=next_url)
 
     async def get_gallery(self, gallery_id: str) -> GalleryDetail:
         gurl = await self._get_gallery_url(gallery_id)
@@ -135,6 +150,7 @@ class ExhentaiSource(BaseSource):
             resp = await client.get(gurl)
             resp.raise_for_status()
             detail = self._parse_gallery_html(resp.text, gallery_id)
+            detail.web_url = gurl
 
             # 收集所有页面的 viewer URL（遍历 gallery 分页）
             if detail.page_urls:
@@ -172,7 +188,6 @@ class ExhentaiSource(BaseSource):
 
     def _parse_gallery_html(self, html: str, gallery_id: str) -> GalleryDetail:
         soup = BeautifulSoup(html, "lxml")
-        web_url = ""
 
         # 标题：优先日文 gj，其次英文 gn
         gj = soup.select_one("h1#gj")
@@ -218,25 +233,10 @@ class ExhentaiSource(BaseSource):
             if href:
                 page_urls.append(href)
 
-        # web_url 用于后续翻页
-
-        # 获取 gallery URL
-        for a in soup.select("h1#gn a"):
-            web_url = a.get("href", "")
-            if web_url:
-                break
-        if not web_url:
-            for a in soup.select("a"):
-                m = self._GALLERY_LINK.search(a.get("href", ""))
-                if m and m.group(1) == gallery_id:
-                    web_url = a.get("href", "")
-                    break
-
         return GalleryDetail(
             native_id=gallery_id,
             title=title,
             cover_url=self._make_thumbnail_url(cover_url),
-            web_url=web_url,
             tags=tags,
             page_urls=page_urls,
             reported_pages=reported_pages,

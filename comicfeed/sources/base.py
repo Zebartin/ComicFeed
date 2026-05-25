@@ -27,6 +27,7 @@ class SearchResult:
     items: list[GallerySummary] = field(default_factory=list)
     total_pages: int = 0
     current_page: int = 1
+    next_url: str = ""  # 游标制翻页（exhentai 用）
 
 
 @dataclass
