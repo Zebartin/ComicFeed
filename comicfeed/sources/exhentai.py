@@ -1,4 +1,5 @@
 import re
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
@@ -53,22 +54,27 @@ class ExhentaiSource(BaseSource):
             cookies=self._cookies(),
         )
 
+    @staticmethod
+    def _ensure_inline_set(url: str) -> str:
+        """确保 URL 中包含 inline_set=dm_e 参数。"""
+        if not url:
+            return url
+        u = urlparse(url)
+        qs = parse_qs(u.query, keep_blank_values=True)
+        qs["inline_set"] = ["dm_e"]
+        return urlunparse(u._replace(query=urlencode(qs, doseq=True)))
+
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
         async with self._client() as client:
             if page <= 1 and not self._next_url:
-                # 首页：构造搜索 URL（e-hentai 用 page=0）
                 self._next_url = ""
-                resp = await client.get(
-                    f"{self._base}/",
-                    params={"f_search": query, "page": 0, "inline_set": "dm_e"},
-                )
+                url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page=0")
+                resp = await client.get(url)
             elif self._next_url:
-                resp = await client.get(self._next_url)
+                resp = await client.get(self._ensure_inline_set(self._next_url))
             else:
-                resp = await client.get(
-                    f"{self._base}/",
-                    params={"f_search": query, "page": page, "inline_set": "dm_e"},
-                )
+                url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page={page}")
+                resp = await client.get(url)
             resp.raise_for_status()
             result = self._parse_search_html(resp.text, page)
             self._next_url = result.next_url
