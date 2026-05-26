@@ -22,6 +22,14 @@ class NhentaiSource(BaseSource):
     _URL_PATTERN = re.compile(r"https?://(?:www\.)?nhentai\.net/g/(\d+)")
     _BASE = "https://nhentai.net"
 
+    def get_sort_options(self) -> list[dict]:
+        return [
+            {"value": "date", "label": "最新"},
+            {"value": "popular-today", "label": "今日热门"},
+            {"value": "popular-week", "label": "本周热门"},
+            {"value": "popular", "label": "全部热门"},
+        ]
+
     def get_config_schema(self) -> list[dict]:
         return [
             {"key": "proxy", "label": "代理", "type": "text", "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},

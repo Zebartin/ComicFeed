@@ -69,6 +69,10 @@ class BaseSource(ABC):
         """
         return []
 
+    def get_sort_options(self) -> list[dict]:
+        """返回本源支持的排序选项: [{value, label}]。空列表表示无排序支持。"""
+        return []
+
     @abstractmethod
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult: ...
 

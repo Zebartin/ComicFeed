@@ -45,7 +45,7 @@ async def search_source(req: SearchRequest):
     filtered = []
     for g in raw:
         nt = normalize_title(g.title)
-        if any(_similarity(nt, et) > 0.8 for et in req.existing_titles):
+        if any(_similarity(nt, et) > 0.999 for et in req.existing_titles):
             continue
         filtered.append(g)
         req.existing_titles.append(nt)

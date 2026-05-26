@@ -140,6 +140,7 @@
   font-size: 13px; color: var(--text-secondary); margin-right: auto;
 }
 .results-dialog footer .sel-count strong { color: var(--gold); }
+.results-dialog footer button:disabled { opacity: .4; cursor: not-allowed; }
 
 /* Empty state */
 .empty-state {
@@ -172,7 +173,7 @@
     <label>源 <select id="source_key"></select></label>
     <label class="full">查询串 <input id="query"></label>
     <label>模式 <select id="mode"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
-    <label>排序 <select id="sort"><option value="date">最新</option><option value="popular-today">今日热门</option><option value="popular-week">本周热门</option><option value="popular">全部热门</option></select></label>
+    <label>排序 <select id="sort"></select></label>
     <label>间隔 (分钟) <input id="interval" type="number" value="360"></label>
     <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
     <label class="inline"><input id="enabled" type="checkbox" checked> 启用</label>
@@ -225,7 +226,10 @@ async function load() {
 
   try {
     const [subs, srcs] = await Promise.all([api('/api/subscriptions'), api('/api/sources')])
+    window._srcs = srcs
     $('source_key').innerHTML = srcs.map(s => `<option>${s.key}</option>`).join('')
+    $('source_key').onchange = updateSortForm
+    updateSortForm()
     $('sub-stat').textContent = `${subs.length} 个订阅`
     if (!subs.length) {
       $('sub-list').innerHTML = '<p style="color:var(--text-muted);padding:40px 0;text-align:center">暂无订阅 — 点击右上角"新建订阅"开始</p>'
@@ -248,6 +252,13 @@ async function load() {
   } catch(e) { $('sub-list').innerHTML = `<p style="color:var(--red)">加载失败: ${e.message}</p>` }
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
+
+function updateSortForm() {
+  const key = $('source_key').value
+  const s = window._srcs?.find(x => x.key === key)
+  const opts = s?.sort_options || []
+  $('sort').innerHTML = opts.length ? opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('') : '<option value="">(无)</option>'
+}
 
 /* Form */
 function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages'].forEach(k=>$(k).value=''); $('form').classList.add('on') }

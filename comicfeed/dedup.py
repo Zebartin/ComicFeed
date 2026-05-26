@@ -3,7 +3,7 @@ from itertools import combinations
 
 from comicfeed.cbz import normalize_title
 
-_DEDUP_THRESHOLD = 0.9
+_DEDUP_THRESHOLD = 0.999
 
 
 def _similarity(a: str, b: str) -> float:
@@ -13,11 +13,11 @@ def _similarity(a: str, b: str) -> float:
 def find_similar_groups(items: list) -> list[list]:
     """阶段 1：按归一化标题相似度分组。
 
-    返回候选组列表（相似度 > 0.8 的项目归为一组）。
+    返回候选组列表（相似度 > _DEDUP_THRESHOLD 的项目归为一组）。
     没有相似项的返回空列表。
     """
     # 归一化标题
-    normalized = {item.native_id: normalize_title(item.title) for item in items}
+    normalized = {item.native_id: item.title for item in items}
     # 并查集分组
     parent = {item.native_id: item.native_id for item in items}
 

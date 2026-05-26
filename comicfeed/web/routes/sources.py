@@ -16,6 +16,7 @@ async def list_sources():
     return [
         {"key": s.key, "name": s.name, "version": s.version,
          "domains": s.domains, "auth_schema": s.auth_schema.name,
-         "config": s.get_config_schema()}
+         "config": s.get_config_schema(),
+         "sort_options": s.get_sort_options()}
         for s in mgr.list_sources()
     ]

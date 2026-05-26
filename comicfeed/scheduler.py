@@ -57,7 +57,7 @@ async def check_subscription(
         filtered = []
         for g in new:
             nt = normalize_title(g.title)
-            if any(_similarity(nt, et) > 0.8 for et in existing_titles):
+            if any(_similarity(nt, et) > 0.999 for et in existing_titles):
                 continue
             filtered.append(g)
             existing_titles.append(nt)
