@@ -76,13 +76,15 @@ def _web_url(source_key: str, native_id: str) -> str:
 @router.delete("/{gallery_id}", status_code=204)
 async def delete_gallery(gallery_id: str):
     async with get_session() as session:
-        from sqlalchemy import delete
         g = await session.get(Gallery, gallery_id)
         if g is None:
             raise HTTPException(404, "未找到")
-        await session.execute(
-            delete(SubscriptionGallery).where(SubscriptionGallery.gallery_id == gallery_id)
-        )
+        # 先删除关联记录
+        sgs = (await session.execute(
+            select(SubscriptionGallery).where(SubscriptionGallery.gallery_id == gallery_id)
+        )).scalars().all()
+        for sg in sgs:
+            await session.delete(sg)
         await session.flush()
         await session.delete(g)
         await session.commit()
