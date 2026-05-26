@@ -345,9 +345,11 @@ async function checkSub(id, loadMore=false) {
     $('load-more-btn').textContent = '加载更多'
     $('load-more-btn').disabled = false
 
-    // 自动链式加载
-    if (keepGoing && checkHasMore) {
-      setTimeout(() => checkSub(current.id, true), 150)
+    if (checkHasMore) {
+      if (keepGoing)  // 自动链式加载
+        setTimeout(() => checkSub(current.id, true), 150)
+      else 
+        checkMaxPages += 5
     }
   } catch(e) {
     $('res-title').textContent = '出错了'

@@ -264,9 +264,11 @@ class ExhentaiSource(BaseSource):
                     imgs = soup.select("img")
                     img_url = imgs[0].get("src", "") if imgs else ""
                 if img_url:
-                    img_resp = await client.get(img_url)
-                    img_resp.raise_for_status()
-                    results.append(img_resp.content)
+                    import httpx
+                    async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
+                        img_resp = await img_client.get(img_url)
+                        img_resp.raise_for_status()
+                        results.append(img_resp.content)
                 else:
                     results.append(b"")
         return results

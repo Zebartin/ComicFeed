@@ -45,7 +45,11 @@ async def download_gallery(
         # 分批下载，每批之间更新进度
         for chunk_start in range(vol_start, vol_end, CHUNK):
             chunk_end = min(chunk_start + CHUNK, vol_end)
-            chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end))
+            try:
+                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end))
+            except Exception as e:
+                _log.error("下载失败: %s 第 %d-%d 页 - %s", gallery_id, chunk_start+1, chunk_end, e)
+                raise
             vol_pages.extend(chunk)
             downloaded += len(chunk)
             if tracker:

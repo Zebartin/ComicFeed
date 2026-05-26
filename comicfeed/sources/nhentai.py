@@ -137,7 +137,8 @@ class NhentaiSource(BaseSource):
     async def download_pages(self, gallery_id: str, page_range: slice) -> list[bytes]:
         detail = await self.get_gallery(gallery_id)
         urls = detail.page_urls[page_range]
-        async with self._client() as client:
+        import httpx
+        async with httpx.AsyncClient(proxy=self.proxy, timeout=30, follow_redirects=True) as client:
             results = []
             for url in urls:
                 resp = await client.get(url)
