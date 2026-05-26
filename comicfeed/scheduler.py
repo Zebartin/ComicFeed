@@ -30,6 +30,11 @@ async def check_subscription(
 
     exclude_ids = exclude_ids or set()
     existing_titles = existing_titles or []
+    # 从 DB 加载已有标题用于去重
+    if not existing_titles:
+        stmt = select(Gallery.normalized_title).where(Gallery.source_key == source.key)
+        db_titles = [row[0] for row in (await session.execute(stmt)).fetchall()]
+        existing_titles.extend(db_titles)
     all_new: list[GallerySummary] = []
     has_more = False
 
