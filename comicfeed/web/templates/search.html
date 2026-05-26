@@ -55,7 +55,8 @@
 <script>
 const $=id=>document.getElementById(id)
 let picked=new Set(),results=[],srcKey='',searchQuery='',sortBy='date'
-let pageNum=1,hasMore=false,nextUrl='',pagesLoaded=0,MAX_PAGES=5
+let pageNum=1,hasMore=false,nextUrl='',pagesLoaded=0,max_pages=5
+let excludeIds=[],existingTitles=[]
 
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function api(p,o={}){return fetch(p,o).then(r=>r.json())}
@@ -68,6 +69,7 @@ async function doSearch() {
   srcKey=$('src-key').value;searchQuery=$('query').value;sortBy=$('sort').value
   if(!srcKey||!searchQuery)return
   picked.clear();results=[];pageNum=1;nextUrl='';pagesLoaded=0
+  excludeIds=[];existingTitles=[]
   $('panel').classList.add('on');$('res-title').textContent='搜索中…';$('res-body').innerHTML='<div class="empty-state"><p>请稍候…</p></div>'
   await fetchPage()
 }
@@ -76,10 +78,11 @@ async function fetchPage(loadMore=false) {
   if(!loadMore){pagesLoaded++;pageNum=1}
   else pagesLoaded++
   $('load-more-btn').textContent='加载中…';$('load-more-btn').disabled=true
-  const r=await api('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,query:searchQuery,sort:sortBy,page:pageNum,next_url:nextUrl})})
+  const r=await api('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,query:searchQuery,sort:sortBy,page:pageNum,next_url:nextUrl,exclude_ids:excludeIds,existing_titles:existingTitles})})
   if(r.error){$('res-body').innerHTML='<div class="empty-state"><p style="color:var(--red)">'+r.error+'</p></div>';return}
   const items=r.items||[];hasMore=r.has_more;nextUrl=r.next_url||'';pageNum=r.current_page+1
   results=loadMore?results.concat(items):items
+  items.forEach(g=>{excludeIds.push(g.native_id);existingTitles.push(g.title)})
   $('res-title').textContent='搜索结果';$('res-count').textContent=`共 ${results.length} 个`
   $('res-body').innerHTML=results.length?results.map((g,i)=>`<div class="g-card" id="gc-${i}">
     <div class="cover" onclick="pick(${i})">
@@ -93,13 +96,13 @@ async function fetchPage(loadMore=false) {
     </div>
   </div>`).join(''):'<div class="empty-state"><p>没有结果</p></div>'
   updateSel();updateLoadMore()
-  if(hasMore && pagesLoaded < MAX_PAGES) setTimeout(()=>fetchPage(true), 150)
+  if(hasMore && pagesLoaded < max_pages) setTimeout(()=>fetchPage(true), 150)
 }
 function pick(i){picked.has(i)?picked.delete(i):picked.add(i);$('gc-'+i).classList.toggle('selected',picked.has(i));updateSel()}
 function toggleAll(){const all=picked.size===results.length;all?picked.clear():results.forEach((_,i)=>picked.add(i));results.forEach((_,i)=>$('gc-'+i)?.classList.toggle('selected',!all));updateSel()}
 function updateSel(){$('sel-info').textContent=picked.size?`已选 ${picked.size} / ${results.length}`:'点选卡片选择'}
 function updateLoadMore(){$('load-more-btn').style.display=hasMore?'':'none';$('load-more-btn').textContent='加载更多';$('load-more-btn').disabled=false}
-async function loadMore(){await fetchPage(true)}
+async function loadMore(){max_pages+=5; fetchPage(true)}
 async function downloadPicked(){
   if(!picked.size)return;const ids=[...picked].map(i=>results[i].native_id)
   ids.forEach(id=>api('/api/galleries/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,gallery_id:id})}).catch(e=>console.error(e)))
