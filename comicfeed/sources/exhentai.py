@@ -109,8 +109,9 @@ class ExhentaiSource(BaseSource):
             if not gid:
                 continue
 
-            # 标题：取 div.glink
-            title = gl2e.select_one("div.glink").get_text(strip=True)
+            # 标题：取 div.glink，归一化处理
+            from comicfeed.cbz import normalize_title
+            title = normalize_title(gl2e.select_one("div.glink").get_text(strip=True))
 
             # 页数：逐 div 查找，避免文本拼接干扰
             pg_count = 0
@@ -200,10 +201,12 @@ class ExhentaiSource(BaseSource):
     def _parse_gallery_html(self, html: str, gallery_id: str) -> GalleryDetail:
         soup = BeautifulSoup(html, "lxml")
 
-        # 标题：优先日文 gj，其次英文 gn
+        # 标题：优先日文 gj，其次英文 gn，归一化处理
+        from comicfeed.cbz import normalize_title
         gj = soup.select_one("h1#gj")
         gn = soup.select_one("h1#gn")
         title = (gj.get_text(strip=True) if gj else "") or (gn.get_text(strip=True) if gn else "")
+        title = normalize_title(title)
 
         # 封面图
         cover_url = ""
