@@ -28,6 +28,17 @@ async def check_subscription(
     if sub is None:
         return [], False
 
+    # SPECIFIC_GALLERY 模式：检查更新而非搜索
+    if sub.mode == "SPECIFIC_GALLERY":
+        gid = sub.query.strip()
+        parsed = source.parse_url(gid)
+        if parsed:
+            gid = parsed.split(":", 1)[-1]
+        result = await source.check_updates(gid, {})
+        if result.has_updates and result.new_gallery_id:
+            return [GallerySummary(native_id=result.new_gallery_id, title="")], False
+        return [], False
+
     exclude_ids = exclude_ids or set()
     existing_titles = existing_titles or []
     # 从 DB 加载已有标题用于去重
