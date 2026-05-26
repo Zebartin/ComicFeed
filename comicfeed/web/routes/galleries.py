@@ -83,6 +83,7 @@ async def delete_gallery(gallery_id: str):
         await session.execute(
             delete(SubscriptionGallery).where(SubscriptionGallery.gallery_id == gallery_id)
         )
+        await session.flush()
         await session.delete(g)
         await session.commit()
 
