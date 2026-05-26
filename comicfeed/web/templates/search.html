@@ -93,7 +93,7 @@ async function fetchPage(loadMore=false) {
     </div>
   </div>`).join(''):'<div class="empty-state"><p>没有结果</p></div>'
   updateSel();updateLoadMore()
-  if(!loadMore && hasMore && pagesLoaded<MAX_PAGES) setTimeout(()=>fetchPage(true),150)
+  if(hasMore && pagesLoaded < MAX_PAGES) setTimeout(()=>fetchPage(true), 150)
 }
 function pick(i){picked.has(i)?picked.delete(i):picked.add(i);$('gc-'+i).classList.toggle('selected',picked.has(i));updateSel()}
 function toggleAll(){const all=picked.size===results.length;all?picked.clear():results.forEach((_,i)=>picked.add(i));results.forEach((_,i)=>$('gc-'+i)?.classList.toggle('selected',!all));updateSel()}
