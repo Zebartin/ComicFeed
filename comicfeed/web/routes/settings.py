@@ -11,7 +11,8 @@ DEFAULTS = {
     "proxy": "",
     "global_concurrency": "5",
     "komga_url": "",
-    "komga_api_key": "",
+    "komga_user": "",
+    "komga_password": "",
     "komga_library_id": "",
     "smtp_host": "",
     "smtp_port": "587",
@@ -60,7 +61,8 @@ async def test_webhook(data: WebhookTest | None = None):
 
 class KomgaTest(BaseModel):
     url: str = ""
-    api_key: str = ""
+    user: str = ""
+    password: str = ""
     library_ids: str = ""
 
 
@@ -71,21 +73,23 @@ async def test_komga(data: KomgaTest | None = None):
         return (getattr(data, key, "") if data else "") or (await get_setting(f"komga_{key}" if key != "library_ids" else "komga_library_id", d) or d)
 
     base_url = (await _v("url")).rstrip("/") if await _v("url") else ""
-    api_key = await _v("api_key")
+    user = await _v("user")
+    password = await _v("password")
     lib_ids_raw = await _v("library_ids")
     if not base_url:
         return {"ok": False, "error": "未配置 Komga URL"}
     if not lib_ids_raw:
         return {"ok": False, "error": "未配置 Library ID"}
+    import base64
     import httpx
     headers = {}
-    if api_key:
-        headers["X-API-Key"] = api_key
+    if user:
+        headers["Authorization"] = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
     try:
         async with httpx.AsyncClient(timeout=10) as c:
             r = await c.get(f"{base_url}/api/v1/libraries", headers=headers)
             if r.status_code == 401:
-                return {"ok": False, "error": "API Key 无效"}
+                return {"ok": False, "error": "认证失败，检查用户名密码"}
             r.raise_for_status()
             existing = {l["id"] for l in r.json()}
             configured = [lid.strip() for lid in lib_ids_raw.split(",") if lid.strip()]

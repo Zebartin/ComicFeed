@@ -1,3 +1,5 @@
+import base64
+
 import httpx
 
 from comicfeed.config import get_setting
@@ -7,18 +9,23 @@ from comicfeed.log import get
 _log = get(__name__)
 
 
+def _basic_auth_header(user: str, password: str) -> str:
+    return "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
+
+
 async def _call_komga_scan(event: Event):
     """调用 Komga API 扫描库（支持多个 Library ID，逗号分隔）。"""
     base_url = await get_setting("komga_url", "")
     library_ids_raw = await get_setting("komga_library_id", "")
-    api_key = await get_setting("komga_api_key", "")
+    user = await get_setting("komga_user", "") or ""
+    password = await get_setting("komga_password", "") or ""
 
     if not base_url or not library_ids_raw:
         return
 
     headers = {}
-    if api_key:
-        headers["X-API-Key"] = api_key
+    if user:
+        headers["Authorization"] = _basic_auth_header(user, password)
 
     base = base_url.rstrip("/")
     for lid in library_ids_raw.split(","):

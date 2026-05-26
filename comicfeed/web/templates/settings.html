@@ -32,7 +32,7 @@
   <div class="sub">
     <div class="field"><label>URL</label><input id="komga_url" placeholder="http://localhost:25600"></div>
     <div class="field"><label>Library ID</label><input id="komga_library_id" placeholder="多个用逗号分隔"></div>
-    <div class="field"><label>API Key</label><input id="komga_api_key"></div>
+    <div class="row"><div class="field"><label>用户名</label><input id="komga_user"></div><div class="field"><label>密码</label><input id="komga_password" type="password"></div></div>
     <button class="btn btn-ghost btn-sm" onclick="testKomga()">测试连接</button>
   </div>
 </div>
@@ -85,7 +85,7 @@ async function testWebhook() {
   alert(data.ok ? 'Webhook 发送成功' : '失败: ' + data.error)
 }
 async function testKomga() {
-  const r = await fetch('/api/settings/test-komga', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:_val('komga_url'),api_key:_val('komga_api_key'),library_ids:_val('komga_library_id')})})
+  const r = await fetch('/api/settings/test-komga', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:_val('komga_url'),user:_val('komga_user'),password:_val('komga_password'),library_ids:_val('komga_library_id')})})
   const data = await r.json()
   if (data.ok) alert(data.warning || data.message || '连接成功')
   else alert('失败: ' + data.error)
