@@ -58,12 +58,21 @@ async def test_webhook(data: WebhookTest | None = None):
         return {"ok": False, "error": str(e)}
 
 
+class KomgaTest(BaseModel):
+    url: str = ""
+    api_key: str = ""
+    library_ids: str = ""
+
+
 @router.post("/test-komga")
-async def test_komga():
-    """测试 Komga 连接，检查配置的 Library ID 是否存在。"""
-    base_url = (await get_setting("komga_url", "") or "").rstrip("/")
-    api_key = await get_setting("komga_api_key", "") or ""
-    lib_ids_raw = await get_setting("komga_library_id", "") or ""
+async def test_komga(data: KomgaTest | None = None):
+    """测试 Komga 连接，优先用传入的值。"""
+    async def _v(key, d=""):
+        return (getattr(data, key, "") if data else "") or (await get_setting(f"komga_{key}" if key != "library_ids" else "komga_library_id", d) or d)
+
+    base_url = (await _v("url")).rstrip("/") if await _v("url") else ""
+    api_key = await _v("api_key")
+    lib_ids_raw = await _v("library_ids")
     if not base_url:
         return {"ok": False, "error": "未配置 Komga URL"}
     if not lib_ids_raw:

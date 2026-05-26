@@ -85,7 +85,7 @@ async function testWebhook() {
   alert(data.ok ? 'Webhook 发送成功' : '失败: ' + data.error)
 }
 async function testKomga() {
-  const r = await fetch('/api/settings/test-komga', {method:'POST'})
+  const r = await fetch('/api/settings/test-komga', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:_val('komga_url'),api_key:_val('komga_api_key'),library_ids:_val('komga_library_id')})})
   const data = await r.json()
   if (data.ok) alert(data.warning || data.message || '连接成功')
   else alert('失败: ' + data.error)
