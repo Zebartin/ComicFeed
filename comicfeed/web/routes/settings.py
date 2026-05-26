@@ -55,11 +55,14 @@ async def test_webhook():
 
 @router.post("/test-komga")
 async def test_komga():
-    """测试 Komga 连接并列出库。"""
+    """测试 Komga 连接，检查配置的 Library ID 是否存在。"""
     base_url = (await get_setting("komga_url", "") or "").rstrip("/")
     api_key = await get_setting("komga_api_key", "") or ""
+    lib_ids_raw = await get_setting("komga_library_id", "") or ""
     if not base_url:
         return {"ok": False, "error": "未配置 Komga URL"}
+    if not lib_ids_raw:
+        return {"ok": False, "error": "未配置 Library ID"}
     import httpx
     headers = {}
     if api_key:
@@ -70,9 +73,15 @@ async def test_komga():
             if r.status_code == 401:
                 return {"ok": False, "error": "API Key 无效"}
             r.raise_for_status()
-            libs = r.json()
-            names = [f"{l['id']}:{l['name']}" for l in libs]
-            return {"ok": True, "libraries": names}
+            existing = {l["id"] for l in r.json()}
+            configured = [lid.strip() for lid in lib_ids_raw.split(",") if lid.strip()]
+            missing = [lid for lid in configured if lid not in existing]
+            found = [lid for lid in configured if lid in existing]
+            if missing and not found:
+                return {"ok": False, "error": f"库 {', '.join(missing)} 不存在"}
+            if missing:
+                return {"ok": True, "warning": f"部分库不存在: {', '.join(missing)}。有效的: {', '.join(found)}"}
+            return {"ok": True, "message": f"全部 {len(found)} 个库验证通过"}
     except httpx.ConnectError:
         return {"ok": False, "error": "无法连接 Komga 服务器"}
     except Exception as e:

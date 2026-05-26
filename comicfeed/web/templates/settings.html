@@ -86,7 +86,7 @@ async function testWebhook() {
 async function testKomga() {
   const r = await fetch('/api/settings/test-komga', {method:'POST'})
   const data = await r.json()
-  if (data.ok) alert('连接成功\n可用库:\n' + data.libraries.join('\n'))
+  if (data.ok) alert(data.warning || data.message || '连接成功')
   else alert('失败: ' + data.error)
 }
 async function testEmail() {
