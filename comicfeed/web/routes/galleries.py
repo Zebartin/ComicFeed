@@ -79,14 +79,10 @@ async def delete_gallery(gallery_id: str):
         g = await session.get(Gallery, gallery_id)
         if g is None:
             raise HTTPException(404, "未找到")
-        # 先删除关联记录
-        sgs = (await session.execute(
-            select(SubscriptionGallery).where(SubscriptionGallery.gallery_id == gallery_id)
-        )).scalars().all()
-        for sg in sgs:
-            await session.delete(sg)
-        await session.flush()
-        await session.delete(g)
+        session.expunge(g)  # 从 session 分离，避免 cascade
+        from sqlalchemy import text
+        await session.execute(text("DELETE FROM subscription_gallery WHERE gallery_id = :gid"), {"gid": gallery_id})
+        await session.execute(text("DELETE FROM gallery WHERE id = :gid"), {"gid": gallery_id})
         await session.commit()
 
 
