@@ -50,8 +50,16 @@ async def send_email(config: dict, event: Event):
     msg.attach(MIMEText(body, "plain", "utf-8"))
 
     def _send():
-        with smtplib.SMTP(config["host"], config["port"]) as s:
-            s.starttls()
+        port = config["port"]
+        if port == 465:
+            import ssl
+            ctx = ssl.create_default_context()
+            s = smtplib.SMTP_SSL(config["host"], port, context=ctx)
+        else:
+            s = smtplib.SMTP(config["host"], port)
+        with s:
+            if port != 465:
+                s.starttls()
             s.login(config["user"], config["password"])
             s.send_message(msg)
 

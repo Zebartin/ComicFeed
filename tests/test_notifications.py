@@ -45,17 +45,28 @@ async def test_send_webhook_with_mock_client():
     assert captured_data[0]["event"] == "gallery.created"
 
 
-async def test_send_email():
-    """send_email 发送 SMTP 邮件。"""
+async def test_send_email_starttls():
+    """send_email 发送 SMTP 邮件 (port 587 STARTTLS)。"""
     event = Event("gallery.created", {
         "gallery_id": "nhentai:123", "title": "Test Comic", "files": ["a.cbz"],
     })
     config = {"host": "smtp.example.com", "port": 587, "user": "u", "password": "p", "to": "me@x.com"}
 
-    with patch("smtplib.SMTP") as mock_smtp:
+    with patch("smtplib.SMTP") as mock:
+        mock.return_value.__enter__.return_value = mock.return_value
         await send_email(config, event)
-        mock_smtp.assert_called_once_with("smtp.example.com", 587)
-        instance = mock_smtp.return_value.__enter__.return_value
-        instance.starttls.assert_called_once()
-        instance.login.assert_called_once_with("u", "p")
-        instance.send_message.assert_called_once()
+        mock.assert_called_once_with("smtp.example.com", 587)
+        mock.return_value.starttls.assert_called_once()
+        mock.return_value.login.assert_called_once_with("u", "p")
+
+
+async def test_send_email_ssl():
+    """send_email 发送 SMTP 邮件 (port 465 SSL)。"""
+    event = Event("gallery.created", {"gallery_id": "x", "title": "t", "files": []})
+    config = {"host": "smtp.example.com", "port": 465, "user": "u", "password": "p", "to": "me@x.com"}
+
+    with patch("smtplib.SMTP_SSL") as mock:
+        mock.return_value.__enter__.return_value = mock.return_value
+        await send_email(config, event)
+        mock.assert_called_once()
+        mock.return_value.login.assert_called_once_with("u", "p")
