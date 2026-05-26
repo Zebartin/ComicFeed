@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from comicfeed.config import get_setting, set_setting
 
@@ -37,10 +38,14 @@ async def update_setting(key: str, value: str = ""):
     return {"key": key, "value": value}
 
 
+class WebhookTest(BaseModel):
+    url: str = ""
+
+
 @router.post("/test-webhook")
-async def test_webhook():
-    """发送测试 Webhook。"""
-    url = await get_setting("webhook_url", "")
+async def test_webhook(data: WebhookTest | None = None):
+    """发送测试 Webhook，优先用传入的值。"""
+    url = (data.url if data and data.url else "") or (await get_setting("webhook_url", "") or "")
     if not url:
         return {"ok": False, "error": "未配置 Webhook URL"}
     import httpx
@@ -88,23 +93,36 @@ async def test_komga():
         return {"ok": False, "error": str(e)}
 
 
+class EmailTest(BaseModel):
+    host: str = ""
+    port: int = 587
+    user: str = ""
+    password: str = ""
+    to: str = ""
+
+
 @router.post("/test-email")
-async def test_email():
-    """发送测试邮件。"""
-    host = await get_setting("smtp_host", "")
+async def test_email(data: EmailTest | None = None):
+    """发送测试邮件，优先用传入的值。"""
+    async def _v(key, default):
+        return (getattr(data, key, "") if data else "") or (await get_setting(f"smtp_{key}", default) or default)
+
+    host = await _v("host", "")
     if not host:
         return {"ok": False, "error": "未配置 SMTP 主机"}
+    to = await _v("to", "")
+    if not to:
+        return {"ok": False, "error": "未配置收件人"}
+
     from comicfeed.hooks import Event
     from comicfeed.notifications import send_email
     config = {
         "host": host,
-        "port": int(await get_setting("smtp_port", "587") or "587"),
-        "user": await get_setting("smtp_user", "") or "",
-        "password": await get_setting("smtp_password", "") or "",
-        "to": await get_setting("smtp_to", "") or "",
+        "port": int(await _v("port", "587")),
+        "user": await _v("user", ""),
+        "password": await _v("password", ""),
+        "to": to,
     }
-    if not config["to"]:
-        return {"ok": False, "error": "未配置收件人"}
     try:
         await send_email(config, Event("test.email", {"message": "ComicFeed 测试邮件"}))
         return {"ok": True}

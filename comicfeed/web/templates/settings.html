@@ -78,8 +78,9 @@ async function load() {
     const el = document.getElementById(k); if (el) el.value = s[k] || ''
   }
 }
+function _val(id){return document.getElementById(id)?.value||''}
 async function testWebhook() {
-  const r = await fetch('/api/settings/test-webhook', {method:'POST'})
+  const r = await fetch('/api/settings/test-webhook', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:_val('webhook_url')})})
   const data = await r.json()
   alert(data.ok ? 'Webhook 发送成功' : '失败: ' + data.error)
 }
@@ -90,7 +91,7 @@ async function testKomga() {
   else alert('失败: ' + data.error)
 }
 async function testEmail() {
-  const r = await fetch('/api/settings/test-email', {method:'POST'})
+  const r = await fetch('/api/settings/test-email', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({host:_val('smtp_host'),port:parseInt(_val('smtp_port'))||587,user:_val('smtp_user'),password:_val('smtp_password'),to:_val('smtp_to')})})
   const data = await r.json()
   alert(data.ok ? '测试邮件发送成功' : '失败: ' + data.error)
 }
