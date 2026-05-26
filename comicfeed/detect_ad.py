@@ -22,13 +22,28 @@ _QR_WHITELIST = [
 ]
 
 
-def _try_decode_qr(img: Image.Image) -> str | None:
+def _decode_qr(img: Image.Image) -> str | None:
     """尝试从图片中解码二维码。返回解码文本或 None。"""
     try:
-        from PIL import ImageQt  # noqa - placeholder, actual impl below
-    except ImportError:
+        from pyzbar.pyzbar import decode
+        results = decode(img)
+        if results:
+            text = results[0].data.decode("utf-8", errors="replace")
+            return text.strip()
+    except Exception:
         pass
     return None
+
+
+def _has_ad_qr(img: Image.Image) -> bool:
+    """检查图片是否含推广二维码。有 QR 码且不在白名单 = 广告。"""
+    text = _decode_qr(img)
+    if not text:
+        return False
+    # 白名单 URL → 不是广告
+    if any(p.search(text) for p in _QR_WHITELIST):
+        return False
+    return True
 
 
 def is_ad_image(data: bytes) -> bool:
@@ -50,6 +65,10 @@ def is_ad_image(data: bytes) -> bool:
     # 高宽比极端（>4:1 或 <1:4）算广告
     ratio = w / h if h > 0 else 0
     if ratio > 4 or ratio < 0.25:
+        return True
+
+    # 尺寸正常，检查是否有推广二维码
+    if _has_ad_qr(img):
         return True
 
     return False
@@ -77,5 +96,4 @@ def detect_ads_from_tail(pages: list[bytes], consecutive_ok: int = 3) -> int:
             if suspicious >= consecutive_ok:
                 # 连续 N 页正常 → 退出广告区，前面的都是正常内容，无需继续扫描
                 break
-        # 还没见过广告的正常页 → 继续
     return ad_count
