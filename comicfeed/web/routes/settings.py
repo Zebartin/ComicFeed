@@ -53,6 +53,32 @@ async def test_webhook():
         return {"ok": False, "error": str(e)}
 
 
+@router.post("/test-komga")
+async def test_komga():
+    """测试 Komga 连接并列出库。"""
+    base_url = (await get_setting("komga_url", "") or "").rstrip("/")
+    api_key = await get_setting("komga_api_key", "") or ""
+    if not base_url:
+        return {"ok": False, "error": "未配置 Komga URL"}
+    import httpx
+    headers = {}
+    if api_key:
+        headers["X-API-Key"] = api_key
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(f"{base_url}/api/v1/libraries", headers=headers)
+            if r.status_code == 401:
+                return {"ok": False, "error": "API Key 无效"}
+            r.raise_for_status()
+            libs = r.json()
+            names = [f"{l['id']}:{l['name']}" for l in libs]
+            return {"ok": True, "libraries": names}
+    except httpx.ConnectError:
+        return {"ok": False, "error": "无法连接 Komga 服务器"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @router.post("/test-email")
 async def test_email():
     """发送测试邮件。"""

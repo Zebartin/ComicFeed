@@ -31,8 +31,9 @@
   <h2>Komga</h2>
   <div class="sub">
     <div class="field"><label>URL</label><input id="komga_url" placeholder="http://localhost:25600"></div>
-    <div class="field"><label>Library ID</label><input id="komga_library_id"></div>
+    <div class="field"><label>Library ID</label><input id="komga_library_id" placeholder="多个用逗号分隔"></div>
     <div class="field"><label>API Key</label><input id="komga_api_key"></div>
+    <button class="btn btn-ghost btn-sm" onclick="testKomga()">测试连接</button>
   </div>
 </div>
 
@@ -81,6 +82,12 @@ async function testWebhook() {
   const r = await fetch('/api/settings/test-webhook', {method:'POST'})
   const data = await r.json()
   alert(data.ok ? 'Webhook 发送成功' : '失败: ' + data.error)
+}
+async function testKomga() {
+  const r = await fetch('/api/settings/test-komga', {method:'POST'})
+  const data = await r.json()
+  if (data.ok) alert('连接成功\n可用库:\n' + data.libraries.join('\n'))
+  else alert('失败: ' + data.error)
 }
 async function testEmail() {
   const r = await fetch('/api/settings/test-email', {method:'POST'})

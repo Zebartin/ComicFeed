@@ -8,22 +8,26 @@ _log = get(__name__)
 
 
 async def _call_komga_scan(event: Event):
-    """调用 Komga API 扫描库。"""
+    """调用 Komga API 扫描库（支持多个 Library ID，逗号分隔）。"""
     base_url = await get_setting("komga_url", "")
-    library_id = await get_setting("komga_library_id", "")
+    library_ids_raw = await get_setting("komga_library_id", "")
     api_key = await get_setting("komga_api_key", "")
 
-    if not base_url or not library_id:
+    if not base_url or not library_ids_raw:
         return
 
-    _log.info("触发 Komga 扫描: library=%s", library_id)
     headers = {}
     if api_key:
         headers["X-API-Key"] = api_key
 
-    url = f"{base_url.rstrip('/')}/api/v1/libraries/{library_id}/scan"
-    async with httpx.AsyncClient(timeout=30) as client:
-        await client.post(url, headers=headers)
+    base = base_url.rstrip("/")
+    for lid in library_ids_raw.split(","):
+        lid = lid.strip()
+        if not lid:
+            continue
+        _log.info("触发 Komga 扫描: library=%s", lid)
+        async with httpx.AsyncClient(timeout=30) as client:
+            await client.post(f"{base}/api/v1/libraries/{lid}/scan", headers=headers)
 
 
 def register_komga_hook():
