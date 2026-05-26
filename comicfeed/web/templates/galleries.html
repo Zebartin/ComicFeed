@@ -85,7 +85,7 @@ async function load(page) {
         <div class="info" onclick="event.stopPropagation();window.open('${x.web_url||''}','_blank')" style="cursor:pointer" title="在源站打开">
           <div class="gid">#${esc(x.native_id)}</div>
           <div class="title">${esc(x.display_title)}</div>
-          <div class="meta"><span>${x.reported_pages} 页</span><span class="dot"></span><span>${x.num_favorites||0} 收藏</span></div>
+          <div class="meta"><span>${x.actual_pages||x.reported_pages} 页</span><span class="dot"></span><span>${x.num_favorites||0} 收藏</span></div>
           ${tags.length ? `<div class="tags">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
         </div>
       </div>`

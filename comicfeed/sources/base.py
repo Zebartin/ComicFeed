@@ -37,6 +37,7 @@ class GalleryDetail:
     cover_url: str
     web_url: str = ""
     page_urls: list[str] = field(default_factory=list)
+    page_native_ids: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     reported_pages: int = 0
     num_favorites: int = 0

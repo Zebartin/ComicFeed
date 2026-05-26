@@ -17,7 +17,7 @@ def find_similar_groups(items: list) -> list[list]:
     没有相似项的返回空列表。
     """
     # 归一化标题
-    normalized = {item.native_id: item.title for item in items}
+    normalized = {item.native_id: normalize_title(item.title) for item in items}
     # 并查集分组
     parent = {item.native_id: item.native_id for item in items}
 

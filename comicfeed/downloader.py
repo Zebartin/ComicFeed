@@ -64,6 +64,8 @@ async def download_gallery(
             _log.info("检测到 %d 页广告 (共 %d 页)", ad_count, len(vol_pages))
             vol_pages = vol_pages[:-ad_count] if ad_count < len(vol_pages) else vol_pages
             downloaded -= ad_count
+            # 移除 "extraneous ads" 标签
+            detail.tags = [t for t in detail.tags if "extraneous" not in t.lower() and "外部广告" not in t]
             if tracker:
                 tracker.progress(full_gid, downloaded)
 
@@ -83,6 +85,17 @@ async def download_gallery(
         await bus.fire(Event("gallery.created", {
             "gallery_id": full_gid, "title": title, "files": result.files,
         }))
+
+    # 写入页面记录（用于增量更新检测）
+    if save_to_db and detail.page_native_ids:
+        from comicfeed.models import Page as PageModel
+        async with get_session() as session:
+            # 删除旧记录后重写
+            from sqlalchemy import delete
+            await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
+            for idx, pid in enumerate(detail.page_native_ids):
+                session.add(PageModel(gallery_id=full_gid, page_index=idx, page_native_id=pid))
+            await session.commit()
 
     # 写入数据库（失败不阻塞）
     if save_to_db:

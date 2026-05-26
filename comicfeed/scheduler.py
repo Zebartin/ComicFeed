@@ -34,9 +34,22 @@ async def check_subscription(
         parsed = source.parse_url(gid)
         if parsed:
             gid = parsed.split(":", 1)[-1]
-        result = await source.check_updates(gid, {})
-        if result.has_updates and result.new_gallery_id:
-            return [GallerySummary(native_id=result.new_gallery_id, title="")], False
+
+        # 从 DB 获取旧页面 ID 列表
+        from comicfeed.models import Page
+        full_gid = f"{source.key}:{gid}"
+        stmt = select(Page.page_native_id).where(Page.gallery_id == full_gid).order_by(Page.page_index)
+        old_ids = [row[0] for row in (await session.execute(stmt)).fetchall()]
+
+        result = await source.check_updates(gid, {"page_ids": old_ids})
+        if result.has_updates:
+            items = []
+            if result.new_page_ids:
+                # 有新增页面
+                items.append(GallerySummary(native_id=gid, title="更新", page_count=0))
+            elif result.new_gallery_id:
+                items.append(GallerySummary(native_id=result.new_gallery_id, title=""))
+            return items, False
         return [], False
 
     exclude_ids = exclude_ids or set()

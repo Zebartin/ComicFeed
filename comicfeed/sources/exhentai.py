@@ -23,6 +23,7 @@ class ExhentaiSource(BaseSource):
 
     _URL_PATTERN = re.compile(r"https?://(?:exhentai|e-hentai)\.org/g/(\d+)/(\w+)")
     _GALLERY_LINK = re.compile(r"/g/(\d+)/(\w+)")
+    _PAGE_ID = re.compile(r"/s/(\w+)/")
 
     def __init__(self, proxy=None, credentials=None):
         super().__init__(proxy=proxy, credentials=credentials)
@@ -79,6 +80,12 @@ class ExhentaiSource(BaseSource):
             result = self._parse_search_html(resp.text, page)
             self._next_url = result.next_url
             return result
+
+    @staticmethod
+    def _extract_page_id(url: str) -> str | None:
+        """从 viewer URL 提取页面 ID。如 /s/cc58247135/... → cc58247135"""
+        m = re.search(r"/s/(\w+)/", url)
+        return m.group(1) if m else None
 
     @staticmethod
     def _make_thumbnail_url(path: str) -> str:
@@ -247,12 +254,16 @@ class ExhentaiSource(BaseSource):
             if href:
                 page_urls.append(href)
 
+        page_native_ids = [self._extract_page_id(u) for u in page_urls]
+        page_native_ids = [p for p in page_native_ids if p]
+
         return GalleryDetail(
             native_id=gallery_id,
             title=title,
             cover_url=self._make_thumbnail_url(cover_url),
             tags=tags,
             page_urls=page_urls,
+            page_native_ids=page_native_ids,
             reported_pages=reported_pages,
         )
 
@@ -283,16 +294,35 @@ class ExhentaiSource(BaseSource):
         return results
 
     async def check_updates(self, gallery_id: str, last_known: dict) -> UpdateResult:
-        """检查画廊是否有更新版本。"""
+        """检查画廊是否有更新版本（基于页面 ID 对比）。"""
         gurl = await self._get_gallery_url(gallery_id)
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
+            # 检查是否有 "newer version" 标记
             newer = soup.select_one("div.sn a, div.sn span")
+            new_gid = None
             if newer and "newer" in newer.get_text().lower():
                 href = newer.get("href", "") if newer.name == "a" else ""
                 m = self._GALLERY_LINK.search(href)
                 if m:
-                    return UpdateResult(has_updates=True, new_gallery_id=m.group(1))
-        return UpdateResult()
+                    new_gid = m.group(1)
+
+            # 从 DB 获取已记录的 page ID
+            old_ids: set[str] = set(last_known.get("page_ids", []))
+
+            # 解析当前页面的 page ID
+            current_ids = set()
+            for a in soup.select("div#gdt a"):
+                pid = self._extract_page_id(a.get("href", ""))
+                if pid:
+                    current_ids.add(pid)
+
+            # 新页面
+            new_ids = current_ids - old_ids
+            if new_ids:
+                return UpdateResult(has_updates=True, new_page_ids=list(new_ids), new_gallery_id=new_gid)
+            if new_gid:
+                return UpdateResult(has_updates=True, new_gallery_id=new_gid)
+            return UpdateResult()
