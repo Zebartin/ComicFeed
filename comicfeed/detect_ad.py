@@ -75,9 +75,7 @@ def detect_ads_from_tail(pages: list[bytes], consecutive_ok: int = 3) -> int:
         elif seen_ad:
             suspicious += 1
             if suspicious >= consecutive_ok:
-                # 连续 N 页正常 → 退出广告区，这些页是真正内容
-                suspicious = 0
-                seen_ad = False
-                continue
+                # 连续 N 页正常 → 退出广告区，前面的都是正常内容，无需继续扫描
+                break
         # 还没见过广告的正常页 → 继续
     return ad_count
