@@ -40,7 +40,7 @@
   <h2>通知</h2>
   <div class="sub">
     <h3>Webhook</h3>
-    <div class="field"><label>URL</label><input id="webhook_url" placeholder="https://hooks.example.com/notify"></div>
+    <div class="field"><label>URL</label><input id="webhook_url" placeholder="https://hooks.example.com/notify"><button class="btn btn-ghost btn-sm" onclick="testWebhook()">测试</button></div>
 
     <h3>邮件 (SMTP)</h3>
     <div class="row">
@@ -52,6 +52,7 @@
       <div class="field"><label>密码</label><input id="smtp_password" type="password"></div>
     </div>
     <div class="field"><label>收件人</label><input id="smtp_to" placeholder="me@example.com"></div>
+    <button class="btn btn-ghost btn-sm" onclick="testEmail()">发送测试邮件</button>
   </div>
 </div>
 
@@ -75,6 +76,16 @@ async function load() {
   for (const k of Object.keys(s)) {
     const el = document.getElementById(k); if (el) el.value = s[k] || ''
   }
+}
+async function testWebhook() {
+  const r = await fetch('/api/settings/test-webhook', {method:'POST'})
+  const data = await r.json()
+  alert(data.ok ? 'Webhook 发送成功' : '失败: ' + data.error)
+}
+async function testEmail() {
+  const r = await fetch('/api/settings/test-email', {method:'POST'})
+  const data = await r.json()
+  alert(data.ok ? '测试邮件发送成功' : '失败: ' + data.error)
 }
 async function saveAll() {
   const r = await fetch('/api/settings'); const s = await r.json()
