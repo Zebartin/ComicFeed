@@ -135,31 +135,36 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "search_failed"}))
                 continue
 
+            downloaded = []
+            failed = []
+            from comicfeed.config import get_setting
+            out_dir = await get_setting("download_path", ".")
+            from comicfeed.web.app import get_download_tracker
+            from comicfeed.models import SubscriptionGallery
+
             for item in new:
                 try:
-                    from comicfeed.config import get_setting
-                    out_dir = await get_setting("download_path", ".")
                     _log.info("开始下载: %s:%s (%s)", source.key, item.native_id, item.title)
-                    from comicfeed.web.app import get_download_tracker
-                    result = await download_pool.download(source, item.native_id, out_dir, tracker=get_download_tracker())
-                    # 写入订阅-画廊关联
-                    from comicfeed.models import SubscriptionGallery
+                    result = await download_pool.download(source, item.native_id, out_dir, tracker=get_download_tracker(), fire_events=False)
                     gid = f"{source.key}:{item.native_id}"
                     sg = await session.get(SubscriptionGallery, (sub.id, gid))
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
                         await session.commit()
-                    await event_bus.fire(Event("gallery.created", {
-                        "gallery_id": f"{source.key}:{item.native_id}",
-                        "title": item.title,
-                        "files": result.files,
-                    }))
+                    downloaded.append({"id": gid, "title": item.title, "files": result.files})
                 except Exception as e:
                     _log.error("下载失败: %s:%s - %s", source.key, item.native_id, e)
-                    await event_bus.fire(Event("gallery.failed", {
-                        "gallery_id": f"{source.key}:{item.native_id}",
-                        "title": item.title,
-                    }))
+                    failed.append({"id": f"{source.key}:{item.native_id}", "title": item.title})
+
+            # 批量通知
+            if downloaded:
+                await event_bus.fire(Event("gallery.created", {
+                    "subscription": sub.name,
+                    "galleries": [{"gallery_id": d["id"], "title": d["title"], "files": d["files"]} for d in downloaded],
+                    "count": len(downloaded),
+                }))
+            for f in failed:
+                await event_bus.fire(Event("gallery.failed", {"gallery_id": f["id"], "title": f["title"]}))
 
 
 def create_scheduler(source_manager: SourceManager, download_pool, interval_minutes: int = 10) -> AsyncIOScheduler:

@@ -34,14 +34,23 @@ async def send_webhook(url: str, event: Event, _client=None):
 async def send_email(config: dict, event: Event):
     """发送邮件通知。config 包含 host/port/user/password/to。"""
     subject = f"[ComicFeed] {event.name}"
-    title = event.data.get("title", "")
-    body = f"事件: {event.name}\n标题: {title}\n"
-    for k, v in event.data.items():
-        if k in ("title", "files"):
-            continue
-        body += f"{k}: {v}\n"
-    if "files" in event.data:
-        body += f"文件: {', '.join(event.data['files'][:5])}\n"
+    count = event.data.get("count", 0)
+    if count:
+        body = f"订阅: {event.data.get('subscription', '')}\n"
+        body += f"本次下载: {count} 个画廊\n\n"
+        for g in event.data.get("galleries", [])[:10]:
+            body += f"  - {g['title'][:80]}\n"
+        if count > 10:
+            body += f"  ... 等共 {count} 个\n"
+    else:
+        title = event.data.get("title", "")
+        body = f"事件: {event.name}\n标题: {title}\n"
+        for k, v in event.data.items():
+            if k in ("title", "files"):
+                continue
+            body += f"{k}: {v}\n"
+        if "files" in event.data:
+            body += f"文件: {', '.join(event.data['files'][:5])}\n"
 
     msg = MIMEMultipart()
     msg["Subject"] = subject

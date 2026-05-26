@@ -274,6 +274,7 @@ async function saveSub() {
     mode: $('mode').value, interval_minutes: +$('interval').value,
     cbz_max_pages: +$('cbz_max_pages').value, sort: $('sort').value, enabled: $('enabled').checked,
   }
+  const isNew = !id
   if (id) {
     await api('/api/subscriptions/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
   } else {
@@ -281,7 +282,7 @@ async function saveSub() {
     id = r.id
   }
   closeForm(); load()
-  if (id) checkSub(id)  // 新建/编辑后自动检查
+  if (isNew) checkSub(id)  // 仅新建时自动检查
 }
 async function delSub(id) { if (confirm('确认删除？')) { await api('/api/subscriptions/'+id, {method:'DELETE'}); load() } }
 

@@ -21,8 +21,9 @@ async def download_gallery(
     output_dir: str,
     cbz_max_pages: int = 0,
     tracker: "DownloadTracker | None" = None,
+    fire_events: bool = True,
 ) -> DownloadResult:
-    """下载完整画廊并打包为 CBZ。"""
+    """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。"""
     from comicfeed.hooks import Event, bus
 
     detail = await source.get_gallery(gallery_id)
@@ -65,9 +66,10 @@ async def download_gallery(
 
     _log.info("下载完成: %s (%d 页) → %s", full_gid, downloaded, os.path.basename(result.files[0]) if result.files else "")
 
-    await bus.fire(Event("gallery.created", {
-        "gallery_id": full_gid, "title": title, "files": result.files,
-    }))
+    if fire_events:
+        await bus.fire(Event("gallery.created", {
+            "gallery_id": full_gid, "title": title, "files": result.files,
+        }))
 
     # 写入数据库
     from datetime import datetime
@@ -125,15 +127,16 @@ class DownloadPool:
         output_dir: str,
         cbz_max_pages: int = 0,
         tracker: "DownloadTracker | None" = None,
+        fire_events: bool = True,
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
         async with self._global_sem:
             if src_sem:
                 async with src_sem:
-                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker)
+                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events)
             else:
-                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker)
+                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events)
 
 
 class DownloadTracker:
