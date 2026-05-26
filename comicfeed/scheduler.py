@@ -151,7 +151,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
                         await session.commit()
-                    downloaded.append({"id": gid, "title": item.title, "files": result.files})
+                    downloaded.append({"id": gid, "title": item.title, "files": result.files, "cover_url": item.cover_url, "web_url": item.web_url, "page_count": item.page_count})
                 except Exception as e:
                     _log.error("下载失败: %s:%s - %s", source.key, item.native_id, e)
                     failed.append({"id": f"{source.key}:{item.native_id}", "title": item.title})
@@ -160,7 +160,12 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
             if downloaded:
                 await event_bus.fire(Event("gallery.created", {
                     "subscription": sub.name,
-                    "galleries": [{"gallery_id": d["id"], "title": d["title"], "files": d["files"]} for d in downloaded],
+                    "source_key": sub.source_key,
+                    "galleries": [{
+                        "gallery_id": d["id"], "title": d["title"],
+                        "files": d["files"], "cover_url": d.get("cover_url", ""),
+                        "web_url": d.get("web_url", ""), "page_count": d.get("page_count", 0),
+                    } for d in downloaded],
                     "count": len(downloaded),
                 }))
             for f in failed:
