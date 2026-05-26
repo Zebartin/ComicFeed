@@ -22,6 +22,7 @@ async def download_gallery(
     cbz_max_pages: int = 0,
     tracker: "DownloadTracker | None" = None,
     fire_events: bool = True,
+    save_to_db: bool = True,
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。"""
     from comicfeed.hooks import Event, bus
@@ -55,11 +56,23 @@ async def download_gallery(
             downloaded += len(chunk)
             if tracker:
                 tracker.progress(full_gid, downloaded)
-        fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_end, total_pages=total)
-        fpath = os.path.join(output_dir, fname)
-        with open(fpath, "wb") as f:
-            pack_cbz(f, fname, detail, vol_pages, start_page=vol_start + 1)
-        result.files.append(fpath)
+
+        # 广告页检测：从尾部扫描，去掉广告
+        from comicfeed.detect_ad import detect_ads_from_tail
+        ad_count = detect_ads_from_tail(vol_pages)
+        if ad_count > 0:
+            _log.info("检测到 %d 页广告 (共 %d 页)", ad_count, len(vol_pages))
+            vol_pages = vol_pages[:-ad_count] if ad_count < len(vol_pages) else vol_pages
+            downloaded -= ad_count
+            if tracker:
+                tracker.progress(full_gid, downloaded)
+
+        if vol_pages:
+            fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_start + len(vol_pages), total_pages=total)
+            fpath = os.path.join(output_dir, fname)
+            with open(fpath, "wb") as f:
+                pack_cbz(f, fname, detail, vol_pages, start_page=vol_start + 1)
+            result.files.append(fpath)
 
     if tracker:
         tracker.finished(full_gid)
@@ -71,32 +84,36 @@ async def download_gallery(
             "gallery_id": full_gid, "title": title, "files": result.files,
         }))
 
-    # 写入数据库
-    from datetime import datetime
-    from comicfeed.database import get_session
-    from comicfeed.models import Gallery
-    import json
-    now = datetime.now()
-    async with get_session() as session:
-        g = await session.get(Gallery, full_gid)
-        if g is None:
-            g = Gallery(id=full_gid, source_key=source.key, native_id=gallery_id,
-                        normalized_title=title, display_title=title,
-                        cover_url=detail.cover_url,
-                        tags=json.dumps(detail.tags, ensure_ascii=False),
-                        num_favorites=detail.num_favorites,
-                        reported_pages=total, actual_pages=downloaded,
-                        downloaded_at=now)
-            session.add(g)
-        else:
-            g.actual_pages = downloaded
-            g.reported_pages = total
-            g.cover_url = detail.cover_url
-            g.tags = json.dumps(detail.tags, ensure_ascii=False)
-            g.num_favorites = detail.num_favorites
-            g.downloaded_at = now
-        g.file_path = result.files[0] if result.files else None
-        await session.commit()
+    # 写入数据库（失败不阻塞）
+    if save_to_db:
+        try:
+            from datetime import datetime
+            from comicfeed.database import get_session
+            from comicfeed.models import Gallery
+            import json
+            now = datetime.now()
+            async with get_session() as session:
+                g = await session.get(Gallery, full_gid)
+                if g is None:
+                    g = Gallery(id=full_gid, source_key=source.key, native_id=gallery_id,
+                                normalized_title=title, display_title=title,
+                                cover_url=detail.cover_url,
+                                tags=json.dumps(detail.tags, ensure_ascii=False),
+                                num_favorites=detail.num_favorites,
+                                reported_pages=total, actual_pages=downloaded,
+                                downloaded_at=now)
+                    session.add(g)
+                else:
+                    g.actual_pages = downloaded
+                    g.reported_pages = total
+                    g.cover_url = detail.cover_url
+                    g.tags = json.dumps(detail.tags, ensure_ascii=False)
+                    g.num_favorites = detail.num_favorites
+                    g.downloaded_at = now
+                g.file_path = result.files[0] if result.files else None
+                await session.commit()
+        except Exception:
+            pass
 
     return result
 
@@ -128,15 +145,16 @@ class DownloadPool:
         cbz_max_pages: int = 0,
         tracker: "DownloadTracker | None" = None,
         fire_events: bool = True,
+        save_to_db: bool = True,
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
         async with self._global_sem:
             if src_sem:
                 async with src_sem:
-                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events)
+                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db)
             else:
-                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events)
+                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db)
 
 
 class DownloadTracker:
