@@ -61,3 +61,18 @@ def test_no_ads_all_normal():
     """没有广告的图集返回 0。"""
     pages = [_make_img(1280, 1800) for _ in range(5)]
     assert detect_ads_from_tail(pages) == 0
+
+
+def test_sandwich_ad_detected():
+    """广告夹心页（尺寸正常但夹在两个广告之间）也被识别。"""
+    pages = [
+        _make_img(1280, 1800),  # 0: 正常
+        _make_img(1280, 1800),  # 1: 正常
+        _make_img(1280, 1800),  # 2: 正常
+        _make_img(728, 90),     # 3: 横幅广告
+        _make_img(1280, 1800),  # 4: 正常尺寸但夹在广告中间→广告
+        _make_img(728, 90),     # 5: 横幅广告
+    ]
+    # 从尾：5(ad), 4(in_ad_zone→ad), 3(ad), 2(ok), 1(ok), 0(ok→stop)
+    # 广告=5,4,3 → 3页
+    assert detect_ads_from_tail(pages) == 3

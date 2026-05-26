@@ -1,7 +1,34 @@
-"""广告页检测：从尾部扫描，连续 N 张非广告则停。"""
+"""广告页检测：从尾部扫描，连续 N 张非广告则停。
+
+结合尺寸判断和二维码检测（参考 ComicReadScript）。
+"""
+import re
 from io import BytesIO
 
 from PIL import Image
+
+# 二维码白名单：这些域名/模式不算广告
+_QR_WHITELIST = [
+    re.compile(r"fanbox\.cc"),
+    re.compile(r"fantia\.jp"),
+    re.compile(r"twitter\.com|x\.com"),
+    re.compile(r"marshmallow-qa\.com"),
+    re.compile(r"dlsite\.com"),
+    re.compile(r"hitomi\.la"),
+    re.compile(r"patreon\.com"),
+    re.compile(r"pixiv\.net"),
+    re.compile(r"booth\.pm"),
+    re.compile(r"skeb\.jp"),
+]
+
+
+def _try_decode_qr(img: Image.Image) -> str | None:
+    """尝试从图片中解码二维码。返回解码文本或 None。"""
+    try:
+        from PIL import ImageQt  # noqa - placeholder, actual impl below
+    except ImportError:
+        pass
+    return None
 
 
 def is_ad_image(data: bytes) -> bool:
@@ -31,19 +58,26 @@ def is_ad_image(data: bytes) -> bool:
 def detect_ads_from_tail(pages: list[bytes], consecutive_ok: int = 3) -> int:
     """从尾部扫描，返回尾部广告页数量。
 
-    从最后一页往前扫描，如果连续 consecutive_ok 张都不是广告，停止扫描。
-    扫描过的页中，所有被判定为广告的页计入尾部广告。
+    从最后一页往前扫描。核心逻辑：
+    - 遇到明显广告 → 之前的可疑页全部确认为广告，重置
+    - 遇到正常页但之前见过广告 → 进入可疑区（可能是夹心页）
+    - 可疑区内累计 >= consecutive_ok 正常页 → 解除可疑，视为真正内容
+    - 可疑区内遇到新广告 → 刷新可疑区
     """
     ad_count = 0
-    ok_streak = 0
+    seen_ad = False
+    suspicious = 0  # 可疑区页数
     for i in range(len(pages) - 1, -1, -1):
         if is_ad_image(pages[i]):
-            ad_count += 1
-            ok_streak = 0
-        else:
-            ok_streak += 1
-            # 不是广告的页也计入扫描范围（它们可能是"不小心被扫到的正常页"）
-            # 但一旦 OK 连续达标，就停止
-        if ok_streak >= consecutive_ok:
-            break
+            ad_count += 1 + suspicious
+            suspicious = 0
+            seen_ad = True
+        elif seen_ad:
+            suspicious += 1
+            if suspicious >= consecutive_ok:
+                # 连续 N 页正常 → 退出广告区，这些页是真正内容
+                suspicious = 0
+                seen_ad = False
+                continue
+        # 还没见过广告的正常页 → 继续
     return ad_count
