@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
+from sqlalchemy import delete as sqla_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from comicfeed.database import get_session
@@ -48,6 +48,8 @@ async def check_subscription(
             # 画廊 ID 变更 → 更新订阅查询串
             if result.gallery.native_id != gid:
                 sub.query = result.gallery.web_url
+                # 清理旧画廊的 Page 记录
+                await session.execute(sqla_delete(Page).where(Page.gallery_id == full_gid))
                 await session.commit()
             return [result.gallery], False
         return [], False
