@@ -16,7 +16,7 @@ from comicfeed.sources.base import (
 
 # get_gallery 短期缓存，消除跨 HTTP 请求的重复调用（如 check_updates → batch_download）
 _gallery_cache: dict[str, tuple[float, GalleryDetail]] = {}
-_GALLERY_CACHE_TTL = 300
+_GALLERY_CACHE_TTL = 3000
 
 
 class ExhentaiSource(BaseSource):
@@ -349,6 +349,7 @@ class ExhentaiSource(BaseSource):
                 page_count=len(new_ids),
                 tags=detail.tags,
                 new_page_ids=list(new_ids),
+                replaces_native_id=gallery_id if gid != gallery_id else "",
                 detail=detail,
             ))
         return UpdateResult()

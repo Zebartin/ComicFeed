@@ -45,12 +45,6 @@ async def check_subscription(
 
         result = await source.check_updates(gid, {"page_ids": old_ids}, gallery_url=gurl)
         if result.has_updates and result.gallery:
-            # 画廊 ID 变更 → 更新订阅查询串
-            if result.gallery.native_id != gid:
-                sub.query = result.gallery.web_url
-                # 清理旧画廊的 Page 记录
-                await session.execute(sqla_delete(Page).where(Page.gallery_id == full_gid))
-                await session.commit()
             return [result.gallery], False
         return [], False
 
@@ -166,7 +160,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
             from comicfeed.config import get_setting
             out_dir = sub.download_dir or await get_setting("download_path", ".")
             from comicfeed.web.app import get_download_tracker
-            from comicfeed.models import SubscriptionGallery
+            from comicfeed.models import Page, SubscriptionGallery
             tracker = get_download_tracker()
 
             # 一次性全部入列
@@ -184,6 +178,12 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                     sg = await session.get(SubscriptionGallery, (sub.id, gid))
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
+                        await session.commit()
+                    # newer version：清理旧画廊 Page + 更新订阅 URL
+                    if item.replaces_native_id:
+                        old_full_gid = f"{source.key}:{item.replaces_native_id}"
+                        await session.execute(sqla_delete(Page).where(Page.gallery_id == old_full_gid))
+                        sub.query = item.web_url
                         await session.commit()
                     downloaded.append({"id": gid, "title": result.title or item.title, "files": result.files, "cover_url": result.cover_url or item.cover_url, "web_url": result.web_url or item.web_url, "page_count": result.page_count or item.page_count})
                 except Exception as e:

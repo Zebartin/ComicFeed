@@ -34,6 +34,7 @@ class GallerySummary:
     tag_ids: list[int] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     new_page_ids: list[str] = field(default_factory=list)  # 增量更新：仅新增的 page ID
+    replaces_native_id: str = ""  # newer version：被替换的旧画廊 native_id
     detail: GalleryDetail | None = None  # check_updates 预取的完整 detail
 
 
