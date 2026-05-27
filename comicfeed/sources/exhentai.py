@@ -1,4 +1,5 @@
 import re
+import time
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
@@ -12,6 +13,10 @@ from comicfeed.sources.base import (
     SearchResult,
     UpdateResult,
 )
+
+# get_gallery 短期缓存，消除跨 HTTP 请求的重复调用（如 check_updates → batch_download）
+_gallery_cache: dict[str, tuple[float, GalleryDetail]] = {}
+_GALLERY_CACHE_TTL = 300
 
 
 class ExhentaiSource(BaseSource):
@@ -86,6 +91,22 @@ class ExhentaiSource(BaseSource):
         """从 viewer URL 提取页面 ID。如 /s/cc58247135/... → cc58247135"""
         m = re.search(r"/s/(\w+)/", url)
         return m.group(1) if m else None
+
+    @staticmethod
+    def _cache_get(key: str) -> GalleryDetail | None:
+        entry = _gallery_cache.get(key)
+        if entry and time.time() - entry[0] < _GALLERY_CACHE_TTL:
+            return entry[1]
+        if entry:
+            del _gallery_cache[key]
+        return None
+
+    @staticmethod
+    def _cache_set(key: str, detail: GalleryDetail):
+        _gallery_cache[key] = (time.time(), detail)
+        if len(_gallery_cache) > 50:
+            oldest = min(_gallery_cache, key=lambda k: _gallery_cache[k][0])
+            del _gallery_cache[oldest]
 
     @staticmethod
     def _make_thumbnail_url(path: str) -> str:
@@ -165,6 +186,9 @@ class ExhentaiSource(BaseSource):
 
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:
         gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
+        cached = self._cache_get(gurl)
+        if cached:
+            return cached
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
@@ -190,6 +214,7 @@ class ExhentaiSource(BaseSource):
                 detail.page_urls = all_urls
                 detail.page_native_ids = [p for p in all_pids if p]
 
+            self._cache_set(gurl, detail)
             return detail
 
     def _parse_gallery_html(self, html: str, gallery_id: str) -> GalleryDetail:
