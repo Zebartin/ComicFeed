@@ -23,7 +23,9 @@
 .q-status.failed { background: #fce4ec; color: var(--red); }
 </style>
 
-<div class="page-header"><h1>下载队列</h1></div>
+<div class="page-header"><h1>下载队列</h1>
+  <button class="btn btn-ghost btn-sm" onclick="clearDone()" id="clear-btn" style="display:none">清除已完成</button>
+</div>
 <div id="list"></div>
 
 <script>
@@ -55,8 +57,13 @@ async function load() {
     if (q.completed.length) html += '<div class="q-section"><h3>已完成</h3>'+q.completed.map(t=>renderItem(t,'done')).join('')+'</div>'
     if (q.failed.length) html += '<div class="q-section"><h3>失败</h3>'+q.failed.map(t=>renderItem(t,'failed')).join('')+'</div>'
     document.getElementById('list').innerHTML = html
+    document.getElementById('clear-btn').style.display = (q.completed||[]).length ? '' : 'none'
   }
   setTimeout(load, 3000)
+}
+async function clearDone() {
+  await fetch('/api/queue/completed', {method:'DELETE'})
+  load()
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 load()

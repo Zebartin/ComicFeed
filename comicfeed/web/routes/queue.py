@@ -14,3 +14,17 @@ async def get_queue():
     if tracker is None:
         return {"pending": [], "active": [], "completed": [], "failed": []}
     return tracker.snapshot()
+
+
+@router.delete("/completed", status_code=204)
+async def clear_completed():
+    tracker = _get_tracker()
+    if tracker:
+        tracker.clear_completed()
+
+
+@router.delete("/failed", status_code=204)
+async def clear_failed():
+    tracker = _get_tracker()
+    if tracker:
+        tracker.clear_failed()

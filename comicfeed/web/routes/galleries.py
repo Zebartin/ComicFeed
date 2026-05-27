@@ -22,6 +22,7 @@ class DownloadRequest(BaseModel):
 class BatchDownloadRequest(BaseModel):
     source_key: str
     gallery_ids: list[str]
+    gallery_metas: dict[str, dict] = {}
 
 
 _SORT_FIELDS = {
@@ -160,8 +161,12 @@ async def batch_download(req: BatchDownloadRequest):
         from comicfeed.hooks import Event, bus
         # 一次性全部入列
         for gid in req.gallery_ids:
-            tracker.enqueue(f"{req.source_key}:{gid}", title=gid, total_pages=0,
-                            cover_url="", web_url="")
+            meta = req.gallery_metas.get(gid, {})
+            tracker.enqueue(f"{req.source_key}:{gid}",
+                            title=meta.get("title", gid),
+                            total_pages=meta.get("page_count", 0),
+                            cover_url=meta.get("cover_url", ""),
+                            web_url=meta.get("web_url", ""))
         downloaded = []
         for gid in req.gallery_ids:
             full_gid = f"{req.source_key}:{gid}"

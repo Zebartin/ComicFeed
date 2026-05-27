@@ -230,6 +230,12 @@ class DownloadTracker:
         if len(self._failed) > self._keep:
             self._failed = self._failed[-self._keep:]
 
+    def clear_completed(self):
+        self._completed.clear()
+
+    def clear_failed(self):
+        self._failed.clear()
+
     def snapshot(self) -> dict:
         return {
             "pending": list(self._pending),
