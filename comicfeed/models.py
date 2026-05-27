@@ -35,6 +35,7 @@ class Subscription(Base):
     cbz_max_pages: Mapped[int] = mapped_column(Integer, default=30)  # 0 = 不分卷
     cross_source_dedup: Mapped[bool] = mapped_column(Boolean, default=True)
     sort: Mapped[str] = mapped_column(String(32), default="date")
+    download_dir: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -19,6 +19,7 @@ class SubCreate(BaseModel):
     cbz_max_pages: int = 30
     cross_source_dedup: bool = True
     sort: str = "date"
+    download_dir: str = ""
     enabled: bool = True
 
 
@@ -31,6 +32,7 @@ class SubUpdate(BaseModel):
     cbz_max_pages: int | None = None
     cross_source_dedup: bool | None = None
     sort: str | None = None
+    download_dir: str | None = None
     enabled: bool | None = None
 
 
@@ -45,7 +47,7 @@ async def list_subscriptions():
                 "id": s.id, "name": s.name, "source_key": s.source_key,
                 "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
                 "cbz_max_pages": s.cbz_max_pages, "cross_source_dedup": s.cross_source_dedup,
-                "enabled": s.enabled,
+                "download_dir": s.download_dir, "enabled": s.enabled,
             }
             for s in subs
         ]
@@ -152,5 +154,5 @@ def _sub_to_dict(s: Subscription) -> dict:
         "id": s.id, "name": s.name, "source_key": s.source_key,
         "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
         "cbz_max_pages": s.cbz_max_pages, "cross_source_dedup": s.cross_source_dedup,
-        "sort": s.sort, "enabled": s.enabled,
+        "sort": s.sort, "download_dir": s.download_dir, "enabled": s.enabled,
     }
