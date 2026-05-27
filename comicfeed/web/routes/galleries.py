@@ -17,6 +17,11 @@ class DownloadRequest(BaseModel):
     url: str | None = None
 
 
+class BatchDownloadRequest(BaseModel):
+    source_key: str
+    gallery_ids: list[str]
+
+
 _SORT_FIELDS = {
     "date": Gallery.downloaded_at,
     "id": Gallery.id,
@@ -124,3 +129,39 @@ async def download_by_id(req: DownloadRequest):
     asyncio.create_task(download_gallery(source, gid, out_dir, tracker=tracker))
     _log.info("提交下载: %s:%s", req.source_key, gid)
     return {"status": "accepted", "gallery_id": f"{req.source_key}:{gid}"}
+
+
+@router.post("/batch-download", status_code=202)
+async def batch_download(req: BatchDownloadRequest):
+    """批量下载，全部完成后统一通知。"""
+    from comicfeed.web.app import get_source_manager, get_download_tracker
+    from comicfeed.config import get_source_proxy, get_setting
+    from comicfeed.credentials import get_source_credentials
+    mgr = get_source_manager()
+    creds = await get_source_credentials(req.source_key)
+    proxy = await get_source_proxy(req.source_key)
+    source = mgr.get_source(req.source_key, credentials=creds, proxy=proxy)
+    if source is None:
+        return {"status": "error", "error": f"源 {req.source_key} 不可用"}
+    out_dir = await get_setting("download_path", ".")
+    tracker = get_download_tracker()
+
+    async def _batch():
+        from comicfeed.downloader import download_gallery
+        from comicfeed.hooks import Event, bus
+        downloaded = []
+        for gid in req.gallery_ids:
+            try:
+                result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False)
+                downloaded.append({"gallery_id": f"{req.source_key}:{gid}", "title": "", "files": result.files})
+            except Exception as e:
+                _log.error("下载失败: %s:%s - %s", req.source_key, gid, e)
+        if downloaded:
+            await bus.fire(Event("gallery.created", {
+                "subscription": f"手动下载 ({req.source_key})",
+                "galleries": downloaded,
+                "count": len(downloaded),
+            }))
+    asyncio.create_task(_batch())
+    _log.info("提交批量下载: %s, %d 个画廊", req.source_key, len(req.gallery_ids))
+    return {"status": "accepted", "count": len(req.gallery_ids)}

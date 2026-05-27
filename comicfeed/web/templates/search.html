@@ -114,7 +114,7 @@ function updateLoadMore(){$('load-more-btn').style.display=hasMore?'':'none';$('
 async function loadMore(){max_pages+=5; fetchPage(true)}
 async function downloadPicked(){
   if(!picked.size)return;const ids=[...picked].map(i=>results[i].native_id)
-  ids.forEach(id=>api('/api/galleries/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,gallery_id:id})}).catch(e=>console.error(e)))
+  api('/api/galleries/batch-download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,gallery_ids:ids})}).catch(e=>console.error(e))
   $('sel-info').textContent=`已提交 ${ids.length} 个下载，即将跳转…`
   setTimeout(()=>{window.location.href='/queue'},800)
 }

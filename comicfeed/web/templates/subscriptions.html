@@ -397,12 +397,10 @@ function updateSel() {
 async function downloadPicked() {
   if (!picked.size) return
   const ids = [...picked], src = current.source_key
-  ids.forEach(id => {
-    api('/api/galleries/download', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({source_key: src, gallery_id: id})
-    }).catch(e => console.error(e))
-  })
+  api('/api/galleries/batch-download', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({source_key: src, gallery_ids: ids})
+  }).catch(e => console.error(e))
   $('sel-info').textContent = `已提交 ${ids.length} 个下载，即将跳转…`
   setTimeout(() => { closeResults(); window.location.href = '/queue' }, 800)
 }
