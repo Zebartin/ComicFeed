@@ -154,5 +154,5 @@ class NhentaiSource(BaseSource):
                 results.append(resp.content)
         return results
 
-    async def check_updates(self, gallery_id: str, last_known: dict) -> UpdateResult:
+    async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
         return UpdateResult()

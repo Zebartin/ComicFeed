@@ -31,8 +31,10 @@ async def check_subscription(
     # SPECIFIC_GALLERY 模式：检查更新而非搜索
     if sub.mode == "SPECIFIC_GALLERY":
         gid = sub.query.strip()
+        gurl = ""
         parsed = source.parse_url(gid)
         if parsed:
+            gurl = gid  # 用户提供了完整 URL，直接使用
             gid = parsed.split(":", 1)[-1]
 
         # 从 DB 获取旧页面 ID 列表
@@ -41,7 +43,7 @@ async def check_subscription(
         stmt = select(Page.page_native_id).where(Page.gallery_id == full_gid).order_by(Page.page_index)
         old_ids = [row[0] for row in (await session.execute(stmt)).fetchall()]
 
-        result = await source.check_updates(gid, {"page_ids": old_ids})
+        result = await source.check_updates(gid, {"page_ids": old_ids}, gallery_url=gurl)
         if result.has_updates:
             items = []
             if result.new_page_ids:

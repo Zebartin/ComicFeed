@@ -194,11 +194,11 @@ class ExhentaiSource(BaseSource):
         async with self._client() as client:
             resp = await client.get(
                 f"{self._base}/",
-                params={"f_search": f"gid:{gallery_id}", "page": 0},
+                params={"f_search": f"gid:{gallery_id}", "page": 0, "inline_set": "dm_e"},
             )
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
-            for a in soup.select("td.gl3c a, td.glname a"):
+            for a in soup.select("td.gl2e a"):
                 href = a.get("href", "")
                 m = self._GALLERY_LINK.search(href)
                 if m and m.group(1) == gallery_id:
@@ -293,9 +293,9 @@ class ExhentaiSource(BaseSource):
                     results.append(b"")
         return results
 
-    async def check_updates(self, gallery_id: str, last_known: dict) -> UpdateResult:
+    async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
         """检查画廊是否有更新版本（基于页面 ID 对比）。"""
-        gurl = await self._get_gallery_url(gallery_id)
+        gurl = gallery_url or await self._get_gallery_url(gallery_id)
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()

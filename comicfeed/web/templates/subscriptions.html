@@ -171,8 +171,8 @@
   <div class="form-grid">
     <label>名称 <input id="name"></label>
     <label>源 <select id="source_key"></select></label>
-    <label class="full">查询串 <input id="query"></label>
-    <label>模式 <select id="mode"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
+    <label class="full"><span id="query-label">查询串</span> <input id="query"></label>
+    <label>模式 <select id="mode" onchange="document.getElementById('query-label').textContent=this.value==='SPECIFIC_GALLERY'?'画廊URL':'查询串'"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
     <label>排序 <select id="sort"></select></label>
     <label>间隔 (分钟) <input id="interval" type="number" value="360"></label>
     <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
@@ -262,11 +262,12 @@ function updateSortForm() {
 }
 
 /* Form */
-function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','download_dir'].forEach(k=>$(k).value=''); $('form').classList.add('on') }
+function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','download_dir'].forEach(k=>$(k).value=''); document.getElementById('query-label').textContent='查询串'; $('form').classList.add('on') }
 function closeForm() { $('form').classList.remove('on') }
 async function editSub(id) {
   const s = await api('/api/subscriptions/'+id); $('sub-id').value = id
   for (const k of ['name','source_key','query','mode','interval_minutes','cbz_max_pages','sort','download_dir']) $(k==='interval_minutes'?'interval':k).value = s[k] ?? ''
+  document.getElementById('query-label').textContent = s.mode === 'SPECIFIC_GALLERY' ? '画廊URL' : '查询串'
   updateSortForm()
   $('enabled').checked = s.enabled; $('form').classList.add('on')
 }
