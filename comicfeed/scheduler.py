@@ -187,7 +187,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
                         await session.commit()
-                    downloaded.append({"id": gid, "title": item.title, "files": result.files, "cover_url": item.cover_url, "web_url": item.web_url, "page_count": item.page_count})
+                    downloaded.append({"id": gid, "title": result.title or item.title, "files": result.files, "cover_url": result.cover_url or item.cover_url, "web_url": result.web_url or item.web_url, "page_count": result.page_count or item.page_count})
                 except Exception as e:
                     _log.error("下载失败: %s - %s", gid, e)
                     tracker.failed(gid, str(e))
