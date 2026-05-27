@@ -292,33 +292,32 @@ class ExhentaiSource(BaseSource):
         """检查画廊是否有更新（newer version 跳转 + 页面 ID 对比）。"""
         gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
         old_ids: set[str] = set(last_known.get("page_ids", []))
+        new_gid = None
+        new_gurl = ""
 
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
 
-            # 检查 newer version
             newer = soup.select_one("div.sn a, div.sn span")
-            new_gid = None
-            new_gurl = ""
             if newer and "newer" in newer.get_text().lower():
                 href = newer.get("href", "") if newer.name == "a" else ""
                 m = self._GALLERY_LINK.search(href)
                 if m:
                     new_gid = m.group(1)
                     new_gurl = href
-                    return UpdateResult(has_updates=True, new_gallery_id=new_gid,
-                                        new_gallery_url=new_gurl)
-
-            # 无 newer version 且已有旧页面 → 无更新
-            if old_ids:
+                    gurl = new_gurl  # 用新 URL 继续
+                # 有新版本时即使有旧 page ID 也要解析新画廊
+            elif old_ids:
+                # 无 newer version 且已有旧页面 → 无更新
                 return UpdateResult()
 
-        # 首次检查（无旧页面），获取完整 page ID 列表
+        # 解析完整 page ID 列表
         detail = await self.get_gallery(gallery_id, gallery_url=gurl)
         current_ids = set(detail.page_native_ids)
         new_ids = current_ids - old_ids
-        if new_ids:
-            return UpdateResult(has_updates=True, new_page_ids=list(new_ids))
+        if new_ids or new_gid:
+            return UpdateResult(has_updates=True, new_page_ids=list(new_ids),
+                                new_gallery_id=new_gid, new_gallery_url=new_gurl)
         return UpdateResult()
