@@ -6,6 +6,8 @@ from comicfeed.database import get_session
 from comicfeed.log import get
 from comicfeed.models import Gallery, SubscriptionGallery
 
+import asyncio
+
 _log = get(__name__)
 
 router = APIRouter(prefix="/api/galleries", tags=["galleries"])
@@ -153,7 +155,12 @@ async def batch_download(req: BatchDownloadRequest):
         for gid in req.gallery_ids:
             try:
                 result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False)
-                downloaded.append({"gallery_id": f"{req.source_key}:{gid}", "title": "", "files": result.files})
+                downloaded.append({
+                    "gallery_id": f"{req.source_key}:{gid}",
+                    "title": result.title, "files": result.files,
+                    "cover_url": result.cover_url, "web_url": result.web_url,
+                    "page_count": result.page_count,
+                })
             except Exception as e:
                 _log.error("下载失败: %s:%s - %s", req.source_key, gid, e)
         if downloaded:

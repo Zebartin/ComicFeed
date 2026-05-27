@@ -13,6 +13,10 @@ _log = get(__name__)
 class DownloadResult:
     gallery_id: str
     files: list[str] = field(default_factory=list)
+    title: str = ""
+    cover_url: str = ""
+    web_url: str = ""
+    page_count: int = 0
 
 
 async def download_gallery(
@@ -37,7 +41,9 @@ async def download_gallery(
     if tracker:
         tracker.started(full_gid, title, total, cover_url=detail.cover_url, web_url=detail.web_url)
 
-    result = DownloadResult(gallery_id=full_gid)
+    result = DownloadResult(gallery_id=full_gid, title=detail.title,
+                            cover_url=detail.cover_url, web_url=detail.web_url,
+                            page_count=total)
     downloaded = 0
     CHUNK = 5  # 每批下载页数，便于更新进度
 
