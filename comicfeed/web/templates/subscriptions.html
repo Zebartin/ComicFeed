@@ -208,7 +208,7 @@
 <script>
 let picked = new Set(), results = [], current = null;
 let checkPage = 0, checkHasMore = false, checkExcludeIds = [], checkTitles = [], checkNextUrl = '';
-let checkPagesLoaded = 0, checkMaxPages = 5, _chainTimer = 0;
+let checkPagesLoaded = 0, checkMaxPages = 5, _chainTimer = 0, _checkGen = 0;
 const $ = id => document.getElementById(id)
 
 async function api(p, o={}) {
@@ -296,6 +296,7 @@ async function checkSub(id, loadMore=false) {
   if (!loadMore) {
     // 首次检查：显示加载状态
     clearTimeout(_chainTimer)
+    _checkGen++
     $('res-title').textContent = '检查中…'
     $('res-meta').textContent = ''
     $('res-body').innerHTML = '<div class="empty-state"><div class="icon">&hellip;</div><h3>正在搜索</h3><p>请稍候…</p></div>'
@@ -308,9 +309,11 @@ async function checkSub(id, loadMore=false) {
     $('load-more-btn').textContent = '加载中…'
     $('load-more-btn').disabled = true
   }
+  const myGen = _checkGen
 
   try {
     const sub = await api('/api/subscriptions/'+id)
+    if (myGen !== _checkGen) return
     $('res-meta').textContent = `${sub.name} · ${sub.source_key} · 查询: ${sub.query || '(空)'}`
     checkPagesLoaded++
     const keepGoing = checkPagesLoaded < checkMaxPages
@@ -319,6 +322,7 @@ async function checkSub(id, loadMore=false) {
       exclude_ids: checkExcludeIds, existing_titles: checkTitles, next_url: checkNextUrl,
     }
     const r = await api('/api/subscriptions/'+id+'/check', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    if (myGen !== _checkGen) return
     if (r.error) { $('res-title').textContent = '出错了'; $('res-body').innerHTML = '<div class="empty-state"><p>'+r.error+'</p></div>'; return }
     const newGals = r.new_galleries || []; current = r.subscription
     checkHasMore = r.has_more; checkPage = (r.current_page || checkPage + 1); checkNextUrl = r.next_url || ''
