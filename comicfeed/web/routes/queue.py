@@ -12,5 +12,5 @@ def _get_tracker():
 async def get_queue():
     tracker = _get_tracker()
     if tracker is None:
-        return {"active": []}
-    return {"active": tracker.active()}
+        return {"pending": [], "active": [], "completed": [], "failed": []}
+    return tracker.snapshot()

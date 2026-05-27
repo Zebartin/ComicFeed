@@ -1,33 +1,46 @@
 from comicfeed.downloader import DownloadTracker
 
 
-def test_tracker_starts_and_finishes():
-    """tracker 记录开始和完成状态。"""
+def test_tracker_start_and_finish():
     tracker = DownloadTracker()
-    assert len(tracker.active()) == 0
+    s = tracker.snapshot()
+    assert s["pending"] == [] and s["active"] == [] and s["completed"] == []
 
     tracker.started("nhentai:123", "Test Comic", 30)
-    active = tracker.active()
-    assert len(active) == 1
-    assert active[0]["gallery_id"] == "nhentai:123"
-    assert active[0]["title"] == "Test Comic"
-    assert active[0]["total_pages"] == 30
-    assert active[0]["downloaded"] == 0
+    assert len(tracker.snapshot()["active"]) == 1
+    a = tracker.snapshot()["active"][0]
+    assert a["gallery_id"] == "nhentai:123"
+    assert a["title"] == "Test Comic"
+    assert a["total_pages"] == 30
+    assert a["downloaded"] == 0
 
     tracker.progress("nhentai:123", 15)
-    assert tracker.active()[0]["downloaded"] == 15
+    assert tracker.snapshot()["active"][0]["downloaded"] == 15
 
     tracker.finished("nhentai:123")
-    assert len(tracker.active()) == 0
+    assert tracker.snapshot()["active"] == []
+    assert len(tracker.snapshot()["completed"]) == 1
+    assert tracker.snapshot()["completed"][0]["gallery_id"] == "nhentai:123"
 
 
-def test_tracker_multiple_downloads():
-    """同时追踪多个下载任务。"""
+def test_tracker_enqueue_flow():
     tracker = DownloadTracker()
-    tracker.started("a", "A", 10)
-    tracker.started("b", "B", 20)
-    assert len(tracker.active()) == 2
+    tracker.enqueue("a", "Title A", 10, cover_url="http://x/a.jpg")
+    tracker.enqueue("b", "Title B", 20)
+    s = tracker.snapshot()
+    assert len(s["pending"]) == 2
+    assert s["pending"][0]["status"] == "pending"
+
+    tracker.started("a", "Title A", 10, cover_url="http://x/a.jpg")
+    s = tracker.snapshot()
+    assert len(s["pending"]) == 1
+    assert len(s["active"]) == 1
+    assert s["active"][0]["gallery_id"] == "a"
 
     tracker.finished("a")
-    assert len(tracker.active()) == 1
-    assert tracker.active()[0]["gallery_id"] == "b"
+    tracker.failed("b", "some error")
+    s = tracker.snapshot()
+    assert s["pending"] == [] and s["active"] == []
+    assert len(s["completed"]) == 1
+    assert len(s["failed"]) == 1
+    assert s["failed"][0]["error"] == "some error"

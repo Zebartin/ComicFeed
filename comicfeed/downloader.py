@@ -179,24 +179,61 @@ class DownloadPool:
 
 
 class DownloadTracker:
-    """追踪正在进行的下载任务。"""
+    """下载队列追踪：pending → active → completed/failed。"""
 
-    def __init__(self):
-        self._tasks: dict[str, dict] = {}
+    def __init__(self, keep_recent: int = 50):
+        self._pending: list[dict] = []
+        self._active: dict[str, dict] = {}
+        self._completed: list[dict] = []
+        self._failed: list[dict] = []
+        self._keep = keep_recent
 
-    def started(self, gallery_id: str, title: str, total_pages: int, cover_url: str = "", web_url: str = ""):
-        self._tasks[gallery_id] = {
-            "gallery_id": gallery_id, "title": title,
-            "total_pages": total_pages, "downloaded": 0,
-            "cover_url": cover_url, "web_url": web_url,
-        }
+    def enqueue(self, gallery_id: str, title: str = "", total_pages: int = 0,
+                cover_url: str = "", web_url: str = ""):
+        """将下载加入待处理队列。"""
+        task = {"gallery_id": gallery_id, "title": title, "total_pages": total_pages,
+                "downloaded": 0, "cover_url": cover_url, "web_url": web_url,
+                "status": "pending"}
+        self._pending.append(task)
+
+    def started(self, gallery_id: str, title: str, total_pages: int,
+                cover_url: str = "", web_url: str = ""):
+        """标记开始下载：从 pending 移动到 active。"""
+        # 先从 pending 移除
+        self._pending = [t for t in self._pending if t["gallery_id"] != gallery_id]
+        task = {"gallery_id": gallery_id, "title": title, "total_pages": total_pages,
+                "downloaded": 0, "cover_url": cover_url, "web_url": web_url,
+                "status": "active"}
+        self._active[gallery_id] = task
 
     def progress(self, gallery_id: str, downloaded: int):
-        if gallery_id in self._tasks:
-            self._tasks[gallery_id]["downloaded"] = downloaded
+        if gallery_id in self._active:
+            self._active[gallery_id]["downloaded"] = downloaded
 
     def finished(self, gallery_id: str):
-        self._tasks.pop(gallery_id, None)
+        task = self._active.pop(gallery_id, None)
+        if task:
+            task["status"] = "completed"
+            self._completed.append(task)
+            if len(self._completed) > self._keep:
+                self._completed = self._completed[-self._keep:]
 
-    def active(self) -> list[dict]:
-        return list(self._tasks.values())
+    def failed(self, gallery_id: str, error: str = ""):
+        task = self._active.pop(gallery_id, None)
+        if task is None:
+            # 可能是从 pending 直接失败（还未开始下载）
+            self._pending = [t for t in self._pending if t["gallery_id"] != gallery_id]
+            task = {"gallery_id": gallery_id, "status": "failed", "error": error}
+        task["status"] = "failed"
+        task["error"] = error
+        self._failed.append(task)
+        if len(self._failed) > self._keep:
+            self._failed = self._failed[-self._keep:]
+
+    def snapshot(self) -> dict:
+        return {
+            "pending": list(self._pending),
+            "active": list(self._active.values()),
+            "completed": list(self._completed),
+            "failed": list(self._failed),
+        }

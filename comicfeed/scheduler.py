@@ -165,20 +165,28 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
             out_dir = sub.download_dir or await get_setting("download_path", ".")
             from comicfeed.web.app import get_download_tracker
             from comicfeed.models import SubscriptionGallery
+            tracker = get_download_tracker()
+
+            # 一次性全部入列
+            for item in new:
+                gid = f"{source.key}:{item.native_id}"
+                tracker.enqueue(gid, title=item.title, total_pages=item.page_count,
+                                cover_url=item.cover_url or "", web_url=item.web_url or "")
 
             for item in new:
+                gid = f"{source.key}:{item.native_id}"
                 try:
-                    _log.info("开始下载: %s:%s (%s)", source.key, item.native_id, item.title)
-                    result = await download_pool.download(source, item.native_id, out_dir, tracker=get_download_tracker(), fire_events=False)
-                    gid = f"{source.key}:{item.native_id}"
+                    _log.info("开始下载: %s (%s)", gid, item.title)
+                    result = await download_pool.download(source, item.native_id, out_dir, tracker=tracker, fire_events=False)
                     sg = await session.get(SubscriptionGallery, (sub.id, gid))
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
                         await session.commit()
                     downloaded.append({"id": gid, "title": item.title, "files": result.files, "cover_url": item.cover_url, "web_url": item.web_url, "page_count": item.page_count})
                 except Exception as e:
-                    _log.error("下载失败: %s:%s - %s", source.key, item.native_id, e)
-                    failed.append({"id": f"{source.key}:{item.native_id}", "title": item.title})
+                    _log.error("下载失败: %s - %s", gid, e)
+                    tracker.failed(gid, str(e))
+                    failed.append({"id": gid, "title": item.title})
 
             # 批量通知
             if downloaded:

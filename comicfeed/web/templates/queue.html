@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+.q-section { margin-bottom: 24px; }
+.q-section h3 { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
 .q-item { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .q-cover { width: 56px; height: 80px; object-fit: cover; background: #f0ebe0; border-radius: 4px; flex-shrink: 0; }
 .q-cover-placeholder { width: 56px; height: 80px; background: #f0ebe0; border-radius: 4px; flex-shrink: 0;
@@ -10,34 +12,51 @@
 .q-info .title { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-info .meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 .q-bar { width: 100%; height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; }
-.q-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
+.q-bar-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+.q-bar-fill.active { background: var(--accent); }
+.q-bar-fill.done { background: var(--accent-light); }
+.q-bar-fill.failed { background: var(--red); }
+.q-status { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px; flex-shrink: 0; }
+.q-status.pending { background: #f0ebe0; color: var(--text-muted); }
+.q-status.active { background: var(--accent-light); color: var(--accent); }
+.q-status.done { background: #e8f5e9; color: #388e3c; }
+.q-status.failed { background: #fce4ec; color: var(--red); }
 </style>
 
 <div class="page-header"><h1>下载队列</h1></div>
 <div id="list"></div>
 
 <script>
+function renderItem(t, cls) {
+  const pct = t.total_pages ? Math.round(t.downloaded/t.total_pages*100) : 0
+  const wu = t.web_url || ''
+  return `<div class="q-item">
+    ${t.cover_url ? `<a href="${wu}" target="_blank"><img class="q-cover" src="${t.cover_url}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></a>` : ''}
+    <div class="q-cover-placeholder" style="${t.cover_url?'display:none':'display:flex'}">?</div>
+    <div class="q-info">
+      <div class="gid">${esc(t.gallery_id)}</div>
+      <div class="title">${esc(t.title)}</div>
+      <div class="meta">${cls==='active' ? `${t.downloaded} / ${t.total_pages} &middot; ${pct}%` : `${t.total_pages} 页`}</div>
+      <div class="q-bar"><div class="q-bar-fill ${cls}" style="width:${cls==='failed'?'100':pct}%"></div></div>
+    </div>
+    <span class="q-status ${cls}">${{pending:'等待中',active:'下载中',done:'已完成',failed:'失败'}[cls]}</span>
+  </div>`
+}
+
 async function load() {
   const r = await fetch('/api/queue'); const q = await r.json()
-  if (!q.active.length) {
+  const total = (q.pending||[]).length + (q.active||[]).length + (q.completed||[]).length + (q.failed||[]).length
+  if (!total) {
     document.getElementById('list').innerHTML = '<p style="color:var(--text-muted);padding:32px 0;text-align:center">无进行中的下载</p>'
   } else {
-    document.getElementById('list').innerHTML = q.active.map(t => {
-      const pct = t.total_pages ? Math.round(t.downloaded/t.total_pages*100) : 0
-      const wu = t.web_url || ''
-      return `<div class="q-item">
-        ${t.cover_url ? `<a href="${wu}" target="_blank"><img class="q-cover" src="${t.cover_url}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></a>` : ''}
-        <div class="q-cover-placeholder" style="${t.cover_url?'display:none':'display:flex'}">?</div>
-        <div class="q-info">
-          <div class="gid">${esc(t.gallery_id)}</div>
-          <div class="title">${esc(t.title)}</div>
-          <div class="meta">${t.downloaded} / ${t.total_pages} &middot; ${pct}%</div>
-          <div class="q-bar"><div class="q-bar-fill" style="width:${pct}%"></div></div>
-        </div>
-      </div>`
-    }).join('')
+    let html = ''
+    if (q.active.length) html += '<div class="q-section"><h3>下载中</h3>'+q.active.map(t=>renderItem(t,'active')).join('')+'</div>'
+    if (q.pending.length) html += '<div class="q-section"><h3>等待中</h3>'+q.pending.map(t=>renderItem(t,'pending')).join('')+'</div>'
+    if (q.completed.length) html += '<div class="q-section"><h3>已完成</h3>'+q.completed.map(t=>renderItem(t,'done')).join('')+'</div>'
+    if (q.failed.length) html += '<div class="q-section"><h3>失败</h3>'+q.failed.map(t=>renderItem(t,'failed')).join('')+'</div>'
+    document.getElementById('list').innerHTML = html
   }
-  setTimeout(load, 2000)
+  setTimeout(load, 3000)
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 load()

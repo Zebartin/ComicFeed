@@ -126,9 +126,16 @@ async def download_by_id(req: DownloadRequest):
     from comicfeed.web.app import get_download_tracker
     out_dir = await get_setting("download_path", ".")
     tracker = get_download_tracker()
+    full_gid = f"{req.source_key}:{gid}"
+    tracker.enqueue(full_gid)
     import asyncio
     from comicfeed.downloader import download_gallery
-    asyncio.create_task(download_gallery(source, gid, out_dir, tracker=tracker))
+    async def _dl():
+        try:
+            await download_gallery(source, gid, out_dir, tracker=tracker)
+        except Exception as e:
+            tracker.failed(full_gid, str(e))
+    asyncio.create_task(_dl())
     _log.info("提交下载: %s:%s", req.source_key, gid)
     return {"status": "accepted", "gallery_id": f"{req.source_key}:{gid}"}
 
@@ -151,18 +158,24 @@ async def batch_download(req: BatchDownloadRequest):
     async def _batch():
         from comicfeed.downloader import download_gallery
         from comicfeed.hooks import Event, bus
+        # 一次性全部入列
+        for gid in req.gallery_ids:
+            tracker.enqueue(f"{req.source_key}:{gid}", title=gid, total_pages=0,
+                            cover_url="", web_url="")
         downloaded = []
         for gid in req.gallery_ids:
+            full_gid = f"{req.source_key}:{gid}"
             try:
                 result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False)
                 downloaded.append({
-                    "gallery_id": f"{req.source_key}:{gid}",
+                    "gallery_id": full_gid,
                     "title": result.title, "files": result.files,
                     "cover_url": result.cover_url, "web_url": result.web_url,
                     "page_count": result.page_count,
                 })
             except Exception as e:
                 _log.error("下载失败: %s:%s - %s", req.source_key, gid, e)
+                tracker.failed(full_gid, str(e))
         if downloaded:
             await bus.fire(Event("gallery.created", {
                 "subscription": f"手动下载 ({req.source_key})",
