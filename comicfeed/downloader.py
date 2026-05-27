@@ -86,18 +86,7 @@ async def download_gallery(
             "gallery_id": full_gid, "title": title, "files": result.files,
         }))
 
-    # 写入页面记录（用于增量更新检测）
-    if save_to_db and detail.page_native_ids:
-        from comicfeed.models import Page as PageModel
-        async with get_session() as session:
-            # 删除旧记录后重写
-            from sqlalchemy import delete
-            await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
-            for idx, pid in enumerate(detail.page_native_ids):
-                session.add(PageModel(gallery_id=full_gid, page_index=idx, page_native_id=pid))
-            await session.commit()
-
-    # 写入数据库（失败不阻塞）
+    # 写入数据库
     if save_to_db:
         try:
             from datetime import datetime
@@ -126,7 +115,20 @@ async def download_gallery(
                 g.file_path = result.files[0] if result.files else None
                 await session.commit()
         except Exception:
-            pass
+            _log.exception("写入 DB 失败: %s", full_gid)
+
+    # 写入页面记录（必须在 Gallery 写入之后，FK 约束）
+    if save_to_db and detail.page_native_ids:
+        try:
+            from comicfeed.models import Page as PageModel
+            async with get_session() as session:
+                from sqlalchemy import delete
+                await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
+                for idx, pid in enumerate(detail.page_native_ids):
+                    session.add(PageModel(gallery_id=full_gid, page_index=idx, page_native_id=pid))
+                await session.commit()
+        except Exception:
+            _log.exception("写入页面记录失败: %s", full_gid)
 
     return result
 
