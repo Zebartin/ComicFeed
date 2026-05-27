@@ -174,6 +174,7 @@ class ExhentaiSource(BaseSource):
             # 收集所有页面的 viewer URL（遍历 gallery 分页）
             if detail.page_urls:
                 all_urls = list(detail.page_urls)
+                all_pids = list(detail.page_native_ids)
                 page_idx = 1
                 while len(all_urls) < detail.reported_pages:
                     paged_url = gurl.rstrip("/") + f"?p={page_idx}"
@@ -184,8 +185,10 @@ class ExhentaiSource(BaseSource):
                     if not more:
                         break
                     all_urls.extend(more)
+                    all_pids.extend(self._extract_page_id(u) for u in more)
                     page_idx += 1
                 detail.page_urls = all_urls
+                detail.page_native_ids = [p for p in all_pids if p]
 
             return detail
 
@@ -296,7 +299,7 @@ class ExhentaiSource(BaseSource):
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
 
-            # 1. 检查 newer version，如果存在则跳转到新画廊
+            # 检查 newer version，如果存在则跳转到新画廊
             newer = soup.select_one("div.sn a, div.sn span")
             if newer and "newer" in newer.get_text().lower():
                 href = newer.get("href", "") if newer.name == "a" else ""
@@ -304,36 +307,19 @@ class ExhentaiSource(BaseSource):
                 if m:
                     new_gid = m.group(1)
                     new_gurl = href
-                    # 访问新画廊页面，新页面不应再有 newer version 标记
-                    resp2 = await client.get(new_gurl)
-                    resp2.raise_for_status()
-                    soup = BeautifulSoup(resp2.text, "lxml")
+                    gurl = new_gurl  # 后续用新 URL
 
-            # 2. 遍历所有 gallery 分页，收集全部 page ID
-            old_ids: set[str] = set(last_known.get("page_ids", []))
-            current_ids = set()
-            base_gurl = new_gurl or gurl
-            pg = 0
-            while pg < 200:
-                thumbs = soup.select("div#gdt a")
-                if not thumbs:
-                    break
-                for a in thumbs:
-                    pid = self._extract_page_id(a.get("href", ""))
-                    if pid:
-                        current_ids.add(pid)
-                pg += 1
-                page_url = base_gurl.rstrip("/") + f"?p={pg}"
-                resp = await client.get(page_url)
-                resp.raise_for_status()
-                soup = BeautifulSoup(resp.text, "lxml")
+        # 复用 get_gallery 获取完整 detail（含 page_native_ids）
+        detail = await self.get_gallery(gallery_id, gallery_url=gurl)
 
-            # 3. 比对
-            new_ids = current_ids - old_ids
-            if new_ids:
-                return UpdateResult(has_updates=True, new_page_ids=list(new_ids),
-                                    new_gallery_id=new_gid, new_gallery_url=new_gurl)
-            if new_gid:
-                return UpdateResult(has_updates=True, new_gallery_id=new_gid,
-                                    new_gallery_url=new_gurl)
-            return UpdateResult()
+        old_ids: set[str] = set(last_known.get("page_ids", []))
+        current_ids = set(detail.page_native_ids)
+
+        new_ids = current_ids - old_ids
+        if new_ids:
+            return UpdateResult(has_updates=True, new_page_ids=list(new_ids),
+                                new_gallery_id=new_gid, new_gallery_url=new_gurl)
+        if new_gid:
+            return UpdateResult(has_updates=True, new_gallery_id=new_gid,
+                                new_gallery_url=new_gurl)
+        return UpdateResult()
