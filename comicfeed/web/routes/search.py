@@ -35,21 +35,41 @@ async def search_source(req: SearchRequest):
     next_url = getattr(source, '_next_url', '')
 
     # 去重
-    exclude_ids = set(req.exclude_ids)
     from comicfeed.cbz import normalize_title
     from comicfeed.dedup import _similarity, find_similar_groups, resolve_duplicates
+    from comicfeed.database import get_session
+    from comicfeed.models import Gallery
+    from sqlalchemy import select
 
-    # 1. 排掉 exclude_ids
+    exclude_ids = set(req.exclude_ids)
+    existing_titles = [normalize_title(t) for t in req.existing_titles]
+
+    # 加载 DB 已有的 ID 和标题
+    if not existing_titles:
+        async with get_session() as session:
+            stmt = select(Gallery.normalized_title).where(Gallery.source_key == req.source_key)
+            rows = await session.execute(stmt)
+            existing_titles.extend(row[0] for row in rows.fetchall())
+
+    # 查询 DB 中已存在的画廊 ID
     raw = [g for g in result.items if g.native_id not in exclude_ids]
-    # 2. 标题去重
+    if raw:
+        ids = [f"{req.source_key}:{g.native_id}" for g in raw]
+        async with get_session() as session:
+            stmt = select(Gallery.id).where(Gallery.id.in_(ids))
+            rows = await session.execute(stmt)
+            db_existing = {row[0] for row in rows.fetchall()}
+        raw = [g for g in raw if f"{req.source_key}:{g.native_id}" not in db_existing]
+
+    # 标题去重
     filtered = []
     for g in raw:
         nt = normalize_title(g.title)
-        if any(_similarity(nt, et) > 0.999 for et in req.existing_titles):
+        if any(_similarity(nt, et) > 0.999 for et in existing_titles):
             continue
         filtered.append(g)
-        req.existing_titles.append(nt)
-    # 3. 批次内去重
+        existing_titles.append(nt)
+    # 批次内去重
     groups = find_similar_groups(filtered)
     if groups:
         keep: set[str] = {g.native_id for g in filtered}
