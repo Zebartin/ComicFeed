@@ -56,6 +56,7 @@ class Gallery(Base):
     num_favorites: Mapped[int] = mapped_column(Integer, default=0)
     reported_pages: Mapped[int] = mapped_column(Integer, default=0)
     actual_pages: Mapped[int] = mapped_column(Integer, default=0)
+    web_url: Mapped[str] = mapped_column(Text, default="")
     file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     downloaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

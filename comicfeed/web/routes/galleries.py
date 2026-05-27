@@ -23,6 +23,7 @@ class BatchDownloadRequest(BaseModel):
     source_key: str
     gallery_ids: list[str]
     gallery_metas: dict[str, dict] = {}
+    subscription_id: int | None = None
 
 
 _SORT_FIELDS = {
@@ -62,7 +63,7 @@ async def list_galleries(source_key: str | None = None, sort: str = "date",
                     "tags": _parse_tags(g.tags), "num_favorites": g.num_favorites,
                     "reported_pages": g.reported_pages, "actual_pages": g.actual_pages,
                     "file_path": g.file_path, "downloaded_at": _fmt_time(g.downloaded_at),
-                    "web_url": _web_url(g.source_key, g.native_id),
+                    "web_url": _web_url(g.source_key, g.native_id, g.web_url),
                 }
                 for g in galleries
             ],
@@ -75,9 +76,13 @@ def _fmt_time(dt) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
-def _web_url(source_key: str, native_id: str) -> str:
+def _web_url(source_key: str, native_id: str, stored_url: str = "") -> str:
+    if stored_url:
+        return stored_url
     if source_key == "nhentai":
         return f"https://nhentai.net/g/{native_id}/"
+    if source_key == "exhentai":
+        return f"https://exhentai.org/?f_search=gid:{native_id}"
     return ""
 
 
@@ -153,7 +158,16 @@ async def batch_download(req: BatchDownloadRequest):
     source = mgr.get_source(req.source_key, credentials=creds, proxy=proxy)
     if source is None:
         return {"status": "error", "error": f"源 {req.source_key} 不可用"}
-    out_dir = await get_setting("download_path", ".")
+    # 优先使用订阅级下载目录
+    sub_down_dir = ""
+    if req.subscription_id:
+        from comicfeed.models import Subscription
+        from comicfeed.database import get_session
+        async with get_session() as s:
+            sub = await s.get(Subscription, req.subscription_id)
+            if sub and sub.download_dir:
+                sub_down_dir = sub.download_dir
+    out_dir = sub_down_dir or await get_setting("download_path", ".")
     tracker = get_download_tracker()
 
     async def _batch():

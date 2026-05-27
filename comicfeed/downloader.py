@@ -105,7 +105,7 @@ async def download_gallery(
                 if g is None:
                     g = Gallery(id=full_gid, source_key=source.key, native_id=gallery_id,
                                 normalized_title=title, display_title=title,
-                                cover_url=detail.cover_url,
+                                cover_url=detail.cover_url, web_url=detail.web_url,
                                 tags=json.dumps(detail.tags, ensure_ascii=False),
                                 num_favorites=detail.num_favorites,
                                 reported_pages=total, actual_pages=downloaded,
@@ -115,6 +115,7 @@ async def download_gallery(
                     g.actual_pages = downloaded
                     g.reported_pages = total
                     g.cover_url = detail.cover_url
+                    g.web_url = detail.web_url
                     g.tags = json.dumps(detail.tags, ensure_ascii=False)
                     g.num_favorites = detail.num_favorites
                     g.downloaded_at = now
