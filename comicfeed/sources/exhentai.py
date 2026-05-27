@@ -291,35 +291,34 @@ class ExhentaiSource(BaseSource):
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
         """检查画廊是否有更新（newer version 跳转 + 页面 ID 对比）。"""
         gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
-        new_gid = None
-        new_gurl = ""
+        old_ids: set[str] = set(last_known.get("page_ids", []))
 
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
 
-            # 检查 newer version，如果存在则跳转到新画廊
+            # 检查 newer version
             newer = soup.select_one("div.sn a, div.sn span")
+            new_gid = None
+            new_gurl = ""
             if newer and "newer" in newer.get_text().lower():
                 href = newer.get("href", "") if newer.name == "a" else ""
                 m = self._GALLERY_LINK.search(href)
                 if m:
                     new_gid = m.group(1)
                     new_gurl = href
-                    gurl = new_gurl  # 后续用新 URL
+                    return UpdateResult(has_updates=True, new_gallery_id=new_gid,
+                                        new_gallery_url=new_gurl)
 
-        # 复用 get_gallery 获取完整 detail（含 page_native_ids）
+            # 无 newer version 且已有旧页面 → 无更新
+            if old_ids:
+                return UpdateResult()
+
+        # 首次检查（无旧页面），获取完整 page ID 列表
         detail = await self.get_gallery(gallery_id, gallery_url=gurl)
-
-        old_ids: set[str] = set(last_known.get("page_ids", []))
         current_ids = set(detail.page_native_ids)
-
         new_ids = current_ids - old_ids
         if new_ids:
-            return UpdateResult(has_updates=True, new_page_ids=list(new_ids),
-                                new_gallery_id=new_gid, new_gallery_url=new_gurl)
-        if new_gid:
-            return UpdateResult(has_updates=True, new_gallery_id=new_gid,
-                                new_gallery_url=new_gurl)
+            return UpdateResult(has_updates=True, new_page_ids=list(new_ids))
         return UpdateResult()
