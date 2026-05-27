@@ -252,29 +252,37 @@ class ExhentaiSource(BaseSource):
         )
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "") -> list[bytes]:
+        from comicfeed.log import get
+        _log = get(__name__)
         detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         results = []
         async with self._client() as client:
-            for viewer_url in urls:
-                resp = await client.get(viewer_url)
-                resp.raise_for_status()
-                soup = BeautifulSoup(resp.text, "lxml")
-                img = soup.select_one("img#img")
-                if img:
-                    img_url = img.get("src", "")
-                else:
-                    # fallback: look for any large image
-                    imgs = soup.select("img")
-                    img_url = imgs[0].get("src", "") if imgs else ""
-                if img_url:
-                    import httpx
-                    async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
-                        img_resp = await img_client.get(img_url)
-                        img_resp.raise_for_status()
-                        results.append(img_resp.content)
-                else:
-                    results.append(b"")
+            for i, viewer_url in enumerate(urls):
+                try:
+                    resp = await client.get(viewer_url)
+                    resp.raise_for_status()
+                    soup = BeautifulSoup(resp.text, "lxml")
+                    img = soup.select_one("img#img")
+                    if img:
+                        img_url = img.get("src", "")
+                    else:
+                        imgs = soup.select("img")
+                        img_url = imgs[0].get("src", "") if imgs else ""
+                    if img_url:
+                        import httpx
+                        async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
+                            img_resp = await img_client.get(img_url)
+                            img_resp.raise_for_status()
+                            results.append(img_resp.content)
+                    else:
+                        _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id,
+                                     page_range.start + i + 1, viewer_url)
+                        results.append(b"")
+                except Exception as e:
+                    _log.error("下载图片失败: gallery=%s page=%d viewer=%s - %r",
+                               gallery_id, page_range.start + i + 1, viewer_url, e)
+                    raise
         return results
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:

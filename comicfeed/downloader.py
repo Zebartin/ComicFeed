@@ -57,7 +57,8 @@ async def download_gallery(
             try:
                 chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url)
             except Exception as e:
-                _log.error("下载失败: %s 第 %d-%d 页 - %s", gallery_id, chunk_start+1, chunk_end, e)
+                _log.error("下载失败: %s 第 %d-%d 页 - %r", gallery_id, chunk_start+1, chunk_end, e)
+                _log.exception("详细错误")
                 raise
             vol_pages.extend(chunk)
             downloaded += len(chunk)
