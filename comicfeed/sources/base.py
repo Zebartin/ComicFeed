@@ -20,6 +20,7 @@ class GallerySummary:
     num_favorites: int = 0
     tag_ids: list[int] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
+    new_page_ids: list[str] = field(default_factory=list)  # 增量更新：仅新增的 page ID
 
 
 @dataclass
@@ -46,9 +47,7 @@ class GalleryDetail:
 @dataclass
 class UpdateResult:
     has_updates: bool = False
-    new_page_ids: list[str] = field(default_factory=list)
-    new_gallery_id: str | None = None
-    new_gallery_url: str = ""
+    gallery: GallerySummary | None = None
 
 
 class BaseSource(ABC):

@@ -290,34 +290,38 @@ class ExhentaiSource(BaseSource):
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
         """检查画廊是否有更新（newer version 跳转 + 页面 ID 对比）。"""
-        gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
         old_ids: set[str] = set(last_known.get("page_ids", []))
-        new_gid = None
-        new_gurl = ""
+        gid = gallery_id
+        gurl = gallery_url
 
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
 
-            newer = soup.select_one("div.sn a, div.sn span")
-            if newer and "newer" in newer.get_text().lower():
-                href = newer.get("href", "") if newer.name == "a" else ""
+            newer = soup.select_one("#gnd")
+            if newer:
+                all_a = newer.select("a")
+                href = all_a[-1].get("href", "")
                 m = self._GALLERY_LINK.search(href)
                 if m:
-                    new_gid = m.group(1)
-                    new_gurl = href
-                    gurl = new_gurl  # 用新 URL 继续
-                # 有新版本时即使有旧 page ID 也要解析新画廊
+                    gid = m.group(1)
+                    gurl = href
             elif old_ids:
-                # 无 newer version 且已有旧页面 → 无更新
                 return UpdateResult()
 
         # 解析完整 page ID 列表
-        detail = await self.get_gallery(gallery_id, gallery_url=gurl)
+        detail = await self.get_gallery(gid, gurl)
         current_ids = set(detail.page_native_ids)
         new_ids = current_ids - old_ids
-        if new_ids or new_gid:
-            return UpdateResult(has_updates=True, new_page_ids=list(new_ids),
-                                new_gallery_id=new_gid, new_gallery_url=new_gurl)
+        if new_ids:
+            return UpdateResult(has_updates=True, gallery=GallerySummary(
+                native_id=gid,
+                title=detail.title,
+                cover_url=detail.cover_url,
+                web_url=gurl,
+                page_count=len(new_ids),
+                tags=detail.tags,
+                new_page_ids=list(new_ids),
+            ))
         return UpdateResult()

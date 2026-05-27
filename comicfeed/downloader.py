@@ -28,8 +28,13 @@ async def download_gallery(
     fire_events: bool = True,
     save_to_db: bool = True,
     gallery_url: str = "",
+    page_filter: set[str] | None = None,
 ) -> DownloadResult:
-    """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。"""
+    """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。
+
+    page_filter: 非 None 时只保留匹配的 page_native_id（增量更新用）。下载仍然获取全量页面，
+    但在 CBZ 打包前过滤，确保增量下载仅写入新页面记录。
+    """
     from comicfeed.hooks import Event, bus
 
     detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
@@ -74,6 +79,16 @@ async def download_gallery(
             downloaded -= ad_count
             # 移除 "extraneous ads" 标签
             detail.tags = [t for t in detail.tags if "extraneous" not in t.lower() and "外部广告" not in t]
+            if tracker:
+                tracker.progress(full_gid, downloaded)
+
+        # 增量更新：只保留新页面打包
+        if page_filter and detail.page_native_ids:
+            before = len(vol_pages)
+            vol_pages = [pg for i, pg in enumerate(vol_pages)
+                         if (vol_start + i) < len(detail.page_native_ids)
+                         and detail.page_native_ids[vol_start + i] in page_filter]
+            downloaded -= before - len(vol_pages)
             if tracker:
                 tracker.progress(full_gid, downloaded)
 
@@ -171,15 +186,19 @@ class DownloadPool:
         fire_events: bool = True,
         save_to_db: bool = True,
         gallery_url: str = "",
+        page_filter: set[str] | None = None,
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
         async with self._global_sem:
+            kwargs = dict(source=source, gallery_id=gallery_id, output_dir=output_dir,
+                          cbz_max_pages=cbz_max_pages, tracker=tracker, fire_events=fire_events,
+                          save_to_db=save_to_db, gallery_url=gallery_url, page_filter=page_filter)
             if src_sem:
                 async with src_sem:
-                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db, gallery_url=gallery_url)
+                    return await download_gallery(**kwargs)
             else:
-                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db, gallery_url=gallery_url)
+                return await download_gallery(**kwargs)
 
 
 class DownloadTracker:
