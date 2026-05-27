@@ -11,27 +11,6 @@ class AuthSchema(Enum):
 
 
 @dataclass
-class GallerySummary:
-    native_id: str
-    title: str
-    cover_url: str
-    web_url: str = ""
-    page_count: int = 0
-    num_favorites: int = 0
-    tag_ids: list[int] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)
-    new_page_ids: list[str] = field(default_factory=list)  # 增量更新：仅新增的 page ID
-
-
-@dataclass
-class SearchResult:
-    items: list[GallerySummary] = field(default_factory=list)
-    total_pages: int = 0
-    current_page: int = 1
-    next_url: str = ""  # 游标制翻页（exhentai 用）
-
-
-@dataclass
 class GalleryDetail:
     native_id: str
     title: str
@@ -42,6 +21,28 @@ class GalleryDetail:
     tags: list[str] = field(default_factory=list)
     reported_pages: int = 0
     num_favorites: int = 0
+
+
+@dataclass
+class GallerySummary:
+    native_id: str
+    title: str
+    cover_url: str
+    web_url: str = ""
+    page_count: int = 0
+    num_favorites: int = 0
+    tag_ids: list[int] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    new_page_ids: list[str] = field(default_factory=list)  # 增量更新：仅新增的 page ID
+    detail: GalleryDetail | None = None  # check_updates 预取的完整 detail
+
+
+@dataclass
+class SearchResult:
+    items: list[GallerySummary] = field(default_factory=list)
+    total_pages: int = 0
+    current_page: int = 1
+    next_url: str = ""  # 游标制翻页（exhentai 用）
 
 
 @dataclass
@@ -81,7 +82,7 @@ class BaseSource(ABC):
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail: ...
 
     @abstractmethod
-    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "") -> list[bytes]: ...
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]: ...
 
     @abstractmethod
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult: ...

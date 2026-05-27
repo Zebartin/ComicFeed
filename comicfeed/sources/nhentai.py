@@ -142,8 +142,9 @@ class NhentaiSource(BaseSource):
             num_favorites=data.get("num_favorites", 0),
         )
 
-    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "") -> list[bytes]:
-        detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
+        if detail is None:
+            detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         import httpx
         async with httpx.AsyncClient(proxy=self.proxy, timeout=30, follow_redirects=True) as client:

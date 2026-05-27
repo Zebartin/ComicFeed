@@ -55,7 +55,7 @@ class _MockSource(BaseSource):
             reported_pages=2,
         )
 
-    async def download_pages(self, gallery_id, page_range, gallery_url=""):
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         await asyncio.sleep(self.delay)

@@ -178,7 +178,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 try:
                     _log.info("开始下载: %s (%s)", gid, item.title)
                     pf = set(item.new_page_ids) if item.new_page_ids else None
-                    result = await download_pool.download(source, item.native_id, out_dir, tracker=tracker, fire_events=False, gallery_url=item.web_url, page_filter=pf)
+                    result = await download_pool.download(source, item.native_id, out_dir, tracker=tracker, fire_events=False, gallery_url=item.web_url, page_filter=pf, detail=item.detail)
                     sg = await session.get(SubscriptionGallery, (sub.id, gid))
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))

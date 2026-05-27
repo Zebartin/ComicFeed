@@ -17,7 +17,7 @@ class _ValidSource(BaseSource):
     async def get_gallery(self, gallery_id: str, gallery_url: str = ""):
         raise NotImplementedError
 
-    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = ""):
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail=None):
         raise NotImplementedError
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = ""):
@@ -64,7 +64,7 @@ class TestPlugin(BaseSource):
 
     async def search(self, query, page): pass
     async def get_gallery(self, gallery_id, gallery_url=""): pass
-    async def download_pages(self, gallery_id, page_range, gallery_url=""): pass
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None): pass
     async def check_updates(self, gallery_id, last_known, gallery_url=""): pass
 """, encoding="utf-8")
 

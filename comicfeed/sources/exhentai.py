@@ -254,10 +254,11 @@ class ExhentaiSource(BaseSource):
             reported_pages=reported_pages,
         )
 
-    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "") -> list[bytes]:
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
         from comicfeed.log import get
         _log = get(__name__)
-        detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
+        if detail is None:
+            detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         results = []
         async with self._client() as client:
@@ -323,5 +324,6 @@ class ExhentaiSource(BaseSource):
                 page_count=len(new_ids),
                 tags=detail.tags,
                 new_page_ids=list(new_ids),
+                detail=detail,
             ))
         return UpdateResult()

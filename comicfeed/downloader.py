@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from comicfeed.cbz import make_cbz_name, normalize_title, pack_cbz
 from comicfeed.log import get
-from comicfeed.sources.base import BaseSource
+from comicfeed.sources.base import BaseSource, GalleryDetail
 
 _log = get(__name__)
 
@@ -29,15 +29,17 @@ async def download_gallery(
     save_to_db: bool = True,
     gallery_url: str = "",
     page_filter: set[str] | None = None,
+    detail: GalleryDetail | None = None,
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。
 
-    page_filter: 非 None 时只保留匹配的 page_native_id（增量更新用）。下载仍然获取全量页面，
-    但在 CBZ 打包前过滤，确保增量下载仅写入新页面记录。
+    detail: 已预取的 GalleryDetail，跳过 get_gallery 调用（增量检查用）。
+    page_filter: 非 None 时只保留匹配的 page_native_id。
     """
     from comicfeed.hooks import Event, bus
 
-    detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
+    if detail is None:
+        detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
     title = normalize_title(detail.title)
     total = detail.reported_pages
     if cbz_max_pages <= 0:
@@ -60,7 +62,7 @@ async def download_gallery(
         for chunk_start in range(vol_start, vol_end, CHUNK):
             chunk_end = min(chunk_start + CHUNK, vol_end)
             try:
-                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url)
+                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url, detail=detail)
             except Exception as e:
                 _log.error("下载失败: %s 第 %d-%d 页 - %r", gallery_id, chunk_start+1, chunk_end, e)
                 _log.exception("详细错误")
@@ -187,13 +189,15 @@ class DownloadPool:
         save_to_db: bool = True,
         gallery_url: str = "",
         page_filter: set[str] | None = None,
+        detail: GalleryDetail | None = None,
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
         async with self._global_sem:
             kwargs = dict(source=source, gallery_id=gallery_id, output_dir=output_dir,
                           cbz_max_pages=cbz_max_pages, tracker=tracker, fire_events=fire_events,
-                          save_to_db=save_to_db, gallery_url=gallery_url, page_filter=page_filter)
+                          save_to_db=save_to_db, gallery_url=gallery_url, page_filter=page_filter,
+                          detail=detail)
             if src_sem:
                 async with src_sem:
                     return await download_gallery(**kwargs)
