@@ -163,8 +163,8 @@ class ExhentaiSource(BaseSource):
 
         return SearchResult(items=items, current_page=page, next_url=next_url)
 
-    async def get_gallery(self, gallery_id: str) -> GalleryDetail:
-        gurl = await self._get_gallery_url(gallery_id)
+    async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:
+        gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
@@ -188,22 +188,6 @@ class ExhentaiSource(BaseSource):
                 detail.page_urls = all_urls
 
             return detail
-
-    async def _get_gallery_url(self, gallery_id: str) -> str:
-        """通过搜索找到 gallery 的完整 URL（含 token）。"""
-        async with self._client() as client:
-            resp = await client.get(
-                f"{self._base}/",
-                params={"f_search": f"gid:{gallery_id}", "page": 0, "inline_set": "dm_e"},
-            )
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "lxml")
-            for a in soup.select("td.gl2e a"):
-                href = a.get("href", "")
-                m = self._GALLERY_LINK.search(href)
-                if m and m.group(1) == gallery_id:
-                    return href
-            return f"{self._base}/g/{gallery_id}/"
 
     def _parse_gallery_html(self, html: str, gallery_id: str) -> GalleryDetail:
         soup = BeautifulSoup(html, "lxml")
@@ -267,8 +251,8 @@ class ExhentaiSource(BaseSource):
             reported_pages=reported_pages,
         )
 
-    async def download_pages(self, gallery_id: str, page_range: slice) -> list[bytes]:
-        detail = await self.get_gallery(gallery_id)
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "") -> list[bytes]:
+        detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         results = []
         async with self._client() as client:
@@ -295,7 +279,7 @@ class ExhentaiSource(BaseSource):
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
         """检查画廊是否有更新版本（基于页面 ID 对比）。"""
-        gurl = gallery_url or await self._get_gallery_url(gallery_id)
+        gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()

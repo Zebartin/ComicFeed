@@ -27,11 +27,12 @@ async def download_gallery(
     tracker: "DownloadTracker | None" = None,
     fire_events: bool = True,
     save_to_db: bool = True,
+    gallery_url: str = "",
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。"""
     from comicfeed.hooks import Event, bus
 
-    detail = await source.get_gallery(gallery_id)
+    detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
     title = normalize_title(detail.title)
     total = detail.reported_pages
     if cbz_max_pages <= 0:
@@ -54,7 +55,7 @@ async def download_gallery(
         for chunk_start in range(vol_start, vol_end, CHUNK):
             chunk_end = min(chunk_start + CHUNK, vol_end)
             try:
-                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end))
+                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url)
             except Exception as e:
                 _log.error("下载失败: %s 第 %d-%d 页 - %s", gallery_id, chunk_start+1, chunk_end, e)
                 raise
@@ -168,15 +169,16 @@ class DownloadPool:
         tracker: "DownloadTracker | None" = None,
         fire_events: bool = True,
         save_to_db: bool = True,
+        gallery_url: str = "",
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
         async with self._global_sem:
             if src_sem:
                 async with src_sem:
-                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db)
+                    return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db, gallery_url=gallery_url)
             else:
-                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db)
+                return await download_gallery(source, gallery_id, output_dir, cbz_max_pages, tracker=tracker, fire_events=fire_events, save_to_db=save_to_db, gallery_url=gallery_url)
 
 
 class DownloadTracker:

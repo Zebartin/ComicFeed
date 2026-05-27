@@ -100,7 +100,7 @@ class NhentaiSource(BaseSource):
             current_page=page,
         )
 
-    async def get_gallery(self, gallery_id: str) -> GalleryDetail:
+    async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:
         async with self._client() as client:
             resp = await client.get(f"{self._BASE}/api/v2/galleries/{gallery_id}")
             resp.raise_for_status()
@@ -142,8 +142,8 @@ class NhentaiSource(BaseSource):
             num_favorites=data.get("num_favorites", 0),
         )
 
-    async def download_pages(self, gallery_id: str, page_range: slice) -> list[bytes]:
-        detail = await self.get_gallery(gallery_id)
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "") -> list[bytes]:
+        detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         import httpx
         async with httpx.AsyncClient(proxy=self.proxy, timeout=30, follow_redirects=True) as client:

@@ -15,13 +15,13 @@ class _FakeSource(BaseSource):
     async def search(self, query, page, sort="date") -> SearchResult:
         return SearchResult(items=self.search_results, total_pages=1, current_page=1)
 
-    async def get_gallery(self, gallery_id):
+    async def get_gallery(self, gallery_id, gallery_url=""):
         raise NotImplementedError
 
-    async def download_pages(self, gallery_id, page_range):
+    async def download_pages(self, gallery_id, page_range, gallery_url=""):
         raise NotImplementedError
 
-    async def check_updates(self, gallery_id, last_known):
+    async def check_updates(self, gallery_id, last_known, gallery_url=""):
         return UpdateResult()
 
 

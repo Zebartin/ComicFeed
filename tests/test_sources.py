@@ -14,13 +14,13 @@ class _ValidSource(BaseSource):
     async def search(self, query: str, page: int, sort: str = "date"):
         raise NotImplementedError
 
-    async def get_gallery(self, gallery_id: str):
+    async def get_gallery(self, gallery_id: str, gallery_url: str = ""):
         raise NotImplementedError
 
-    async def download_pages(self, gallery_id: str, page_range: slice):
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = ""):
         raise NotImplementedError
 
-    async def check_updates(self, gallery_id: str, last_known: dict):
+    async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = ""):
         raise NotImplementedError
 
     def parse_url(self, url: str) -> str | None:
@@ -63,9 +63,9 @@ class TestPlugin(BaseSource):
     auth_schema = AuthSchema.NONE
 
     async def search(self, query, page): pass
-    async def get_gallery(self, gallery_id): pass
-    async def download_pages(self, gallery_id, page_range): pass
-    async def check_updates(self, gallery_id, last_known): pass
+    async def get_gallery(self, gallery_id, gallery_url=""): pass
+    async def download_pages(self, gallery_id, page_range, gallery_url=""): pass
+    async def check_updates(self, gallery_id, last_known, gallery_url=""): pass
 """, encoding="utf-8")
 
     manager = SourceManager()

@@ -138,7 +138,7 @@ async def download_by_id(req: DownloadRequest):
     from comicfeed.downloader import download_gallery
     async def _dl():
         try:
-            await download_gallery(source, gid, out_dir, tracker=tracker)
+            await download_gallery(source, gid, out_dir, tracker=tracker, gallery_url=req.url or "")
         except Exception as e:
             tracker.failed(full_gid, str(e))
     asyncio.create_task(_dl())
@@ -185,7 +185,8 @@ async def batch_download(req: BatchDownloadRequest):
         for gid in req.gallery_ids:
             full_gid = f"{req.source_key}:{gid}"
             try:
-                result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False)
+                meta = req.gallery_metas.get(gid, {})
+                result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False, gallery_url=meta.get("web_url", ""))
                 downloaded.append({
                     "gallery_id": full_gid,
                     "title": result.title, "files": result.files,

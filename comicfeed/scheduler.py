@@ -48,9 +48,9 @@ async def check_subscription(
             items = []
             if result.new_page_ids:
                 # 有新增页面
-                items.append(GallerySummary(native_id=gid, title="更新", page_count=0))
+                items.append(GallerySummary(native_id=gid, title="更新", cover_url="", page_count=0))
             elif result.new_gallery_id:
-                items.append(GallerySummary(native_id=result.new_gallery_id, title=""))
+                items.append(GallerySummary(native_id=result.new_gallery_id, title="", cover_url=""))
             return items, False
         return [], False
 
@@ -179,7 +179,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 gid = f"{source.key}:{item.native_id}"
                 try:
                     _log.info("开始下载: %s (%s)", gid, item.title)
-                    result = await download_pool.download(source, item.native_id, out_dir, tracker=tracker, fire_events=False)
+                    result = await download_pool.download(source, item.native_id, out_dir, tracker=tracker, fire_events=False, gallery_url=item.web_url)
                     sg = await session.get(SubscriptionGallery, (sub.id, gid))
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))

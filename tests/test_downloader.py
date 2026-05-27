@@ -45,7 +45,7 @@ class _MockSource(BaseSource):
     async def search(self, query, page, sort="date") -> SearchResult:
         return SearchResult()
 
-    async def get_gallery(self, gallery_id) -> GalleryDetail:
+    async def get_gallery(self, gallery_id, gallery_url="") -> GalleryDetail:
         return GalleryDetail(
             native_id=gallery_id,
             title="Mock Gallery",
@@ -55,7 +55,7 @@ class _MockSource(BaseSource):
             reported_pages=2,
         )
 
-    async def download_pages(self, gallery_id, page_range):
+    async def download_pages(self, gallery_id, page_range, gallery_url=""):
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         await asyncio.sleep(self.delay)
@@ -63,7 +63,7 @@ class _MockSource(BaseSource):
         self.active -= 1
         return result
 
-    async def check_updates(self, gallery_id, last_known):
+    async def check_updates(self, gallery_id, last_known, gallery_url=""):
         return UpdateResult()
 
 
