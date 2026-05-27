@@ -19,6 +19,7 @@ _BLACKLIST = re.compile(
     r"|Digital|DL版|Chinese|中文|中国語|English"
     r"|censor|修正|Decensored|Uncensored|Colorized"
     r"|全彩|无修正|中国翻訳"
+    r"|AI Generated|AI生成"
     r"|COMIC.*\d+",
     re.IGNORECASE,
 )
