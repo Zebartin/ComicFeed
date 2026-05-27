@@ -278,35 +278,54 @@ class ExhentaiSource(BaseSource):
         return results
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
-        """检查画廊是否有更新版本（基于页面 ID 对比）。"""
+        """检查画廊是否有更新（newer version 跳转 + 页面 ID 对比）。"""
         gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
+        new_gid = None
+        new_gurl = ""
+
         async with self._client() as client:
             resp = await client.get(gurl)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "lxml")
-            # 检查是否有 "newer version" 标记
+
+            # 1. 检查 newer version，如果存在则跳转到新画廊
             newer = soup.select_one("div.sn a, div.sn span")
-            new_gid = None
             if newer and "newer" in newer.get_text().lower():
                 href = newer.get("href", "") if newer.name == "a" else ""
                 m = self._GALLERY_LINK.search(href)
                 if m:
                     new_gid = m.group(1)
+                    new_gurl = href
+                    # 访问新画廊页面，新页面不应再有 newer version 标记
+                    resp2 = await client.get(new_gurl)
+                    resp2.raise_for_status()
+                    soup = BeautifulSoup(resp2.text, "lxml")
 
-            # 从 DB 获取已记录的 page ID
+            # 2. 遍历所有 gallery 分页，收集全部 page ID
             old_ids: set[str] = set(last_known.get("page_ids", []))
-
-            # 解析当前页面的 page ID
             current_ids = set()
-            for a in soup.select("div#gdt a"):
-                pid = self._extract_page_id(a.get("href", ""))
-                if pid:
-                    current_ids.add(pid)
+            base_gurl = new_gurl or gurl
+            pg = 0
+            while pg < 200:
+                thumbs = soup.select("div#gdt a")
+                if not thumbs:
+                    break
+                for a in thumbs:
+                    pid = self._extract_page_id(a.get("href", ""))
+                    if pid:
+                        current_ids.add(pid)
+                pg += 1
+                page_url = base_gurl.rstrip("/") + f"?p={pg}"
+                resp = await client.get(page_url)
+                resp.raise_for_status()
+                soup = BeautifulSoup(resp.text, "lxml")
 
-            # 新页面
+            # 3. 比对
             new_ids = current_ids - old_ids
             if new_ids:
-                return UpdateResult(has_updates=True, new_page_ids=list(new_ids), new_gallery_id=new_gid)
+                return UpdateResult(has_updates=True, new_page_ids=list(new_ids),
+                                    new_gallery_id=new_gid, new_gallery_url=new_gurl)
             if new_gid:
-                return UpdateResult(has_updates=True, new_gallery_id=new_gid)
+                return UpdateResult(has_updates=True, new_gallery_id=new_gid,
+                                    new_gallery_url=new_gurl)
             return UpdateResult()

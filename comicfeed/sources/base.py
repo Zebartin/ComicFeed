@@ -48,6 +48,7 @@ class UpdateResult:
     has_updates: bool = False
     new_page_ids: list[str] = field(default_factory=list)
     new_gallery_id: str | None = None
+    new_gallery_url: str = ""
 
 
 class BaseSource(ABC):

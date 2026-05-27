@@ -47,10 +47,13 @@ async def check_subscription(
         if result.has_updates:
             items = []
             if result.new_page_ids:
-                # 有新增页面
-                items.append(GallerySummary(native_id=gid, title="更新", cover_url="", page_count=0))
+                items.append(GallerySummary(native_id=gid, title="更新", cover_url="", web_url=gurl, page_count=0))
             elif result.new_gallery_id:
-                items.append(GallerySummary(native_id=result.new_gallery_id, title="", cover_url=""))
+                # 更新订阅查询串指向新画廊 URL
+                if result.new_gallery_url:
+                    sub.query = result.new_gallery_url
+                    await session.commit()
+                items.append(GallerySummary(native_id=result.new_gallery_id, title="", cover_url="", web_url=result.new_gallery_url))
             return items, False
         return [], False
 
