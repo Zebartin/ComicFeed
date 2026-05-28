@@ -40,7 +40,7 @@ async def check_subscription(
         # 从 DB 获取旧页面 ID 列表
         from comicfeed.models import Page
         full_gid = f"{source.key}:{gid}"
-        stmt = select(Page.page_native_id).where(Page.gallery_id == full_gid).order_by(Page.page_index)
+        stmt = select(Page.page_native_id).where(Page.gallery_id == full_gid)
         old_ids = [row[0] for row in (await session.execute(stmt)).fetchall()]
 
         result = await source.check_updates(gid, {"page_ids": old_ids}, gallery_url=gurl)

@@ -141,8 +141,8 @@ async def download_gallery(
                 from sqlalchemy import delete
                 if not append_pages:
                     await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
-                for idx, pid in enumerate(detail.page_native_ids):
-                    session.add(PageModel(gallery_id=full_gid, page_index=idx, page_native_id=pid))
+                for pid in detail.page_native_ids:
+                    session.add(PageModel(gallery_id=full_gid, page_native_id=pid))
                 await session.commit()
         except Exception:
             _log.exception("写入页面记录失败: %s", full_gid)

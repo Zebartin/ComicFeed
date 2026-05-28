@@ -78,7 +78,6 @@ class Page(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     gallery_id: Mapped[str] = mapped_column(ForeignKey("gallery.id"))
-    page_index: Mapped[int] = mapped_column(Integer)
     page_native_id: Mapped[str] = mapped_column(String(256))
 
 
