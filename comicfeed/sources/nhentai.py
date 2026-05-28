@@ -132,7 +132,10 @@ class NhentaiSource(BaseSource):
 
         native_id = str(data.get("id", ""))
         upload_ts = data.get("upload_date", 0)
-        upload_date = str(upload_ts) if upload_ts else ""
+        upload_date = ""
+        if upload_ts:
+            from datetime import datetime
+            upload_date = datetime.fromtimestamp(upload_ts).strftime("%Y-%m-%d")
         return GalleryDetail(
             native_id=native_id,
             title=title,
