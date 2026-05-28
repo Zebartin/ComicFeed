@@ -260,6 +260,14 @@ class ExhentaiSource(BaseSource):
                     elif name:
                         tags.append(name)
 
+        # 上传时间
+        upload_date = ""
+        for tr in soup.select("div#gdd tr"):
+            tds = tr.select("td")
+            if len(tds) >= 2 and "posted" in tds[0].get_text().lower():
+                upload_date = tds[1].get_text(strip=True)
+                break
+
         # 页数
         reported_pages = 0
         for el in soup.select("td.gdt2, div.gdtm"):
@@ -285,6 +293,7 @@ class ExhentaiSource(BaseSource):
             tags=tags,
             page_urls=page_urls,
             page_native_ids=page_native_ids,
+            upload_date=upload_date,
             reported_pages=reported_pages,
         )
 
@@ -359,6 +368,7 @@ class ExhentaiSource(BaseSource):
                 page_urls=[detail.page_urls[i] for i in keep_idx],
                 page_native_ids=[detail.page_native_ids[i] for i in keep_idx],
                 tags=list(detail.tags),
+                upload_date=detail.upload_date,
                 reported_pages=len(keep_idx),
                 num_favorites=detail.num_favorites,
             )

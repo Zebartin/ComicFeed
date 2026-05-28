@@ -80,6 +80,18 @@ def _build_comicinfo(detail: GalleryDetail) -> bytes:
     ET.SubElement(root, "Title").text = detail.title
     ET.SubElement(root, "Number").text = detail.native_id
     ET.SubElement(root, "Tags").text = ", ".join(detail.tags)
+    if detail.upload_date:
+        try:
+            from datetime import datetime
+            if detail.upload_date.isdigit():
+                dt = datetime.fromtimestamp(int(detail.upload_date))
+            else:
+                dt = datetime.fromisoformat(detail.upload_date)
+            ET.SubElement(root, "Year").text = str(dt.year)
+            ET.SubElement(root, "Month").text = str(dt.month)
+            ET.SubElement(root, "Day").text = str(dt.day)
+        except (ValueError, OSError):
+            pass
     if detail.web_url:
         ET.SubElement(root, "Web").text = detail.web_url
     tree = ET.ElementTree(root)
