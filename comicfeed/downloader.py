@@ -1,8 +1,9 @@
 import asyncio
+import glob
 import os
 from dataclasses import dataclass, field
 
-from comicfeed.cbz import make_cbz_name, normalize_title, pack_cbz
+from comicfeed.cbz import make_cbz_name, normalize_title, pack_cbz, read_cbz_pages
 from comicfeed.log import get
 from comicfeed.sources.base import BaseSource, GalleryDetail
 
@@ -53,7 +54,37 @@ async def download_gallery(
                             cover_url=detail.cover_url, web_url=detail.web_url,
                             page_count=total)
     downloaded = 0
-    CHUNK = 5  # 每批下载页数，便于更新进度
+    CHUNK = 5
+
+    # 增量更新：准备向已有 CBZ 追加
+    _old_count = 0
+    _append_pages: list[bytes] = []  # prepend to first volume
+    _append_start = 0   # page number offset for first volume
+    if append_pages:
+        from comicfeed.database import get_session
+        async with get_session() as s:
+            from sqlalchemy import func, select as sa_select
+            from comicfeed.models import Page as PageModel2
+            _old_count = (await s.execute(
+                sa_select(func.count()).where(PageModel2.gallery_id == full_gid)
+            )).scalar() or 0
+
+        if _old_count > 0:
+            prefix = f"[{gallery_id}] {title}"
+            from comicfeed.cbz import sanitize_filename
+            pattern = os.path.join(output_dir, sanitize_filename(prefix) + "*.cbz")
+            existing = sorted(glob.glob(pattern))
+            if existing:
+                if cbz_max_pages > 0:
+                    pages_in_last = _old_count % cbz_max_pages or cbz_max_pages
+                    if pages_in_last < cbz_max_pages:
+                        _append_pages = read_cbz_pages(existing[-1])
+                        _append_start = _old_count - pages_in_last
+                        os.remove(existing[-1])
+                else:
+                    _append_pages = read_cbz_pages(existing[0])
+                    _append_start = 0
+                    os.remove(existing[0])
 
     for vol_start in range(0, total, cbz_max_pages):
         vol_end = min(vol_start + cbz_max_pages, total)
@@ -84,11 +115,19 @@ async def download_gallery(
             if tracker:
                 tracker.progress(full_gid, downloaded)
 
-        if vol_pages:
-            fname = make_cbz_name(gallery_id, title, vol_start + 1, vol_start + len(vol_pages), total_pages=total)
+        if vol_pages or _append_pages:
+            # 增量追加：第一卷拼接旧 CBZ 页面
+            if vol_start == 0 and _append_pages:
+                vol_pages = _append_pages + vol_pages
+                start = _append_start + 1
+                total_for_name = _old_count + total if cbz_max_pages <= 0 or (start + len(vol_pages) - 1 >= _old_count + total) else 0
+            else:
+                start = vol_start + 1
+                total_for_name = total if cbz_max_pages <= 0 else 0
+            fname = make_cbz_name(gallery_id, title, start, start + len(vol_pages) - 1, total_pages=total_for_name)
             fpath = os.path.join(output_dir, fname)
             with open(fpath, "wb") as f:
-                pack_cbz(f, fname, detail, vol_pages, start_page=vol_start + 1)
+                pack_cbz(f, fname, detail, vol_pages, start_page=start)
             result.files.append(fpath)
 
     if tracker:

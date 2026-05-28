@@ -64,6 +64,17 @@ def make_cbz_name(native_id: str, normalized_title: str, start_page: int, end_pa
     return f"{name}.cbz"
 
 
+def read_cbz_pages(path: str) -> list[bytes]:
+    """读取 CBZ 文件中的所有页面（按文件名排序）。"""
+    import zipfile
+    pages = []
+    with zipfile.ZipFile(path, "r") as z:
+        for name in sorted(z.namelist()):
+            if not name.endswith("/"):
+                pages.append(z.read(name))
+    return pages
+
+
 def _build_comicinfo(detail: GalleryDetail) -> bytes:
     root = ET.Element("ComicInfo")
     ET.SubElement(root, "Title").text = detail.title
