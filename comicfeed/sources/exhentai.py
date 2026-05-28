@@ -18,6 +18,9 @@ from comicfeed.sources.base import (
 _gallery_cache: dict[str, tuple[float, GalleryDetail]] = {}
 _GALLERY_CACHE_TTL = 3000
 
+# check_updates 产生的过滤 detail，供后续 batch_download 使用
+_update_cache: dict[str, GalleryDetail] = {}
+
 
 class ExhentaiSource(BaseSource):
     key = "exhentai"
@@ -186,6 +189,12 @@ class ExhentaiSource(BaseSource):
 
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:
         gurl = gallery_url or f"{self._base}/g/{gallery_id}/"
+
+        # 检查是否有 check_updates 预过滤的 detail（一次性消耗）
+        upd = _update_cache.pop(gallery_id, None)
+        if upd:
+            return upd
+
         cached = self._cache_get(gurl)
         if cached:
             return cached
@@ -353,6 +362,7 @@ class ExhentaiSource(BaseSource):
                 reported_pages=len(keep_idx),
                 num_favorites=detail.num_favorites,
             )
+            _update_cache[gid] = filtered
             return UpdateResult(has_updates=True, gallery=GallerySummary(
                 native_id=gid,
                 title=detail.title,
