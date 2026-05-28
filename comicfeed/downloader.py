@@ -45,6 +45,7 @@ async def download_gallery(
         detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
     title = normalize_title(detail.title)
     total = detail.reported_pages
+    _do_split = cbz_max_pages > 0  # 保存原始分卷意图
     if cbz_max_pages <= 0:
         cbz_max_pages = total
 
@@ -77,7 +78,7 @@ async def download_gallery(
             pattern = os.path.join(output_dir, f"[{lookup_id}]*.cbz")
             existing = sorted(glob.glob(pattern))
             if existing:
-                if cbz_max_pages > 0:
+                if _do_split:
                     pages_in_last = _old_count % cbz_max_pages or cbz_max_pages
                     if pages_in_last < cbz_max_pages:
                         _append_pages = read_cbz_pages(existing[-1])
@@ -122,10 +123,10 @@ async def download_gallery(
             if vol_start == 0 and _append_pages:
                 vol_pages = _append_pages + vol_pages
                 start = _append_start + 1
-                total_for_name = _old_count + total if cbz_max_pages <= 0 or (start + len(vol_pages) - 1 >= _old_count + total) else 0
+                total_for_name = _old_count + total if not _do_split or (start + len(vol_pages) - 1 >= _old_count + total) else 0
             else:
                 start = vol_start + 1
-                total_for_name = total if cbz_max_pages <= 0 else 0
+                total_for_name = total if not _do_split else 0
             fname = make_cbz_name(gallery_id, title, start, start + len(vol_pages) - 1, total_pages=total_for_name)
             fpath = os.path.join(output_dir, fname)
             with open(fpath, "wb") as f:
