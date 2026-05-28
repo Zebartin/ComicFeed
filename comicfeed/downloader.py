@@ -28,13 +28,13 @@ async def download_gallery(
     fire_events: bool = True,
     save_to_db: bool = True,
     gallery_url: str = "",
-    page_filter: set[str] | None = None,
     detail: GalleryDetail | None = None,
+    append_pages: bool = False,
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。
 
-    detail: 已预取的 GalleryDetail，跳过 get_gallery 调用（增量检查用）。
-    page_filter: 非 None 时只保留匹配的 page_native_id。
+    detail: 已预取的 GalleryDetail（增量更新时仅含新页面），跳过 get_gallery。
+    append_pages: True 时只 INSERT 新 page 记录，不删旧（增量更新用）。
     """
     from comicfeed.hooks import Event, bus
 
@@ -81,16 +81,6 @@ async def download_gallery(
             downloaded -= ad_count
             # 移除 "extraneous ads" 标签
             detail.tags = [t for t in detail.tags if "extraneous" not in t.lower() and "外部广告" not in t]
-            if tracker:
-                tracker.progress(full_gid, downloaded)
-
-        # 增量更新：只保留新页面打包
-        if page_filter and detail.page_native_ids:
-            before = len(vol_pages)
-            vol_pages = [pg for i, pg in enumerate(vol_pages)
-                         if (vol_start + i) < len(detail.page_native_ids)
-                         and detail.page_native_ids[vol_start + i] in page_filter]
-            downloaded -= before - len(vol_pages)
             if tracker:
                 tracker.progress(full_gid, downloaded)
 
@@ -149,7 +139,8 @@ async def download_gallery(
             from comicfeed.models import Page as PageModel
             async with get_session() as session:
                 from sqlalchemy import delete
-                await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
+                if not append_pages:
+                    await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
                 for idx, pid in enumerate(detail.page_native_ids):
                     session.add(PageModel(gallery_id=full_gid, page_index=idx, page_native_id=pid))
                 await session.commit()
@@ -188,16 +179,16 @@ class DownloadPool:
         fire_events: bool = True,
         save_to_db: bool = True,
         gallery_url: str = "",
-        page_filter: set[str] | None = None,
         detail: GalleryDetail | None = None,
+        append_pages: bool = False,
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
         async with self._global_sem:
             kwargs = dict(source=source, gallery_id=gallery_id, output_dir=output_dir,
                           cbz_max_pages=cbz_max_pages, tracker=tracker, fire_events=fire_events,
-                          save_to_db=save_to_db, gallery_url=gallery_url, page_filter=page_filter,
-                          detail=detail)
+                          save_to_db=save_to_db, gallery_url=gallery_url,
+                          detail=detail, append_pages=append_pages)
             if src_sem:
                 async with src_sem:
                     return await download_gallery(**kwargs)

@@ -341,6 +341,18 @@ class ExhentaiSource(BaseSource):
         current_ids = set(detail.page_native_ids)
         new_ids = current_ids - old_ids
         if new_ids:
+            keep_idx = [i for i, pid in enumerate(detail.page_native_ids) if pid in new_ids]
+            filtered = GalleryDetail(
+                native_id=detail.native_id,
+                title=detail.title,
+                cover_url=detail.cover_url,
+                web_url=gurl,
+                page_urls=[detail.page_urls[i] for i in keep_idx],
+                page_native_ids=[detail.page_native_ids[i] for i in keep_idx],
+                tags=list(detail.tags),
+                reported_pages=len(keep_idx),
+                num_favorites=detail.num_favorites,
+            )
             return UpdateResult(has_updates=True, gallery=GallerySummary(
                 native_id=gid,
                 title=detail.title,
@@ -350,6 +362,6 @@ class ExhentaiSource(BaseSource):
                 tags=detail.tags,
                 new_page_ids=list(new_ids),
                 replaces_native_id=gallery_id if gid != gallery_id else "",
-                detail=detail,
+                detail=filtered,
             ))
         return UpdateResult()
