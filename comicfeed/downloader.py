@@ -70,9 +70,7 @@ async def download_gallery(
             )).scalar() or 0
 
         if _old_count > 0:
-            prefix = f"[{gallery_id}] {title}"
-            from comicfeed.cbz import sanitize_filename
-            pattern = os.path.join(output_dir, sanitize_filename(prefix) + "*.cbz")
+            pattern = os.path.join(output_dir, f"[{gallery_id}]*.cbz")
             existing = sorted(glob.glob(pattern))
             if existing:
                 if cbz_max_pages > 0:
