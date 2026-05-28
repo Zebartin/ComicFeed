@@ -31,11 +31,13 @@ async def download_gallery(
     gallery_url: str = "",
     detail: GalleryDetail | None = None,
     append_pages: bool = False,
+    replaces_native_id: str = "",
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。
 
     detail: 已预取的 GalleryDetail（增量更新时仅含新页面），跳过 get_gallery。
     append_pages: True 时只 INSERT 新 page 记录，不删旧（增量更新用）。
+    replaces_native_id: 增量时被替换的旧画廊 native_id（用于查找已有 CBZ）。
     """
     from comicfeed.hooks import Event, bus
 
@@ -65,12 +67,14 @@ async def download_gallery(
         async with get_session() as s:
             from sqlalchemy import func, select as sa_select
             from comicfeed.models import Page as PageModel2
+            lookup_gid = f"{source.key}:{replaces_native_id}" if replaces_native_id else full_gid
             _old_count = (await s.execute(
-                sa_select(func.count()).where(PageModel2.gallery_id == full_gid)
+                sa_select(func.count()).where(PageModel2.gallery_id == lookup_gid)
             )).scalar() or 0
 
         if _old_count > 0:
-            pattern = os.path.join(output_dir, f"[{gallery_id}]*.cbz")
+            lookup_id = replaces_native_id or gallery_id
+            pattern = os.path.join(output_dir, f"[{lookup_id}]*.cbz")
             existing = sorted(glob.glob(pattern))
             if existing:
                 if cbz_max_pages > 0:
@@ -218,6 +222,7 @@ class DownloadPool:
         gallery_url: str = "",
         detail: GalleryDetail | None = None,
         append_pages: bool = False,
+        replaces_native_id: str = "",
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
@@ -225,7 +230,8 @@ class DownloadPool:
             kwargs = dict(source=source, gallery_id=gallery_id, output_dir=output_dir,
                           cbz_max_pages=cbz_max_pages, tracker=tracker, fire_events=fire_events,
                           save_to_db=save_to_db, gallery_url=gallery_url,
-                          detail=detail, append_pages=append_pages)
+                          detail=detail, append_pages=append_pages,
+                          replaces_native_id=replaces_native_id)
             if src_sem:
                 async with src_sem:
                     return await download_gallery(**kwargs)
