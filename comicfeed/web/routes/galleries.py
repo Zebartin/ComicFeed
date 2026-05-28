@@ -159,15 +159,17 @@ async def batch_download(req: BatchDownloadRequest):
     source = mgr.get_source(req.source_key, credentials=creds, proxy=proxy)
     if source is None:
         return {"status": "error", "error": f"源 {req.source_key} 不可用"}
-    # 优先使用订阅级下载目录
+    # 优先使用订阅级下载目录和分卷设置
     sub_down_dir = ""
+    sub_cbz_max = 0
     if req.subscription_id:
         from comicfeed.models import Subscription
         from comicfeed.database import get_session
         async with get_session() as s:
             sub = await s.get(Subscription, req.subscription_id)
-            if sub and sub.download_dir:
-                sub_down_dir = sub.download_dir
+            if sub:
+                sub_down_dir = sub.download_dir or ""
+                sub_cbz_max = sub.cbz_max_pages or 0
     out_dir = sub_down_dir or await get_setting("download_path", ".")
     tracker = get_download_tracker()
 
@@ -191,7 +193,8 @@ async def batch_download(req: BatchDownloadRequest):
                 result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False,
                                                 gallery_url=meta.get("web_url", ""),
                                                 append_pages=bool(npid),
-                                                replaces_native_id=meta.get("replaces_native_id", ""))
+                                                replaces_native_id=meta.get("replaces_native_id", ""),
+                                                cbz_max_pages=sub_cbz_max)
                 downloaded.append({
                     "gallery_id": full_gid,
                     "title": result.title, "files": result.files,
