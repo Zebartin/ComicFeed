@@ -72,10 +72,10 @@ async def download_gallery(
             _old_count = (await s.execute(
                 sa_select(func.count()).where(PageModel2.gallery_id == lookup_gid)
             )).scalar() or 0
-
         if _old_count > 0:
             lookup_id = replaces_native_id or gallery_id
-            pattern = os.path.join(output_dir, f"[{lookup_id}]*.cbz")
+            safe = f"[{lookup_id}]".replace("[", "[[]").replace("]", "[]]")
+            pattern = os.path.join(output_dir, safe + "*.cbz")
             existing = sorted(glob.glob(pattern))
             if existing:
                 if _do_split:
