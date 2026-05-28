@@ -198,6 +198,18 @@ async def batch_download(req: BatchDownloadRequest):
                     "cover_url": result.cover_url, "web_url": result.web_url,
                     "page_count": result.page_count,
                 })
+                # newer version：迁移旧 Page + 更新订阅 URL
+                rid = meta.get("replaces_native_id", "")
+                if rid and req.subscription_id:
+                    from sqlalchemy import update as sqla_update
+                    from comicfeed.models import Page, Subscription
+                    async with get_session() as s:
+                        old_full_gid = f"{req.source_key}:{rid}"
+                        await s.execute(sqla_update(Page).where(Page.gallery_id == old_full_gid).values(gallery_id=full_gid))
+                        sub = await s.get(Subscription, req.subscription_id)
+                        if sub:
+                            sub.query = meta.get("web_url", "")
+                        await s.commit()
             except Exception as e:
                 _log.error("下载失败: %s:%s - %s", req.source_key, gid, e)
                 tracker.failed(full_gid, str(e))
