@@ -187,7 +187,11 @@ async def batch_download(req: BatchDownloadRequest):
             full_gid = f"{req.source_key}:{gid}"
             try:
                 meta = req.gallery_metas.get(gid, {})
-                result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False, gallery_url=meta.get("web_url", ""))
+                npid = meta.get("new_page_ids") or []
+                result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False,
+                                                gallery_url=meta.get("web_url", ""),
+                                                append_pages=bool(npid),
+                                                replaces_native_id=meta.get("replaces_native_id", ""))
                 downloaded.append({
                     "gallery_id": full_gid,
                     "title": result.title, "files": result.files,

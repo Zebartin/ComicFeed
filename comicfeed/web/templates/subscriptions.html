@@ -411,7 +411,7 @@ async function downloadPicked() {
   if (!picked.size) return
   const ids = [...picked], src = current.source_key
   const metas = {}
-  ids.forEach(id => { const g = results.find(r => r.native_id === id); if (g) metas[id] = {title: g.title, cover_url: g.cover_url, web_url: g.web_url, page_count: g.page_count} })
+  ids.forEach(id => { const g = results.find(r => r.native_id === id); if (g) metas[id] = {title: g.title, cover_url: g.cover_url, web_url: g.web_url, page_count: g.page_count, new_page_ids: g.new_page_ids || [], replaces_native_id: g.replaces_native_id || ''} })
   api('/api/galleries/batch-download', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({source_key: src, gallery_ids: ids, gallery_metas: metas, subscription_id: current.id})

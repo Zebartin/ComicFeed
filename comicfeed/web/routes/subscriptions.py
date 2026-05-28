@@ -142,6 +142,8 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
                 "page_count": g.page_count, "cover_url": g.cover_url,
                 "web_url": g.web_url, "num_favorites": g.num_favorites,
                 "tags": g.tags[:6],
+                "new_page_ids": g.new_page_ids,
+                "replaces_native_id": g.replaces_native_id,
             } for g in new],
             "has_more": has_more,
             "current_page": req.page + req.max_search_pages,
