@@ -24,7 +24,16 @@ async def create_tables():
 
 
 async def _migrate(conn):
-    """简单迁移：检查所有模型表，自动添加缺失列。"""
+    """简单迁移：自动添加缺失列、删除过时列。"""
+    # 删除已知过时列
+    _drop_cols = {"page": ["page_index"]}
+    for table_name, cols in _drop_cols.items():
+        result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
+        existing = {row[1] for row in result.fetchall()}
+        for col_name in cols:
+            if col_name in existing:
+                await conn.execute(text(f'ALTER TABLE {table_name} DROP COLUMN "{col_name}"'))
+
     for table in Base.metadata.sorted_tables:
         # 获取表中已有列
         result = await conn.execute(text(f"PRAGMA table_info({table.name})"))
