@@ -95,6 +95,7 @@ async def delete_gallery(gallery_id: str):
         session.expunge(g)  # 从 session 分离，避免 cascade
         from sqlalchemy import text
         await session.execute(text("DELETE FROM subscription_gallery WHERE gallery_id = :gid"), {"gid": gallery_id})
+        await session.execute(text("DELETE FROM page WHERE gallery_id = :gid"), {"gid": gallery_id})
         await session.execute(text("DELETE FROM gallery WHERE id = :gid"), {"gid": gallery_id})
         await session.commit()
 
