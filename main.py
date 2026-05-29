@@ -77,7 +77,7 @@ def main():
         print(f"  用户名: {args.auth_user}")
 
     import uvicorn
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info", reload=args.debug)
 
 
 if __name__ == "__main__":
