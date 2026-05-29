@@ -1,3 +1,4 @@
+import asyncio
 import re
 import time
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
@@ -275,6 +276,9 @@ class ExhentaiSource(BaseSource):
             if "pages" in text:
                 reported_pages = int(re.sub(r"\D", "", text) or "0")
                 break
+        
+        # 收藏数
+        num_fav = int(soup.select_one("#favcount").get_text(strip=True).split()[0])
 
         # 页面 URL（从当前 viewer 页的缩略图提取）
         page_urls = []
@@ -295,6 +299,7 @@ class ExhentaiSource(BaseSource):
             page_native_ids=page_native_ids,
             upload_date=upload_date,
             reported_pages=reported_pages,
+            num_favorites=num_fav
         )
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
@@ -306,30 +311,37 @@ class ExhentaiSource(BaseSource):
         results = []
         async with self._client() as client:
             for i, viewer_url in enumerate(urls):
-                try:
-                    resp = await client.get(viewer_url)
-                    resp.raise_for_status()
-                    soup = BeautifulSoup(resp.text, "lxml")
-                    img = soup.select_one("img#img")
-                    if img:
-                        img_url = img.get("src", "")
-                    else:
-                        imgs = soup.select("img")
-                        img_url = imgs[0].get("src", "") if imgs else ""
-                    if img_url:
-                        import httpx
-                        async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
-                            img_resp = await img_client.get(img_url)
-                            img_resp.raise_for_status()
-                            results.append(img_resp.content)
-                    else:
-                        _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id,
-                                     page_range.start + i + 1, viewer_url)
-                        results.append(b"")
-                except Exception as e:
-                    _log.error("下载图片失败: gallery=%s page=%d viewer=%s - %r",
-                               gallery_id, page_range.start + i + 1, viewer_url, e)
-                    raise
+                last_err = None
+                for attempt in range(3):
+                    try:
+                        resp = await client.get(viewer_url)
+                        resp.raise_for_status()
+                        soup = BeautifulSoup(resp.text, "lxml")
+                        img = soup.select_one("img#img")
+                        if img:
+                            img_url = img.get("src", "")
+                        else:
+                            imgs = soup.select("img")
+                            img_url = imgs[0].get("src", "") if imgs else ""
+                        if img_url:
+                            import httpx
+                            async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
+                                img_resp = await img_client.get(img_url)
+                                img_resp.raise_for_status()
+                                results.append(img_resp.content)
+                        else:
+                            _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id,
+                                         page_range.start + i + 1, viewer_url)
+                            results.append(b"")
+                        break
+                    except Exception as e:
+                        last_err = e
+                        if attempt < 2:
+                            await asyncio.sleep(1)
+                else:
+                    _log.error("下载图片失败(重试3次): gallery=%s page=%d viewer=%s - %r",
+                               gallery_id, page_range.start + i + 1, viewer_url, last_err)
+                    raise last_err
         return results
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
@@ -338,21 +350,21 @@ class ExhentaiSource(BaseSource):
         gid = gallery_id
         gurl = gallery_url
 
-        async with self._client() as client:
-            resp = await client.get(gurl)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "lxml")
+        # async with self._client() as client:
+        #     resp = await client.get(gurl)
+        #     resp.raise_for_status()
+        #     soup = BeautifulSoup(resp.text, "lxml")
 
-            newer = soup.select_one("#gnd")
-            if newer:
-                all_a = newer.select("a")
-                href = all_a[-1].get("href", "")
-                m = self._GALLERY_LINK.search(href)
-                if m:
-                    gid = m.group(1)
-                    gurl = href
-            elif old_ids:
-                return UpdateResult()
+        #     newer = soup.select_one("#gnd")
+        #     if newer:
+        #         all_a = newer.select("a")
+        #         href = all_a[-1].get("href", "")
+        #         m = self._GALLERY_LINK.search(href)
+        #         if m:
+        #             gid = m.group(1)
+        #             gurl = href
+        #     elif old_ids:
+        #         return UpdateResult()
 
         # 解析完整 page ID 列表
         detail = await self.get_gallery(gid, gurl)

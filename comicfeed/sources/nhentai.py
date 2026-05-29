@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from curl_cffi.requests import AsyncSession
@@ -153,12 +154,26 @@ class NhentaiSource(BaseSource):
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         import httpx
+        from comicfeed.log import get
+        _log = get(__name__)
         async with httpx.AsyncClient(proxy=self.proxy, timeout=30, follow_redirects=True) as client:
             results = []
-            for url in urls:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                results.append(resp.content)
+            for i, url in enumerate(urls):
+                last_err = None
+                for attempt in range(3):
+                    try:
+                        resp = await client.get(url)
+                        resp.raise_for_status()
+                        results.append(resp.content)
+                        break
+                    except Exception as e:
+                        last_err = e
+                        if attempt < 2:
+                            await asyncio.sleep(1)
+                else:
+                    _log.error("下载图片失败(重试3次): gallery=%s page=%d - %r",
+                               gallery_id, page_range.start + i + 1, last_err)
+                    raise last_err
         return results
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
