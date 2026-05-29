@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import delete as sqla_delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from comicfeed.database import get_session
@@ -178,11 +178,8 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                     if sg is None:
                         session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
                         await session.commit()
-                    # newer version：迁移旧 Page 到新 gallery_id + 更新订阅 URL
+                    # newer version：更新订阅 URL
                     if item.replaces_native_id:
-                        old_full_gid = f"{source.key}:{item.replaces_native_id}"
-                        from sqlalchemy import update as sqla_update
-                        await session.execute(sqla_update(Page).where(Page.gallery_id == old_full_gid).values(gallery_id=gid))
                         sub.query = item.web_url
                         await session.commit()
                     downloaded.append({"id": gid, "title": result.title or item.title, "files": result.files, "cover_url": result.cover_url or item.cover_url, "web_url": result.web_url or item.web_url, "page_count": result.page_count or item.page_count})

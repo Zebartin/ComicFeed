@@ -74,8 +74,7 @@ async def download_gallery(
             )).scalar() or 0
         if _old_count > 0:
             lookup_id = replaces_native_id or gallery_id
-            safe = f"[{lookup_id}]".replace("[", "[[]").replace("]", "[]]")
-            pattern = os.path.join(output_dir, safe + "*.cbz")
+            pattern = os.path.join(output_dir, f"[[]{lookup_id}[]]*.cbz")
             existing = sorted(glob.glob(pattern))
             if existing:
                 if _do_split:
@@ -179,12 +178,16 @@ async def download_gallery(
     if save_to_db and detail.page_native_ids:
         try:
             from comicfeed.models import Page as PageModel
+            from sqlalchemy import delete, update as sqla_update
             async with get_session() as session:
-                from sqlalchemy import delete
                 if not append_pages:
                     await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
                 for pid in detail.page_native_ids:
                     session.add(PageModel(gallery_id=full_gid, page_native_id=pid))
+                # newer version：迁移旧 Page 到新 gallery_id
+                if replaces_native_id:
+                    old_gid = f"{source.key}:{replaces_native_id}"
+                    await session.execute(sqla_update(PageModel).where(PageModel.gallery_id == old_gid).values(gallery_id=full_gid))
                 await session.commit()
         except Exception:
             _log.exception("写入页面记录失败: %s", full_gid)
