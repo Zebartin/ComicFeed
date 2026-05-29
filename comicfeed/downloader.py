@@ -42,14 +42,19 @@ async def download_gallery(
     from comicfeed.hooks import Event, bus
 
     if detail is None:
+        _log.debug("get_gallery: %s url=%s", gallery_id, gallery_url)
         detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
+    else:
+        _log.debug("使用预取 detail: %s (%d 页)", gallery_id, detail.reported_pages)
     title = normalize_title(detail.title)
     total = detail.reported_pages
-    _do_split = cbz_max_pages > 0  # 保存原始分卷意图
+    _do_split = cbz_max_pages > 0
     if cbz_max_pages <= 0:
         cbz_max_pages = total
 
     full_gid = f"{source.key}:{gallery_id}"
+    _log.debug("参数: full_gid=%s cbz_max_pages=%d do_split=%s total=%d append=%s replaces=%s",
+               full_gid, cbz_max_pages, _do_split, total, append_pages, replaces_native_id)
     if tracker:
         tracker.started(full_gid, title, total, cover_url=detail.cover_url, web_url=detail.web_url)
 
@@ -72,18 +77,25 @@ async def download_gallery(
             _old_count = (await s.execute(
                 sa_select(func.count()).where(PageModel2.gallery_id == lookup_gid)
             )).scalar() or 0
+        _log.debug("增量模式: lookup_gid=%s old_count=%d", lookup_gid, _old_count)
         if _old_count > 0:
             lookup_id = replaces_native_id or gallery_id
             pattern = os.path.join(output_dir, f"[[]{lookup_id}[]]*.cbz")
             existing = sorted(glob.glob(pattern))
+            _log.debug("查找已有 CBZ: pattern=%s found=%d", pattern, len(existing))
             if existing:
                 if _do_split:
                     pages_in_last = _old_count % cbz_max_pages or cbz_max_pages
+                    vacancy = cbz_max_pages - pages_in_last if pages_in_last < cbz_max_pages else 0
+                    _log.debug("分卷模式: old_count=%d pages_in_last=%d vacancy=%d cbz_max=%d",
+                               _old_count, pages_in_last, vacancy, cbz_max_pages)
                     if pages_in_last < cbz_max_pages:
+                        _log.debug("重打包最后一卷: %s (%d 页)", existing[-1], pages_in_last)
                         _append_pages = read_cbz_pages(existing[-1])
                         _append_start = _old_count - pages_in_last
                         os.remove(existing[-1])
                 else:
+                    _log.debug("不分卷: 读取 %s (%d 页)", existing[0], _old_count)
                     _append_pages = read_cbz_pages(existing[0])
                     _append_start = 0
                     os.remove(existing[0])
@@ -123,11 +135,14 @@ async def download_gallery(
                 vol_pages = _append_pages + vol_pages
                 start = _append_start + 1
                 total_for_name = _old_count + total if not _do_split or (start + len(vol_pages) - 1 >= _old_count + total) else 0
+                _log.debug("第一卷拼接: old=%d new=%d start=%d pages=%d name_total=%d",
+                           len(_append_pages), len(vol_pages) - len(_append_pages), start, len(vol_pages), total_for_name)
             else:
                 start = vol_start + 1
                 total_for_name = total if not _do_split else 0
             fname = make_cbz_name(gallery_id, title, start, start + len(vol_pages) - 1, total_pages=total_for_name)
             fpath = os.path.join(output_dir, fname)
+            _log.debug("打包 CBZ: %s (%d 页)", os.path.basename(fpath), len(vol_pages))
             with open(fpath, "wb") as f:
                 pack_cbz(f, fname, detail, vol_pages, start_page=start)
             result.files.append(fpath)
