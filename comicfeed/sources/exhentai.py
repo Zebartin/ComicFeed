@@ -335,6 +335,7 @@ class ExhentaiSource(BaseSource):
                         if nl:
                             sep = "&" if "?" in viewer_url else "?"
                             req_url = viewer_url + sep + "nl=" + nl
+                            _log.debug("重试带 nl: %s", nl)
                         resp = await client.get(req_url)
                         resp.raise_for_status()
                         soup = BeautifulSoup(resp.text, "lxml")
@@ -343,6 +344,7 @@ class ExhentaiSource(BaseSource):
                         new_nl = self._extract_nl(soup)
                         if new_nl:
                             nl = new_nl
+                            _log.debug("nl token: %s", nl)
 
                         # 提取图片 URL
                         img = soup.select_one("img#img")
@@ -365,8 +367,8 @@ class ExhentaiSource(BaseSource):
                                 results.append(img_resp.content)
                                 break
                         except Exception as e:
-                            _log.warning("下载图片失败(尝试%d/%d): %s page=%d - %r",
-                                        attempt + 1, _retry, gallery_id, page_no, e)
+                            _log.warning("下载图片失败(尝试%d/%d): %s page=%d nl=%s - %r",
+                                        attempt + 1, _retry, gallery_id, page_no, nl, e)
                             if attempt < _retry - 1:
                                 await asyncio.sleep(1)
                                 # 下一轮带 nl 重访 viewer 页
