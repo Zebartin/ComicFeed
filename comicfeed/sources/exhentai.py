@@ -302,6 +302,17 @@ class ExhentaiSource(BaseSource):
             num_favorites=num_fav
         )
 
+    @staticmethod
+    def _extract_nl(soup: BeautifulSoup) -> str:
+        """从 viewer 页面提取 nl token。"""
+        el = soup.select_one("#loadfail") or soup.select_one("div#i6 a#loadfail")
+        if el:
+            onclick = el.get("onclick", "")
+            for part in onclick.split("'"):
+                if "-" in part:
+                    return part
+        return ""
+
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
         from comicfeed.config import get_setting
         from comicfeed.log import get
@@ -311,38 +322,64 @@ class ExhentaiSource(BaseSource):
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         results = []
+        import httpx
         async with self._client() as client:
             for i, viewer_url in enumerate(urls):
+                page_no = page_range.start + i + 1
+                nl = ""
                 last_err = None
                 for attempt in range(_retry):
                     try:
-                        resp = await client.get(viewer_url)
+                        # 访问 viewer 页（有 nl 时带上）
+                        req_url = viewer_url
+                        if nl:
+                            sep = "&" if "?" in viewer_url else "?"
+                            req_url = viewer_url + sep + "nl=" + nl
+                        resp = await client.get(req_url)
                         resp.raise_for_status()
                         soup = BeautifulSoup(resp.text, "lxml")
+
+                        # 提取 nl（每次访问 viewer 页都可能更新）
+                        new_nl = self._extract_nl(soup)
+                        if new_nl:
+                            nl = new_nl
+
+                        # 提取图片 URL
                         img = soup.select_one("img#img")
                         if img:
                             img_url = img.get("src", "")
                         else:
                             imgs = soup.select("img")
                             img_url = imgs[0].get("src", "") if imgs else ""
-                        if img_url:
-                            import httpx
+
+                        if not img_url:
+                            _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id, page_no, viewer_url)
+                            results.append(b"")
+                            break
+
+                        # 下载图片
+                        try:
                             async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
                                 img_resp = await img_client.get(img_url)
                                 img_resp.raise_for_status()
                                 results.append(img_resp.content)
-                        else:
-                            _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id,
-                                         page_range.start + i + 1, viewer_url)
-                            results.append(b"")
-                        break
+                                break
+                        except Exception as e:
+                            _log.warning("下载图片失败(尝试%d/%d): %s page=%d - %r",
+                                        attempt + 1, _retry, gallery_id, page_no, e)
+                            if attempt < _retry - 1:
+                                await asyncio.sleep(1)
+                                # 下一轮带 nl 重访 viewer 页
+                                continue
+                            raise
+
                     except Exception as e:
                         last_err = e
                         if attempt < _retry - 1:
                             await asyncio.sleep(1)
                 else:
-                    _log.error("下载图片失败(重试%d次): gallery=%s page=%d viewer=%s - %r", _retry,
-                               gallery_id, page_range.start + i + 1, viewer_url, last_err)
+                    _log.error("下载图片失败(重试%d次): gallery=%s page=%d viewer=%s - %r",
+                               _retry, gallery_id, page_no, viewer_url, last_err)
                     raise last_err
         return results
 
