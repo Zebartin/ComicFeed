@@ -66,8 +66,9 @@ async def download_gallery(
 
     # 增量更新：准备向已有 CBZ 追加
     _old_count = 0
-    _append_pages: list[bytes] = []  # prepend to first volume
-    _append_start = 0   # page number offset for first volume
+    _append_pages: list[bytes] = []
+    _append_start = 0
+    _vacancy = 0  # 最后一卷空位
     if append_pages:
         from comicfeed.database import get_session
         async with get_session() as s:
@@ -86,10 +87,10 @@ async def download_gallery(
             if existing:
                 if _do_split:
                     pages_in_last = _old_count % cbz_max_pages or cbz_max_pages
-                    vacancy = cbz_max_pages - pages_in_last if pages_in_last < cbz_max_pages else 0
+                    _vacancy = cbz_max_pages - pages_in_last if pages_in_last < cbz_max_pages else 0
                     _log.debug("分卷模式: old_count=%d pages_in_last=%d vacancy=%d cbz_max=%d",
-                               _old_count, pages_in_last, vacancy, cbz_max_pages)
-                    if pages_in_last < cbz_max_pages:
+                               _old_count, pages_in_last, _vacancy, cbz_max_pages)
+                    if _vacancy > 0:
                         _log.debug("重打包最后一卷: %s (%d 页)", existing[-1], pages_in_last)
                         _append_pages = read_cbz_pages(existing[-1])
                         _append_start = _old_count - pages_in_last
@@ -100,52 +101,61 @@ async def download_gallery(
                     _append_start = 0
                     os.remove(existing[0])
 
-    for vol_start in range(0, total, cbz_max_pages):
-        vol_end = min(vol_start + cbz_max_pages, total)
-        vol_pages: list[bytes] = []
-        # 分批下载，每批之间更新进度
-        for chunk_start in range(vol_start, vol_end, CHUNK):
-            chunk_end = min(chunk_start + CHUNK, vol_end)
-            try:
-                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url, detail=detail)
-            except Exception as e:
-                _log.error("下载失败: %s 第 %d-%d 页 - %r", gallery_id, chunk_start+1, chunk_end, e)
-                _log.exception("详细错误")
-                raise
-            vol_pages.extend(chunk)
-            downloaded += len(chunk)
-            if tracker:
-                tracker.progress(full_gid, downloaded)
+    # 下载所有新页面
+    all_new_pages: list[bytes] = []
+    for chunk_start in range(0, total, CHUNK):
+        chunk_end = min(chunk_start + CHUNK, total)
+        try:
+            chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url, detail=detail)
+        except Exception as e:
+            _log.error("下载失败: %s 第 %d-%d 页 - %r", gallery_id, chunk_start+1, chunk_end, e)
+            raise
+        all_new_pages.extend(chunk)
+        downloaded += len(chunk)
+        if tracker:
+            tracker.progress(full_gid, downloaded)
 
-        # 广告页检测：从尾部扫描，去掉广告
-        from comicfeed.detect_ad import detect_ads_from_tail
-        ad_count = detect_ads_from_tail(vol_pages)
-        if ad_count > 0:
-            _log.info("检测到 %d 页广告 (共 %d 页)", ad_count, len(vol_pages))
-            vol_pages = vol_pages[:-ad_count] if ad_count < len(vol_pages) else vol_pages
-            downloaded -= ad_count
-            # 移除 "extraneous ads" 标签
-            detail.tags = [t for t in detail.tags if "extraneous" not in t.lower() and "外部广告" not in t]
-            if tracker:
-                tracker.progress(full_gid, downloaded)
+    # 广告页检测
+    from comicfeed.detect_ad import detect_ads_from_tail
+    ad_count = detect_ads_from_tail(all_new_pages)
+    if ad_count > 0:
+        _log.info("检测到 %d 页广告 (共 %d 页)", ad_count, len(all_new_pages))
+        all_new_pages = all_new_pages[:-ad_count] if ad_count < len(all_new_pages) else all_new_pages
+        downloaded -= ad_count
+        detail.tags = [t for t in detail.tags if "extraneous" not in t.lower() and "外部广告" not in t]
 
-        if vol_pages or _append_pages:
-            # 增量追加：第一卷拼接旧 CBZ 页面
-            if vol_start == 0 and _append_pages:
-                vol_pages = _append_pages + vol_pages
-                start = _append_start + 1
-                total_for_name = _old_count + total if not _do_split or (start + len(vol_pages) - 1 >= _old_count + total) else 0
-                _log.debug("第一卷拼接: old=%d new=%d start=%d pages=%d name_total=%d",
-                           len(_append_pages), len(vol_pages) - len(_append_pages), start, len(vol_pages), total_for_name)
-            else:
-                start = vol_start + 1
-                total_for_name = total if not _do_split else 0
-            fname = make_cbz_name(gallery_id, title, start, start + len(vol_pages) - 1, total_pages=total_for_name)
-            fpath = os.path.join(output_dir, fname)
-            _log.debug("打包 CBZ: %s (%d 页)", os.path.basename(fpath), len(vol_pages))
-            with open(fpath, "wb") as f:
-                pack_cbz(f, fname, detail, vol_pages, start_page=start)
-            result.files.append(fpath)
+    # 打包 CBZ
+    def _pack_vol(pages, start_page):
+        if not pages:
+            return
+        fname = make_cbz_name(gallery_id, title, start_page, start_page + len(pages) - 1,
+                              total_pages=0 if _do_split else len(pages))
+        fpath = os.path.join(output_dir, fname)
+        _log.debug("打包 CBZ: %s (%d 页)", os.path.basename(fpath), len(pages))
+        with open(fpath, "wb") as f:
+            pack_cbz(f, fname, detail, pages, start_page=start_page)
+        result.files.append(fpath)
+
+    remaining = list(all_new_pages)
+    page_offset = 0
+    if _append_pages:
+        if _do_split and _vacancy > 0:
+            fill = min(_vacancy, len(remaining))
+            _pack_vol(_append_pages + remaining[:fill], _append_start + 1)
+            _log.debug("合并第一卷: old=%d fill=%d start=%d", len(_append_pages), fill, _append_start + 1)
+            remaining = remaining[fill:]
+            page_offset = _append_start + len(_append_pages) + fill
+        else:
+            _pack_vol(_append_pages + remaining, 1)
+            _log.debug("不分卷合并: old=%d new=%d", len(_append_pages), len(remaining))
+            remaining = []
+
+    while remaining:
+        vol_pages = remaining[:cbz_max_pages]
+        remaining = remaining[cbz_max_pages:]
+        _pack_vol(vol_pages, page_offset + 1)
+        _log.debug("续卷: start=%d pages=%d", page_offset + 1, len(vol_pages))
+        page_offset += len(vol_pages)
 
     if tracker:
         tracker.finished(full_gid)
