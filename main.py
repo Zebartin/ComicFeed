@@ -23,12 +23,14 @@ def main():
     parser.add_argument("--db", default="comicfeed.db")
     parser.add_argument("--auth-user", default="admin")
     parser.add_argument("--auth-pass", default="")
+    parser.add_argument("--debug", action="store_true", help="输出 DEBUG 级别日志")
     args = parser.parse_args()
 
+    import logging
     from comicfeed.log import setup
     init_db(args.db)
-    # 日志模块用独立 SQLite 连接写库，避免异步事件循环问题
-    setup(db_path=args.db if args.db != ":memory:" else None)
+    setup(level=logging.DEBUG if args.debug else logging.INFO,
+          db_path=args.db if args.db != ":memory:" else None)
     asyncio.run(create_tables())
 
     # 初始化加密密钥（持久化到数据库）
