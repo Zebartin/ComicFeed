@@ -16,7 +16,18 @@ from comicfeed.source_manager import SourceManager
 from comicfeed.web.app import create_app
 
 
+# uvicorn reload 模式使用的全局状态
+_config = {}
+_source_mgr = None
+_download_pool = None
+
+
+def _app_factory():
+    return create_app(_config, source_manager=_source_mgr, download_pool=_download_pool)
+
+
 def main():
+    global _config, _source_mgr, _download_pool
     parser = argparse.ArgumentParser(description="ComicFeed")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
@@ -33,7 +44,6 @@ def main():
           db_path=args.db if args.db != ":memory:" else None)
     asyncio.run(create_tables())
 
-    # 初始化加密密钥（持久化到数据库）
     from comicfeed.config import get_setting, set_setting
     from comicfeed.credentials import init as cred_init
     key = asyncio.run(get_setting("_fernet_key", ""))
@@ -45,11 +55,11 @@ def main():
 
     from comicfeed.log import get
 
-    source_mgr = SourceManager()
+    _source_mgr = SourceManager()
     try:
         import os as _os
         sources_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "comicfeed", "sources")
-        keys = source_mgr.load_sources(sources_dir)
+        keys = _source_mgr.load_sources(sources_dir)
         get("main").info("已加载源: %s", ', '.join(keys) if keys else '(无)')
     except Exception as e:
         get("main").error("源加载失败: %s", e)
@@ -64,10 +74,9 @@ def main():
     asyncio.run(get_translator().load())
 
     from comicfeed.downloader import DownloadPool
-    download_pool = DownloadPool(max_workers=5)
+    _download_pool = DownloadPool(max_workers=5)
 
-    config = {"auth_username": args.auth_user, "auth_password": args.auth_pass}
-    app = create_app(config, source_manager=source_mgr, download_pool=download_pool)
+    _config = {"auth_username": args.auth_user, "auth_password": args.auth_pass}
 
     print(f"ComicFeed 启动: http://{args.host}:{args.port}")
     print(f"  定时检查: 每 10 分钟 (按订阅间隔执行)")
@@ -77,7 +86,10 @@ def main():
         print(f"  用户名: {args.auth_user}")
 
     import uvicorn
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info", reload=args.debug)
+    if args.debug:
+        uvicorn.run("main:_app_factory", host=args.host, port=args.port, log_level="debug", reload=True, factory=True)
+    else:
+        uvicorn.run(_app_factory(), host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":
