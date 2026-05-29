@@ -102,14 +102,25 @@ async def download_gallery(
                     os.remove(existing[0])
 
     # 下载所有新页面
+    try:
+        from comicfeed.config import get_setting as _cfg
+        _chunk_retry = int((await _cfg("download_retry", "3")) or "3")
+    except Exception:
+        _chunk_retry = 3
     all_new_pages: list[bytes] = []
     for chunk_start in range(0, total, CHUNK):
         chunk_end = min(chunk_start + CHUNK, total)
-        try:
-            chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url, detail=detail)
-        except Exception as e:
-            _log.error("下载失败: %s 第 %d-%d 页 - %r", gallery_id, chunk_start+1, chunk_end, e)
-            raise
+        for retry in range(_chunk_retry):
+            try:
+                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url, detail=detail)
+                break
+            except Exception as e:
+                if retry < _chunk_retry - 1:
+                    _log.warning("下载失败(重试%d/%d): %s 第 %d-%d 页 - %r", retry+1, _chunk_retry, gallery_id, chunk_start+1, chunk_end, e)
+                    await asyncio.sleep(3)
+                else:
+                    _log.error("下载失败: %s 第 %d-%d 页 - %r", gallery_id, chunk_start+1, chunk_end, e)
+                    raise
         all_new_pages.extend(chunk)
         downloaded += len(chunk)
         if tracker:

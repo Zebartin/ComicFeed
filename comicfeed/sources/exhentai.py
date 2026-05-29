@@ -303,8 +303,10 @@ class ExhentaiSource(BaseSource):
         )
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
+        from comicfeed.config import get_setting
         from comicfeed.log import get
         _log = get(__name__)
+        _retry = int(await get_setting("download_retry", "3") or "3")
         if detail is None:
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
@@ -312,7 +314,7 @@ class ExhentaiSource(BaseSource):
         async with self._client() as client:
             for i, viewer_url in enumerate(urls):
                 last_err = None
-                for attempt in range(3):
+                for attempt in range(_retry):
                     try:
                         resp = await client.get(viewer_url)
                         resp.raise_for_status()
@@ -336,10 +338,10 @@ class ExhentaiSource(BaseSource):
                         break
                     except Exception as e:
                         last_err = e
-                        if attempt < 2:
+                        if attempt < _retry - 1:
                             await asyncio.sleep(1)
                 else:
-                    _log.error("下载图片失败(重试3次): gallery=%s page=%d viewer=%s - %r",
+                    _log.error("下载图片失败(重试%d次): gallery=%s page=%d viewer=%s - %r", _retry,
                                gallery_id, page_range.start + i + 1, viewer_url, last_err)
                     raise last_err
         return results
