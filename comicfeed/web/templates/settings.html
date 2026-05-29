@@ -22,6 +22,7 @@
   <div class="sub">
     <div class="field"><label>下载路径</label><input id="download_path" placeholder="留空=当前目录"></div>
     <div class="field"><label>巡检间隔 (分钟)</label><input id="check_interval" placeholder="10"></div>
+    <div class="field"><label>下载重试次数</label><input id="download_retry" placeholder="3"></div>
     <div class="field"><label>并发数</label><input id="global_concurrency" placeholder="5"></div>
     <div class="field"><label>代理</label><input id="proxy" placeholder="http://localhost:8889"></div>
   </div>
@@ -97,7 +98,9 @@ async function testEmail() {
 }
 async function saveAll() {
   const r = await fetch('/api/settings'); const s = await r.json()
-  for (const k of Object.keys(s)) {
+  const keys = new Set(Object.keys(s))
+  document.querySelectorAll('input[id]').forEach(el => keys.add(el.id))
+  for (const k of keys) {
     const v = document.getElementById(k)?.value
     if (v !== undefined) await fetch('/api/settings/'+k+'?value='+encodeURIComponent(v||''), {method:'PUT'})
   }
