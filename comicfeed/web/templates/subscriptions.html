@@ -164,6 +164,12 @@
   <button class="btn btn-primary" onclick="openForm()" style="margin-left:auto">新建订阅</button>
 </div>
 
+<div class="toolbar" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+  <input id="sub-search" placeholder="搜索名称..." oninput="render()" style="flex:1;min-width:160px;max-width:280px;padding:6px 10px;font-size:12px">
+  <select id="sub-filter-src" onchange="render()" style="padding:6px 10px;font-size:12px"><option value="">所有源</option></select>
+  <select id="sub-filter-enabled" onchange="render()" style="padding:6px 10px;font-size:12px"><option value="">全部</option><option value="1">启用</option><option value="0">停用</option></select>
+</div>
+
 <div id="sub-list"></div>
 
 <!-- Create / Edit form -->
@@ -218,8 +224,9 @@ async function api(p, o={}) {
   return r.status === 204 ? null : r.json()
 }
 
+let _subs = []
+
 async function load() {
-  // 检查配置状态
   try {
     const st = await api('/api/setup/status')
     document.getElementById('setup-banner').style.display = st.all_done ? 'none' : ''
@@ -228,29 +235,42 @@ async function load() {
   try {
     const [subs, srcs] = await Promise.all([api('/api/subscriptions'), api('/api/sources')])
     window._srcs = srcs
+    _subs = subs
     $('source_key').innerHTML = srcs.map(s => `<option>${s.key}</option>`).join('')
     $('source_key').onchange = updateSortForm
     updateSortForm()
-    $('sub-stat').textContent = `${subs.length} 个订阅`
-    if (!subs.length) {
-      $('sub-list').innerHTML = '<p style="color:var(--text-muted);padding:40px 0;text-align:center">暂无订阅 — 点击右上角"新建订阅"开始</p>'
-    } else {
-      $('sub-list').innerHTML = `<table>
-        <thead><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th style="width:200px">操作</th></tr></thead>
-        <tbody>${subs.map(s => `<tr>
-          <td style="font-weight:500">${esc(s.name)}</td>
-          <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">${esc(s.source_key)}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.query)}</td>
-          <td>${s.interval_minutes} 分</td>
-          <td>${s.enabled ? '<span class="badge badge-on">启用</span>' : '<span class="badge badge-off">停用</span>'}</td>
-          <td>
-            <button class="btn btn-ghost btn-xs" onclick="editSub(${s.id})">编辑</button>
-            <button class="btn btn-primary btn-xs" onclick="checkSub(${s.id})">检查</button>
-            <button class="btn btn-danger btn-xs" onclick="delSub(${s.id})">删除</button>
-          </td>
-        </tr>`).join('')}</tbody></table>`
-    }
+    $('sub-filter-src').innerHTML = '<option value="">所有源</option>' + srcs.map(s => `<option>${s.key}</option>`).join('')
+    render()
   } catch(e) { $('sub-list').innerHTML = `<p style="color:var(--red)">加载失败: ${e.message}</p>` }
+}
+
+function render() {
+  const q = ($('sub-search').value || '').toLowerCase()
+  const src = $('sub-filter-src').value
+  const en = $('sub-filter-enabled').value
+  let filtered = _subs
+  if (q) filtered = filtered.filter(s => (s.name||'').toLowerCase().includes(q))
+  if (src) filtered = filtered.filter(s => s.source_key === src)
+  if (en) filtered = filtered.filter(s => s.enabled === (en === '1'))
+  $('sub-stat').textContent = filtered.length !== _subs.length ? `${filtered.length} / ${_subs.length} 个订阅` : `${_subs.length} 个订阅`
+  if (!filtered.length) {
+    $('sub-list').innerHTML = '<p style="color:var(--text-muted);padding:40px 0;text-align:center">暂无订阅</p>'
+    return
+  }
+  $('sub-list').innerHTML = `<table>
+    <thead><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th style="width:200px">操作</th></tr></thead>
+    <tbody>${filtered.map(s => `<tr>
+      <td style="font-weight:500">${esc(s.name)}</td>
+      <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">${esc(s.source_key)}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.query)}</td>
+      <td>${s.interval_minutes} 分</td>
+      <td>${s.enabled ? '<span class="badge badge-on">启用</span>' : '<span class="badge badge-off">停用</span>'}</td>
+      <td>
+        <button class="btn btn-ghost btn-xs" onclick="editSub(${s.id})">编辑</button>
+        <button class="btn btn-primary btn-xs" onclick="checkSub(${s.id})">检查</button>
+        <button class="btn btn-danger btn-xs" onclick="delSub(${s.id})">删除</button>
+      </td>
+    </tr>`).join('')}</tbody></table>`
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 
