@@ -248,6 +248,8 @@ class ExhentaiSource(BaseSource):
 
         # 标签
         tags = []
+        writers = []
+        _WRITER_NS = {"artist", "group"}
         from comicfeed.tag_translator import get_translator
         _tt = get_translator()
         for tr in soup.select("div#taglist table tr"):
@@ -256,9 +258,14 @@ class ExhentaiSource(BaseSource):
                 ns = tds[0].get_text(strip=True).rstrip(":")
                 for a in tds[1].select("a"):
                     name = a.get_text(strip=True)
-                    if ns and name:
-                        tags.append(_tt.translate(ns, name))
-                    elif name:
+                    if not name:
+                        continue
+                    translated = _tt.translate(ns, name) if ns else name
+                    if ns.lower() in _WRITER_NS:
+                        writers.append(translated)
+                    elif ns:
+                        tags.append(translated)
+                    else:
                         tags.append(name)
 
         # 上传时间
@@ -295,6 +302,7 @@ class ExhentaiSource(BaseSource):
             title=title,
             cover_url=self._make_thumbnail_url(cover_url),
             tags=tags,
+            writers=writers,
             page_urls=page_urls,
             page_native_ids=page_native_ids,
             upload_date=upload_date,
@@ -421,6 +429,7 @@ class ExhentaiSource(BaseSource):
                 page_urls=[detail.page_urls[i] for i in keep_idx],
                 page_native_ids=[detail.page_native_ids[i] for i in keep_idx],
                 tags=list(detail.tags),
+                writers=list(detail.writers),
                 upload_date=detail.upload_date,
                 reported_pages=len(keep_idx),
                 num_favorites=detail.num_favorites,

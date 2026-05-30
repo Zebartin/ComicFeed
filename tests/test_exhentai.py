@@ -80,7 +80,7 @@ def test_parse_gallery_html():
     assert d.native_id == "1234567"
     assert d.title == "Japanese Title"  # japanese_title preferred
     assert "cover" in d.cover_url
-    assert "artist name" in " ".join(d.tags)
+    assert "artist name" in " ".join(d.writers)
     assert "tag1" in " ".join(d.tags)
     assert d.reported_pages == 34
     assert len(d.page_urls) > 0  # 从缩略图链接构造

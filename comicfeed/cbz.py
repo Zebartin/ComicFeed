@@ -79,6 +79,8 @@ def _build_comicinfo(detail: GalleryDetail) -> bytes:
     root = ET.Element("ComicInfo")
     ET.SubElement(root, "Title").text = detail.title
     ET.SubElement(root, "Number").text = detail.native_id
+    if detail.writers:
+        ET.SubElement(root, "Writer").text = ", ".join(detail.writers)
     ET.SubElement(root, "Tags").text = ", ".join(detail.tags)
     if detail.upload_date:
         try:

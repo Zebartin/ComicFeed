@@ -19,6 +19,7 @@ class GalleryDetail:
     page_urls: list[str] = field(default_factory=list)
     page_native_ids: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
+    writers: list[str] = field(default_factory=list)
     upload_date: str = ""
     reported_pages: int = 0
     num_favorites: int = 0

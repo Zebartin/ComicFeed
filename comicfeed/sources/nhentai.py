@@ -119,13 +119,18 @@ class NhentaiSource(BaseSource):
         from comicfeed.tag_translator import get_translator
         _tt = get_translator()
         tags = []
+        writers = []
+        _WRITER_TYPES = {"artist", "group"}
         for t in data.get("tags", []):
             ns = t.get("type", "")
             name = t.get("name", "")
-            if ns and name:
-                tags.append(_tt.translate(ns, name))
-            elif name:
-                tags.append(name)
+            if not name:
+                continue
+            translated = _tt.translate(ns, name)
+            if ns in _WRITER_TYPES:
+                writers.append(translated)
+            else:
+                tags.append(translated)
 
         page_urls = []
         page_native_ids = []
@@ -149,6 +154,7 @@ class NhentaiSource(BaseSource):
             page_urls=page_urls,
             page_native_ids=page_native_ids,
             tags=tags,
+            writers=writers,
             upload_date=upload_date,
             reported_pages=len(page_urls),
             num_favorites=data.get("num_favorites", 0),
