@@ -155,12 +155,14 @@ async def download_gallery(
         _chunk_retry = 3
     all_new_pages: list[bytes] = []
     for abs_idx in range(0, total):
-        cache_file = os.path.join(_cache_dir, f"{abs_idx:04d}.dat")
+        pid = detail.page_native_ids[abs_idx] if abs_idx < len(detail.page_native_ids) else ""
+        cache_name = (pid + ".dat") if pid else f"{abs_idx:04d}.dat"
+        cache_file = os.path.join(_cache_dir, cache_name)
         if os.path.exists(cache_file):
             data = open(cache_file, "rb").read()
             all_new_pages.append(data)
             downloaded += 1
-            _log.debug("缓存命中: %s page=%d", gallery_id, abs_idx + 1)
+            _log.debug("缓存命中: %s page=%d pid=%s", gallery_id, abs_idx + 1, pid)
             if tracker:
                 tracker.progress(full_gid, downloaded)
             continue
