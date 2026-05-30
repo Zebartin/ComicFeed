@@ -60,7 +60,7 @@ _SAMPLE_GALLERY_HTML = """
 <div id="gleft"><div id="gd1"><div style="background:url(https://ehgt.org/g/1234567/cover.jpg)"></div></div></div>
 <div id="gdd"><table><tbody>
 <tr><td class="gdt1">Posted:</td><td class="gdt2">2024-12-31 20:00</td></tr>
-<tr><td class="gdt1">Favorited:</td><td class="gdt2">123 times</td></tr>
+<tr><td class="gdt1">Favorited:</td><td class="gdt2"><span id="favcount">123</span> times</td></tr>
 </tbody></table></div>
 <div id="taglist"><table><tbody>
 <tr><td class="tc">artist:</td><td><div><a>artist name</a></div></td></tr>

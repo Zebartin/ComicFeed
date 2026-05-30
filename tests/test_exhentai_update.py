@@ -19,6 +19,7 @@ def test_parse_gallery_extracts_page_ids():
     """解析画廊 HTML 时提取页面 ID。"""
     s = ExhentaiSource()
     html = """
+    <div id="gdd"><table><tr><td class="gdt1">Favorited:</td><td class="gdt2"><span id="favcount">456</span> times</td></tr></table></div>
     <div id="gdt">
       <a href="https://exhentai.org/s/aa11bb22/123-1"><img src="t.jpg"/></a>
       <a href="https://exhentai.org/s/cc33dd44/123-2"><img src="t.jpg"/></a>
