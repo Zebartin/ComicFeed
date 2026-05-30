@@ -81,6 +81,8 @@ async def download_gallery(
     """
     from comicfeed.hooks import Event, bus
 
+    os.makedirs(output_dir, exist_ok=True)
+
     if detail is None:
         _log.debug("get_gallery: %s url=%s", gallery_id, gallery_url)
         detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
