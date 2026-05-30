@@ -191,6 +191,7 @@ async def batch_download(req: BatchDownloadRequest):
                                           "replaces_native_id": meta.get("replaces_native_id", ""),
                                           "subscription_id": req.subscription_id})
         downloaded = []
+        failed_list = []
         for gid in req.gallery_ids:
             full_gid = f"{req.source_key}:{gid}"
             try:
@@ -219,11 +220,15 @@ async def batch_download(req: BatchDownloadRequest):
             except Exception as e:
                 _log.error("下载失败: %s:%s - %s", req.source_key, gid, e)
                 tracker.failed(full_gid, str(e))
-        if downloaded:
+                meta = req.gallery_metas.get(gid, {})
+                failed_list.append({"gallery_id": full_gid, "title": meta.get("title", gid), "error": str(e)})
+        if downloaded or failed_list:
             await bus.fire(Event("gallery.created", {
                 "subscription": f"手动下载 ({req.source_key})",
                 "galleries": downloaded,
                 "count": len(downloaded),
+                "failed": failed_list,
+                "failed_count": len(failed_list),
             }))
     asyncio.create_task(_batch())
     _log.info("提交批量下载: %s, %d 个画廊", req.source_key, len(req.gallery_ids))

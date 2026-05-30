@@ -191,10 +191,10 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 except Exception as e:
                     _log.error("下载失败: %s - %s", gid, e)
                     tracker.failed(gid, str(e))
-                    failed.append({"id": gid, "title": item.title})
+                    failed.append({"id": gid, "title": item.title, "error": str(e)})
 
             # 批量通知
-            if downloaded:
+            if downloaded or failed:
                 await event_bus.fire(Event("gallery.created", {
                     "subscription": sub.name,
                     "source_key": sub.source_key,
@@ -204,9 +204,9 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                         "web_url": d.get("web_url", ""), "page_count": d.get("page_count", 0),
                     } for d in downloaded],
                     "count": len(downloaded),
+                    "failed": [{"gallery_id": f["id"], "title": f["title"], "error": f.get("error", "")} for f in failed],
+                    "failed_count": len(failed),
                 }))
-            for f in failed:
-                await event_bus.fire(Event("gallery.failed", {"gallery_id": f["id"], "title": f["title"]}))
 
 
 def create_scheduler(source_manager: SourceManager, download_pool, interval_minutes: int = 10) -> AsyncIOScheduler:

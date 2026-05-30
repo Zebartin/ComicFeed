@@ -35,11 +35,14 @@ async def send_email(config: dict, event: Event):
     """发送邮件通知。config 包含 host/port/user/password/to。"""
     subject = f"[ComicFeed] {event.name}"
     count = event.data.get("count", 0)
-    if count:
+    failed = event.data.get("failed", [])
+    failed_count = event.data.get("failed_count", 0)
+    if count or failed_count:
         galleries = event.data.get("galleries", [])[:12]
+        label = f"{count} 个成功" + (f" / {failed_count} 个失败" if failed_count else "")
         html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui,sans-serif;color:#333;max-width:600px;margin:0 auto">
 <h2 style="color:#b8860b;border-bottom:1px solid #e5ded3;padding-bottom:8px">ComicFeed · 新下载</h2>
-<p style="color:#666;font-size:14px">订阅: {event.data.get('subscription', '')} · {count} 个画廊</p>
+<p style="color:#666;font-size:14px">订阅: {event.data.get('subscription', '')} · {label}</p>
 """
         for g in galleries:
             cover = g.get('cover_url', '')
@@ -54,6 +57,10 @@ async def send_email(config: dict, event: Event):
 {"<a href='"+web+"' style='font-size:11px;color:#b8860b;text-decoration:none'>在源站查看</a>" if web else ""}</td></tr></table>"""
         if count > 12:
             html += f"<p style='color:#999;font-size:12px'>... 等共 {count} 个画廊</p>"
+        for f in failed[:5]:
+            html += f"<p style='font-size:11px;color:#c0392b;margin:4px 0'>&#10007; {f.get('title','')[:60]} &mdash; {f.get('error','')[:100]}</p>"
+        if failed_count > 5:
+            html += f"<p style='font-size:11px;color:#999'>... 等共 {failed_count} 个失败</p>"
         html += f"<p style='color:#999;font-size:11px;margin-top:20px;border-top:1px solid #e5ded3;padding-top:10px'>由 ComicFeed 自动发送</p></body></html>"
         body = html
         msg = MIMEMultipart("alternative")
