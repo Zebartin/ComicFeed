@@ -42,6 +42,7 @@ function renderItem(t, cls) {
       <div class="q-bar"><div class="q-bar-fill ${cls}" style="width:${cls==='failed'?'100':pct}%"></div></div>
     </div>
     <span class="q-status ${cls}">${({pending:'等待中',active:'下载中',done:'已完成',failed:'失败'})[cls]}</span>
+    ${cls==='failed' ? `<button class="btn btn-ghost btn-sm" onclick="retry('${esc(t.gallery_id)}')" style="margin-left:8px">重试</button>` : ''}
   </div>`
 }
 
@@ -63,6 +64,10 @@ async function load() {
 }
 async function clearDone() {
   await fetch('/api/queue/completed', {method:'DELETE'})
+  load()
+}
+async function retry(gid) {
+  await fetch('/api/queue/retry/' + encodeURIComponent(gid), {method:'POST'})
   load()
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }

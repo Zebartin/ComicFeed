@@ -167,7 +167,12 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
             for item in new:
                 gid = f"{source.key}:{item.native_id}"
                 tracker.enqueue(gid, title=item.title, total_pages=item.page_count,
-                                cover_url=item.cover_url or "", web_url=item.web_url or "")
+                                cover_url=item.cover_url or "", web_url=item.web_url or "",
+                                retry_kwargs={"source_key": source.key, "gallery_id": item.native_id,
+                                              "output_dir": out_dir, "cbz_max_pages": sub.cbz_max_pages,
+                                              "gallery_url": item.web_url,
+                                              "append_pages": bool(item.new_page_ids),
+                                              "replaces_native_id": item.replaces_native_id})
 
             for item in new:
                 gid = f"{source.key}:{item.native_id}"

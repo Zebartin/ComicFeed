@@ -134,7 +134,7 @@ async def download_by_id(req: DownloadRequest):
     out_dir = await get_setting("download_path", ".")
     tracker = get_download_tracker()
     full_gid = f"{req.source_key}:{gid}"
-    tracker.enqueue(full_gid)
+    tracker.enqueue(full_gid, retry_kwargs={"source_key": req.source_key, "gallery_id": gid, "output_dir": out_dir, "gallery_url": req.url or ""})
     import asyncio
     from comicfeed.downloader import download_gallery
     async def _dl():
@@ -183,7 +183,13 @@ async def batch_download(req: BatchDownloadRequest):
                             title=meta.get("title", gid),
                             total_pages=meta.get("page_count", 0),
                             cover_url=meta.get("cover_url", ""),
-                            web_url=meta.get("web_url", ""))
+                            web_url=meta.get("web_url", ""),
+                            retry_kwargs={"source_key": req.source_key, "gallery_id": gid,
+                                          "output_dir": out_dir, "cbz_max_pages": sub_cbz_max,
+                                          "gallery_url": meta.get("web_url", ""),
+                                          "append_pages": bool(meta.get("new_page_ids") or []),
+                                          "replaces_native_id": meta.get("replaces_native_id", ""),
+                                          "subscription_id": req.subscription_id})
         downloaded = []
         for gid in req.gallery_ids:
             full_gid = f"{req.source_key}:{gid}"

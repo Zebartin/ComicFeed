@@ -360,21 +360,25 @@ class DownloadTracker:
         self._keep = keep_recent
 
     def enqueue(self, gallery_id: str, title: str = "", total_pages: int = 0,
-                cover_url: str = "", web_url: str = ""):
+                cover_url: str = "", web_url: str = "", retry_kwargs: dict | None = None):
         """将下载加入待处理队列。"""
         task = {"gallery_id": gallery_id, "title": title, "total_pages": total_pages,
                 "downloaded": 0, "cover_url": cover_url, "web_url": web_url,
-                "status": "pending"}
+                "status": "pending", "retry_kwargs": retry_kwargs or {}}
         self._pending.append(task)
 
     def started(self, gallery_id: str, title: str, total_pages: int,
                 cover_url: str = "", web_url: str = ""):
         """标记开始下载：从 pending 移动到 active。"""
-        # 先从 pending 移除
-        self._pending = [t for t in self._pending if t["gallery_id"] != gallery_id]
+        prev = None
+        for i, t in enumerate(self._pending):
+            if t["gallery_id"] == gallery_id:
+                prev = self._pending.pop(i)
+                break
         task = {"gallery_id": gallery_id, "title": title, "total_pages": total_pages,
                 "downloaded": 0, "cover_url": cover_url, "web_url": web_url,
-                "status": "active"}
+                "status": "active",
+                "retry_kwargs": prev.get("retry_kwargs", {}) if prev else {}}
         self._active[gallery_id] = task
 
     def progress(self, gallery_id: str, downloaded: int):
