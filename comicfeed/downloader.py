@@ -1,6 +1,8 @@
 import asyncio
 import glob
 import os
+import shutil
+import time
 from dataclasses import dataclass, field
 
 from comicfeed.cbz import make_cbz_name, normalize_title, pack_cbz, read_cbz_pages
@@ -8,6 +10,44 @@ from comicfeed.log import get
 from comicfeed.sources.base import BaseSource, GalleryDetail
 
 _log = get(__name__)
+
+_CACHE_TTL = 86400  # 24h
+_CACHE_MAX_MB = 500
+
+
+def _cleanup_cache(root: str):
+    """删除过期缓存文件，超总大小阈值时淘汰最旧。"""
+    if not os.path.exists(root):
+        return
+    now = time.time()
+    total = 0
+    keep = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for fn in filenames:
+            fp = os.path.join(dirpath, fn)
+            try:
+                st = os.stat(fp)
+            except OSError:
+                continue
+            if now - st.st_mtime > _CACHE_TTL:
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+            else:
+                total += st.st_size
+                keep.append((st.st_mtime, fp))
+    if total > _CACHE_MAX_MB * 1024 * 1024:
+        keep.sort()
+        for _, fp in keep:
+            try:
+                st = os.stat(fp)
+                os.remove(fp)
+                total -= st.st_size
+            except OSError:
+                pass
+            if total <= _CACHE_MAX_MB * 1024 * 1024:
+                break
 
 
 @dataclass
@@ -62,7 +102,12 @@ async def download_gallery(
                             cover_url=detail.cover_url, web_url=detail.web_url,
                             page_count=total)
     downloaded = 0
-    CHUNK = 5
+
+    # 下载缓存
+    _cache_root = os.path.join(output_dir, ".cache")
+    _cleanup_cache(_cache_root)
+    _cache_dir = os.path.join(_cache_root, gallery_id)
+    os.makedirs(_cache_dir, exist_ok=True)
 
     # 增量更新：准备向已有 CBZ 追加
     _old_count = 0
@@ -101,30 +146,42 @@ async def download_gallery(
                     _append_start = 0
                     os.remove(existing[0])
 
-    # 下载所有新页面
+    # 逐页下载（带磁盘缓存）
     try:
         from comicfeed.config import get_setting as _cfg
         _chunk_retry = int((await _cfg("download_retry", "3")) or "3")
     except Exception:
         _chunk_retry = 3
     all_new_pages: list[bytes] = []
-    for chunk_start in range(0, total, CHUNK):
-        chunk_end = min(chunk_start + CHUNK, total)
+    for abs_idx in range(0, total):
+        cache_file = os.path.join(_cache_dir, f"{abs_idx:04d}.dat")
+        if os.path.exists(cache_file):
+            data = open(cache_file, "rb").read()
+            all_new_pages.append(data)
+            downloaded += 1
+            _log.debug("缓存命中: %s page=%d", gallery_id, abs_idx + 1)
+            if tracker:
+                tracker.progress(full_gid, downloaded)
+            continue
+
         for retry in range(_chunk_retry):
             try:
-                chunk = await source.download_pages(gallery_id, slice(chunk_start, chunk_end), gallery_url=gallery_url, detail=detail)
+                pages = await source.download_pages(gallery_id, slice(abs_idx, abs_idx + 1), gallery_url=gallery_url, detail=detail)
+                data = pages[0]
+                with open(cache_file, "wb") as f:
+                    f.write(data)
+                all_new_pages.append(data)
+                downloaded += 1
+                if tracker:
+                    tracker.progress(full_gid, downloaded)
                 break
             except Exception as e:
                 if retry < _chunk_retry - 1:
-                    _log.warning("下载失败(重试%d/%d): %s 第 %d-%d 页 - %r", retry+1, _chunk_retry, gallery_id, chunk_start+1, chunk_end, e)
+                    _log.warning("下载失败(重试%d/%d): %s page=%d - %r", retry + 1, _chunk_retry, gallery_id, abs_idx + 1, e)
                     await asyncio.sleep(3)
                 else:
-                    _log.error("下载失败: %s 第 %d-%d 页 - %r", gallery_id, chunk_start+1, chunk_end, e)
+                    _log.error("下载失败: %s page=%d - %r", gallery_id, abs_idx + 1, e)
                     raise
-        all_new_pages.extend(chunk)
-        downloaded += len(chunk)
-        if tracker:
-            tracker.progress(full_gid, downloaded)
 
     # 广告页检测
     from comicfeed.detect_ad import detect_ads_from_tail
@@ -167,6 +224,9 @@ async def download_gallery(
         _pack_vol(vol_pages, page_offset + 1)
         _log.debug("续卷: start=%d pages=%d", page_offset + 1, len(vol_pages))
         page_offset += len(vol_pages)
+
+    # 清理本 gallery 缓存
+    shutil.rmtree(_cache_dir, ignore_errors=True)
 
     if tracker:
         tracker.finished(full_gid)
