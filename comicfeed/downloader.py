@@ -5,13 +5,13 @@ import shutil
 import time
 from dataclasses import dataclass, field
 
-from comicfeed.cbz import make_cbz_name, normalize_title, pack_cbz, read_cbz_pages
+from comicfeed.cbz import make_cbz_name, pack_cbz, read_cbz_pages
 from comicfeed.log import get
 from comicfeed.sources.base import BaseSource, GalleryDetail
 
 _log = get(__name__)
 
-_CACHE_TTL = 86400  # 24h
+_CACHE_TTL = 259200  # 72h
 _CACHE_MAX_MB = 500
 
 
@@ -88,7 +88,7 @@ async def download_gallery(
         detail = await source.get_gallery(gallery_id, gallery_url=gallery_url)
     else:
         _log.debug("使用预取 detail: %s (%d 页)", gallery_id, detail.reported_pages)
-    title = normalize_title(detail.title)
+    title = detail.title
     total = detail.reported_pages
     _do_split = cbz_max_pages > 0
     if cbz_max_pages <= 0:

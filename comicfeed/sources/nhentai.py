@@ -109,8 +109,9 @@ class NhentaiSource(BaseSource):
             return self._parse_gallery_response(resp.json())
 
     def _parse_gallery_response(self, data: dict) -> GalleryDetail:
+        from comicfeed.cbz import normalize_title
         title_data = data.get("title", {})
-        title = title_data.get("japanese") or title_data.get("pretty", "")
+        title = normalize_title(title_data.get("japanese") or title_data.get("pretty", ""))
         cover = data.get("cover", {})
         cover_path = cover.get("path", "")
         cover_url = self._make_image_url("https://t.nhentai.net", cover_path) if cover_path else ""
