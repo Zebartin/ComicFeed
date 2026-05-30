@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 
 from curl_cffi.requests import AsyncSession
@@ -126,10 +127,12 @@ class NhentaiSource(BaseSource):
                 tags.append(name)
 
         page_urls = []
+        page_native_ids = []
         for p in data.get("pages", []):
             path = p.get("path", "")
             if path:
                 page_urls.append(self._make_image_url("https://i.nhentai.net", path))
+                page_native_ids.append(os.path.basename(path))
 
         native_id = str(data.get("id", ""))
         upload_ts = data.get("upload_date", 0)
@@ -143,6 +146,7 @@ class NhentaiSource(BaseSource):
             cover_url=cover_url,
             web_url=f"https://nhentai.net/g/{native_id}/",
             page_urls=page_urls,
+            page_native_ids=page_native_ids,
             tags=tags,
             upload_date=upload_date,
             reported_pages=len(page_urls),
