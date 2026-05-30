@@ -208,12 +208,15 @@ async def download_gallery(
     remaining = list(all_new_pages)
     page_offset = 0
     if _append_pages:
-        if _do_split and _vacancy > 0:
-            fill = min(_vacancy, len(remaining))
-            _pack_vol(_append_pages + remaining[:fill], _append_start + 1)
-            _log.debug("合并第一卷: old=%d fill=%d start=%d", len(_append_pages), fill, _append_start + 1)
-            remaining = remaining[fill:]
-            page_offset = _append_start + len(_append_pages) + fill
+        if _do_split:
+            if _vacancy == 0:
+                page_offset = _old_count
+            else:
+                fill = min(_vacancy, len(remaining))
+                _pack_vol(_append_pages + remaining[:fill], _append_start + 1)
+                _log.debug("合并第一卷: old=%d fill=%d start=%d", len(_append_pages), fill, _append_start + 1)
+                remaining = remaining[fill:]
+                page_offset = _append_start + len(_append_pages) + fill
         else:
             _pack_vol(_append_pages + remaining, 1)
             _log.debug("不分卷合并: old=%d new=%d", len(_append_pages), len(remaining))
