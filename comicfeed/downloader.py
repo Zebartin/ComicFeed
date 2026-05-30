@@ -113,7 +113,8 @@ async def download_gallery(
     _old_count = 0
     _append_pages: list[bytes] = []
     _append_start = 0
-    _vacancy = 0  # 最后一卷空位
+    _vacancy = 0
+    _old_cbz: list[str] = []  # 下载成功后删除的旧 CBZ
     if append_pages:
         from comicfeed.database import get_session
         async with get_session() as s:
@@ -139,12 +140,12 @@ async def download_gallery(
                         _log.debug("重打包最后一卷: %s (%d 页)", existing[-1], pages_in_last)
                         _append_pages = read_cbz_pages(existing[-1])
                         _append_start = _old_count - pages_in_last
-                        os.remove(existing[-1])
+                        _old_cbz.append(existing[-1])
                 else:
                     _log.debug("不分卷: 读取 %s (%d 页)", existing[0], _old_count)
                     _append_pages = read_cbz_pages(existing[0])
                     _append_start = 0
-                    os.remove(existing[0])
+                    _old_cbz.append(existing[0])
 
     # 逐页下载（带磁盘缓存）
     try:
@@ -225,8 +226,13 @@ async def download_gallery(
         _log.debug("续卷: start=%d pages=%d", page_offset + 1, len(vol_pages))
         page_offset += len(vol_pages)
 
-    # 清理本 gallery 缓存
+    # 清理本 gallery 缓存 + 删除旧 CBZ
     shutil.rmtree(_cache_dir, ignore_errors=True)
+    for p in _old_cbz:
+        try:
+            os.remove(p)
+        except OSError:
+            pass
 
     if tracker:
         tracker.finished(full_gid)
