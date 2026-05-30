@@ -104,7 +104,7 @@ async def download_gallery(
     downloaded = 0
 
     # 下载缓存
-    _cache_root = os.path.join(output_dir, ".cache")
+    _cache_root = os.path.join(os.getcwd(), ".cache")
     _cleanup_cache(_cache_root)
     _cache_dir = os.path.join(_cache_root, gallery_id)
     os.makedirs(_cache_dir, exist_ok=True)
