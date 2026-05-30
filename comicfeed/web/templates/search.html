@@ -50,6 +50,7 @@
     <button class="btn btn-ghost btn-sm" id="load-more-btn" onclick="loadMore()" style="display:none">加载更多</button>
     <button class="btn btn-ghost btn-sm" onclick="toggleAll()">全选</button>
     <button class="btn btn-gold btn-sm" onclick="downloadPicked()">下载选中</button>
+    <button class="btn btn-ghost btn-sm" onclick="saveAsSub()">保存为订阅</button>
   </div>
 </div>
 
@@ -119,6 +120,11 @@ async function downloadPicked(){
   api('/api/galleries/batch-download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,gallery_ids:ids,gallery_metas:metas})}).catch(e=>console.error(e))
   $('sel-info').textContent=`已提交 ${ids.length} 个下载，即将跳转…`
   setTimeout(()=>{window.location.href='/queue'},800)
+}
+async function saveAsSub(){
+  if(!srcKey||!searchQuery)return
+  await api('/api/subscriptions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:searchQuery,source_key:srcKey,query:searchQuery,mode:'SEARCH',sort:sortBy})})
+  $('sel-info').textContent='已保存为订阅';setTimeout(()=>{$('sel-info').textContent='点选卡片选择'},2000)
 }
 load()
 </script>
