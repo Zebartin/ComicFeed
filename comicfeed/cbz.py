@@ -70,7 +70,7 @@ def read_cbz_pages(path: str) -> list[bytes]:
     pages = []
     with zipfile.ZipFile(path, "r") as z:
         for name in sorted(z.namelist()):
-            if not name.endswith("/"):
+            if not name.endswith("/") and not name.lower().endswith(".xml"):
                 pages.append(z.read(name))
     return pages
 

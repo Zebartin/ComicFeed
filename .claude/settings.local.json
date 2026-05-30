@@ -6,7 +6,12 @@
       "PowerShell(gh api *)",
       "WebSearch",
       "Bash(New-Item *)",
-      "Bash(uv run *)"
+      "Bash(uv run *)",
+      "Bash(git commit *)",
+      "Bash(git add *)",
+      "PowerShell(uv run *)",
+      "Bash(git restore *)",
+      "WebFetch(domain:exhentai.org)"
     ]
   }
 }

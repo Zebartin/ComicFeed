@@ -45,11 +45,10 @@ async def search_source(req: SearchRequest):
     existing_titles = [normalize_title(t) for t in req.existing_titles]
 
     # 加载 DB 已有的 ID 和标题
-    if not existing_titles:
-        async with get_session() as session:
-            stmt = select(Gallery.normalized_title).where(Gallery.source_key == req.source_key)
-            rows = await session.execute(stmt)
-            existing_titles.extend(row[0] for row in rows.fetchall())
+    async with get_session() as session:
+        stmt = select(Gallery.normalized_title)
+        rows = await session.execute(stmt)
+        existing_titles.extend(row[0] for row in rows.fetchall())
 
     # 查询 DB 中已存在的画廊 ID
     raw = [g for g in result.items if g.native_id not in exclude_ids]

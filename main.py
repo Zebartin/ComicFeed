@@ -33,6 +33,7 @@ def main():
           db_path=args.db if args.db != ":memory:" else None)
     asyncio.run(create_tables())
 
+    # 初始化加密密钥（持久化到数据库）
     from comicfeed.config import get_setting, set_setting
     from comicfeed.credentials import init as cred_init
     key = asyncio.run(get_setting("_fernet_key", ""))

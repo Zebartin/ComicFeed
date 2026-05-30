@@ -391,21 +391,21 @@ class ExhentaiSource(BaseSource):
         gid = gallery_id
         gurl = gallery_url
 
-        # async with self._client() as client:
-        #     resp = await client.get(gurl)
-        #     resp.raise_for_status()
-        #     soup = BeautifulSoup(resp.text, "lxml")
+        async with self._client() as client:
+            resp = await client.get(gurl)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "lxml")
 
-        #     newer = soup.select_one("#gnd")
-        #     if newer:
-        #         all_a = newer.select("a")
-        #         href = all_a[-1].get("href", "")
-        #         m = self._GALLERY_LINK.search(href)
-        #         if m:
-        #             gid = m.group(1)
-        #             gurl = href
-        #     elif old_ids:
-        #         return UpdateResult()
+            newer = soup.select_one("#gnd")
+            if newer:
+                all_a = newer.select("a")
+                href = all_a[-1].get("href", "")
+                m = self._GALLERY_LINK.search(href)
+                if m:
+                    gid = m.group(1)
+                    gurl = href
+            elif old_ids:
+                return UpdateResult()
 
         # 解析完整 page ID 列表
         detail = await self.get_gallery(gid, gurl)
