@@ -1,7 +1,7 @@
 from difflib import SequenceMatcher
 from itertools import combinations
 
-from comicfeed.cbz import normalize_title
+from comicfeed.io.cbz import normalize_title
 
 _DEDUP_THRESHOLD = 0.999
 

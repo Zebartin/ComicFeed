@@ -5,7 +5,7 @@ import shutil
 import time
 from dataclasses import dataclass, field
 
-from comicfeed.cbz import make_cbz_name, pack_cbz, read_cbz_pages
+from comicfeed.io.cbz import make_cbz_name, pack_cbz, read_cbz_pages
 from comicfeed.log import get
 from comicfeed.sources.base import BaseSource, GalleryDetail
 
@@ -186,7 +186,7 @@ async def download_gallery(
                     raise
 
     # 广告页检测
-    from comicfeed.detect_ad import detect_ads_from_tail
+    from comicfeed.io.detect_ad import detect_ads_from_tail
     ad_count = detect_ads_from_tail(all_new_pages)
     if ad_count > 0:
         _log.info("检测到 %d 页广告 (共 %d 页)", ad_count, len(all_new_pages))

@@ -79,7 +79,7 @@ async def check_subscription(
         new = [g for g in raw_items if f"{source.key}:{g.native_id}" not in db_existing]
 
         # 标题去重：排除与 existing_titles 相似的
-        from comicfeed.cbz import normalize_title
+        from comicfeed.io.cbz import normalize_title
         from comicfeed.dedup import _similarity
         filtered = []
         for g in new:

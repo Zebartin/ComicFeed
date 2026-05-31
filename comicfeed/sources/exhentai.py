@@ -120,7 +120,7 @@ class ExhentaiSource(BaseSource):
                 continue
 
             # 标题：取 div.glink，归一化处理
-            from comicfeed.cbz import normalize_title
+            from comicfeed.io.cbz import normalize_title
             title = normalize_title(gl2e.select_one("div.glink").get_text(strip=True))
 
             # 页数：逐 div 查找，避免文本拼接干扰
@@ -209,7 +209,7 @@ class ExhentaiSource(BaseSource):
         soup = BeautifulSoup(html, "lxml")
 
         # 标题：优先日文 gj，其次英文 gn，归一化处理
-        from comicfeed.cbz import normalize_title
+        from comicfeed.io.cbz import normalize_title
         gj = soup.select_one("h1#gj")
         gn = soup.select_one("h1#gn")
         title = (gj.get_text(strip=True) if gj else "") or (gn.get_text(strip=True) if gn else "")

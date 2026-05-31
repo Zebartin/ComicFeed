@@ -84,7 +84,7 @@ class NhentaiSource(BaseSource):
             tags = [_tt.translate("", t) for t in english if t]
             tags = [t for t in tags if t]
             nid = str(item.get("id", ""))
-            from comicfeed.cbz import normalize_title
+            from comicfeed.io.cbz import normalize_title
             raw_title = item.get("japanese_title") or item.get("english_title", "")
             items.append(GallerySummary(
                 native_id=nid,
@@ -109,7 +109,7 @@ class NhentaiSource(BaseSource):
             return self._parse_gallery_response(resp.json())
 
     def _parse_gallery_response(self, data: dict) -> GalleryDetail:
-        from comicfeed.cbz import normalize_title
+        from comicfeed.io.cbz import normalize_title
         title_data = data.get("title", {})
         title = normalize_title(title_data.get("japanese") or title_data.get("pretty", ""))
         cover = data.get("cover", {})
@@ -120,7 +120,7 @@ class NhentaiSource(BaseSource):
         _tt = get_translator()
         tags = []
         writers = []
-        _WRITER_TYPES = {"artist", "group"}
+        _WRITER_TYPES = {"artist", "group", "画师", "团队"}
         for t in data.get("tags", []):
             ns = t.get("type", "")
             name = t.get("name", "")
