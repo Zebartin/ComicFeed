@@ -1,7 +1,7 @@
 from cryptography.fernet import Fernet
 
-from comicfeed.credentials import encrypt_value, get_source_credentials, init as cred_init
-from comicfeed.database import create_tables, get_session, init_db
+from comicfeed.infrastructure.config import encrypt_value, get_source_credentials, init_crypto
+from comicfeed.infrastructure.database import create_tables, get_session, init_db
 from comicfeed.models import SourceCredential
 
 # 测试用的固定密钥
@@ -9,7 +9,7 @@ _TEST_KEY = Fernet.generate_key().decode("utf-8")
 
 
 def setup_module():
-    cred_init(_TEST_KEY)
+    init_crypto(_TEST_KEY)
 
 
 async def test_save_and_load_credentials():

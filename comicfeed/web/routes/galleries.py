@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from comicfeed.database import get_session
-from comicfeed.log import get
+from comicfeed.infrastructure.database import get_session
+from comicfeed.infrastructure.log import get
 from comicfeed.models import Gallery, SubscriptionGallery
 
 import asyncio
@@ -112,8 +112,8 @@ def _parse_tags(raw: str) -> list[str]:
 async def download_by_id(req: DownloadRequest):
     """按 Gallery ID 或 URL 手动下载（后台任务）。"""
     from comicfeed.web.app import get_source_manager
-    from comicfeed.config import get_source_proxy
-    from comicfeed.credentials import get_source_credentials
+    from comicfeed.infrastructure.config import get_source_proxy
+    from comicfeed.infrastructure.config import get_source_credentials
     mgr = get_source_manager()
     creds = await get_source_credentials(req.source_key)
     proxy = await get_source_proxy(req.source_key)
@@ -129,7 +129,7 @@ async def download_by_id(req: DownloadRequest):
         else:
             return {"error": "无法解析 URL"}
     # 返回已接受，后台执行下载
-    from comicfeed.config import get_setting
+    from comicfeed.infrastructure.config import get_setting
     from comicfeed.web.app import get_download_tracker
     out_dir = await get_setting("download_path", ".")
     tracker = get_download_tracker()
@@ -151,8 +151,8 @@ async def download_by_id(req: DownloadRequest):
 async def batch_download(req: BatchDownloadRequest):
     """批量下载，全部完成后统一通知。"""
     from comicfeed.web.app import get_source_manager, get_download_tracker
-    from comicfeed.config import get_source_proxy, get_setting
-    from comicfeed.credentials import get_source_credentials
+    from comicfeed.infrastructure.config import get_source_proxy, get_setting
+    from comicfeed.infrastructure.config import get_source_credentials
     mgr = get_source_manager()
     creds = await get_source_credentials(req.source_key)
     proxy = await get_source_proxy(req.source_key)
@@ -164,7 +164,7 @@ async def batch_download(req: BatchDownloadRequest):
     sub_cbz_max = 0
     if req.subscription_id:
         from comicfeed.models import Subscription
-        from comicfeed.database import get_session
+        from comicfeed.infrastructure.database import get_session
         async with get_session() as s:
             sub = await s.get(Subscription, req.subscription_id)
             if sub:

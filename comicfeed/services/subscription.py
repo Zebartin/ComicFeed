@@ -3,9 +3,9 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from comicfeed.dedup import _similarity, find_similar_groups, resolve_duplicates
+from comicfeed.services.dedup import _similarity, find_similar_groups, resolve_duplicates
 from comicfeed.io.cbz import normalize_title
-from comicfeed.log import get
+from comicfeed.infrastructure.log import get
 from comicfeed.models import Subscription
 from comicfeed.repositories.gallery import existing_ids, existing_titles as _load_titles
 from comicfeed.repositories.page import ids_for_gallery

@@ -1,6 +1,6 @@
-from comicfeed.database import create_tables, get_session, init_db
+from comicfeed.infrastructure.database import create_tables, get_session, init_db
 from comicfeed.models import Gallery, Subscription
-from comicfeed.scheduler import check_subscription
+from comicfeed.infrastructure.scheduler import check_subscription
 from comicfeed.sources.base import AuthSchema, BaseSource, GallerySummary, SearchResult, UpdateResult
 
 

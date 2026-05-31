@@ -134,7 +134,7 @@ class ExhentaiSource(BaseSource):
             # 标签：td.tc + 紧邻的 td 成对解析
             tag_names = []
             tds = row.select("td")
-            from comicfeed.tag_translator import get_translator
+            from comicfeed.infrastructure.tag_translator import get_translator
             _tt = get_translator()
             for i, td in enumerate(tds):
                 if "tc" in (td.get("class") or []):
@@ -228,7 +228,7 @@ class ExhentaiSource(BaseSource):
         tags = []
         writers = []
         _WRITER_NS = {"artist", "group", "画师", "团队"}
-        from comicfeed.tag_translator import get_translator
+        from comicfeed.infrastructure.tag_translator import get_translator
         _tt = get_translator()
         for tr in soup.select("div#taglist table tr"):
             tds = tr.select("td")
@@ -303,8 +303,8 @@ class ExhentaiSource(BaseSource):
         return ""
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
-        from comicfeed.config import get_setting
-        from comicfeed.log import get
+        from comicfeed.infrastructure.config import get_setting
+        from comicfeed.infrastructure.log import get
         _log = get(__name__)
         _retry = int(await get_setting("download_retry", "3") or "3")
         if detail is None:

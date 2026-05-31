@@ -1,4 +1,4 @@
-from comicfeed.database import create_tables, get_session, init_db
+from comicfeed.infrastructure.database import create_tables, get_session, init_db
 from comicfeed.models import Gallery
 
 

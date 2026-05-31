@@ -5,11 +5,11 @@ import shutil
 import time
 from dataclasses import dataclass, field
 
-from comicfeed.config import get_setting as _cfg
-from comicfeed.database import get_session
+from comicfeed.infrastructure.config import get_setting as _cfg
+from comicfeed.infrastructure.database import get_session
 from comicfeed.io.cbz import make_cbz_name, pack_cbz, read_cbz_pages
 from comicfeed.io.detect_ad import detect_ads_from_tail
-from comicfeed.log import get
+from comicfeed.infrastructure.log import get
 from comicfeed.repositories.gallery import get_or_create
 from comicfeed.repositories.page import append_new, count_for_gallery, migrate_gallery, replace_all
 from comicfeed.sources.base import BaseSource, GalleryDetail

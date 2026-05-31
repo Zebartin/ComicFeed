@@ -1,7 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from comicfeed.notifications import build_payload, send_email, send_webhook
+from comicfeed.infrastructure.notifications import build_payload, send_email, send_webhook
 
 
 def test_build_payload():

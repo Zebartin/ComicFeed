@@ -1,6 +1,6 @@
 import json
 
-from comicfeed.tag_translator import TagTranslator
+from comicfeed.infrastructure.tag_translator import TagTranslator
 
 _SAMPLE_DB = {
     "namespaces": {"artist": "画师", "group": "团队", "tag": "标签"},

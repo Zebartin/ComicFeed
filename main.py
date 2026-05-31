@@ -11,8 +11,8 @@ import sys
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from comicfeed.database import create_tables, init_db
-from comicfeed.source_manager import SourceManager
+from comicfeed.infrastructure.database import create_tables, init_db
+from comicfeed.infrastructure.source_manager import SourceManager
 from comicfeed.web.app import create_app
 
 
@@ -27,23 +27,23 @@ def main():
     args = parser.parse_args()
 
     import logging
-    from comicfeed.log import setup
+    from comicfeed.infrastructure.log import setup
     init_db(args.db)
     setup(level=logging.DEBUG if args.debug else logging.INFO,
           db_path=args.db if args.db != ":memory:" else None)
     asyncio.run(create_tables())
 
     # 初始化加密密钥（持久化到数据库）
-    from comicfeed.config import get_setting, set_setting
-    from comicfeed.credentials import init as cred_init
+    from comicfeed.infrastructure.config import get_setting, set_setting
+    from comicfeed.infrastructure.config import init_crypto
     key = asyncio.run(get_setting("_fernet_key", ""))
     if not key:
         from cryptography.fernet import Fernet
         key = Fernet.generate_key().decode("utf-8")
         asyncio.run(set_setting("_fernet_key", key))
-    cred_init(key)
+    init_crypto(key)
 
-    from comicfeed.log import get
+    from comicfeed.infrastructure.log import get
 
     source_mgr = SourceManager()
     try:
@@ -54,7 +54,7 @@ def main():
     except Exception as e:
         get("main").error("源加载失败: %s", e)
 
-    from comicfeed.tag_translator import get_translator
+    from comicfeed.infrastructure.tag_translator import get_translator
     asyncio.run(get_translator().load())
 
     from comicfeed.downloader import DownloadPool

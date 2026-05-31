@@ -1,7 +1,7 @@
 """下载编排：批量下载 + 通知。"""
 from dataclasses import dataclass, field
 
-from comicfeed.log import get
+from comicfeed.infrastructure.log import get
 from comicfeed.sources.base import GalleryDetail
 
 _log = get(__name__)

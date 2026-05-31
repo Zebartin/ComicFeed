@@ -3,11 +3,11 @@ from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
-from comicfeed.database import get_session
-from comicfeed.log import get
+from comicfeed.infrastructure.database import get_session
+from comicfeed.infrastructure.log import get
 from comicfeed.models import Subscription
 from comicfeed.services.subscription import check_subscription
-from comicfeed.source_manager import SourceManager
+from comicfeed.infrastructure.source_manager import SourceManager
 
 _log = get(__name__)
 
@@ -29,8 +29,8 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
 
             _log.info("检查订阅: %s [%s] query=%s", sub.name, sub.source_key, sub.query)
 
-            from comicfeed.config import get_setting, get_source_proxy
-            from comicfeed.credentials import get_source_credentials
+            from comicfeed.infrastructure.config import get_setting, get_source_proxy
+            from comicfeed.infrastructure.config import get_source_credentials
             creds = await get_source_credentials(sub.source_key)
             proxy = await get_source_proxy(sub.source_key)
             source = source_manager.get_source(sub.source_key, credentials=creds, proxy=proxy)
@@ -49,7 +49,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 await notify_source_error({"source_key": sub.source_key, "reason": "search_failed"})
                 continue
 
-            from comicfeed.config import get_setting
+            from comicfeed.infrastructure.config import get_setting
             out_dir = sub.download_dir or await get_setting("download_path", ".")
             from comicfeed.models import SubscriptionGallery
             from comicfeed.web.app import get_download_tracker

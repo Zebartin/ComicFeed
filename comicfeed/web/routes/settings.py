@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from comicfeed.config import get_setting, set_setting
+from comicfeed.infrastructure.config import get_setting, set_setting
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -51,7 +51,7 @@ async def test_webhook(data: WebhookTest | None = None):
     if not url:
         return {"ok": False, "error": "未配置 Webhook URL"}
     import httpx
-    from comicfeed.notifications import send_webhook
+    from comicfeed.infrastructure.notifications import send_webhook
     try:
         await send_webhook(url, {"name": "test.webhook", "data": {"message": "ComicFeed 测试通知"}})
         return {"ok": True}
@@ -127,7 +127,7 @@ async def test_email(data: EmailTest | None = None):
     if not to:
         return {"ok": False, "error": "未配置收件人"}
 
-    from comicfeed.notifications import send_email
+    from comicfeed.infrastructure.notifications import send_email
     config = {
         "host": host,
         "port": int(await _v("port", "587")),

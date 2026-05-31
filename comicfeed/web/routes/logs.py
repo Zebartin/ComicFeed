@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from sqlalchemy import select
 
-from comicfeed.database import get_session
+from comicfeed.infrastructure.database import get_session
 from comicfeed.models import SystemLog
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])

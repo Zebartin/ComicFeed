@@ -1,7 +1,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from comicfeed.database import create_tables, init_db, get_session
+from comicfeed.infrastructure.database import create_tables, init_db, get_session
 from comicfeed.web.app import create_app
 
 

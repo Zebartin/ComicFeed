@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from comicfeed.source_manager import SourceManager
+from comicfeed.infrastructure.source_manager import SourceManager
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 

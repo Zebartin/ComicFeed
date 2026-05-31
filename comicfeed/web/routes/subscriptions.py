@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from comicfeed.database import get_session
-from comicfeed.log import get
+from comicfeed.infrastructure.database import get_session
+from comicfeed.infrastructure.log import get
 from comicfeed.models import Subscription
 
 _log = get(__name__)
@@ -118,8 +118,8 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
         if sub is None:
             raise HTTPException(404, "未找到")
         mgr = get_source_manager()
-        from comicfeed.config import get_source_proxy
-        from comicfeed.credentials import get_source_credentials
+        from comicfeed.infrastructure.config import get_source_proxy
+        from comicfeed.infrastructure.config import get_source_credentials
         creds = await get_source_credentials(sub.source_key)
         proxy = await get_source_proxy(sub.source_key)
         source = mgr.get_source(sub.source_key, credentials=creds, proxy=proxy) if mgr else None
@@ -127,7 +127,7 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
             return {"error": f"源 {sub.source_key} 不可用", "new_galleries": []}
         if req.next_url and hasattr(source, '_next_url'):
             source._next_url = req.next_url
-        from comicfeed.scheduler import check_subscription
+        from comicfeed.infrastructure.scheduler import check_subscription
         _log.info("手动检查订阅: %s [%s]", sub.name, sub.source_key)
         new, has_more = await check_subscription(
             session, sub_id, source,

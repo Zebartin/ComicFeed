@@ -1,4 +1,4 @@
-from comicfeed.dedup import find_similar_groups, resolve_duplicates
+from comicfeed.services.dedup import find_similar_groups, resolve_duplicates
 
 # 模拟搜索返回的摘要
 _Summary = lambda nid, title, pages: type("s", (), {"native_id": nid, "title": title, "page_count": pages, "cover_url": ""})()

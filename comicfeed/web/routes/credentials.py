@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from comicfeed.credentials import encrypt_value, get_source_credentials
-from comicfeed.database import get_session
-from comicfeed.log import get
+from comicfeed.infrastructure.config import encrypt_value, get_source_credentials
+from comicfeed.infrastructure.database import get_session
+from comicfeed.infrastructure.log import get
 from comicfeed.models import SourceCredential
 
 _log = get(__name__)

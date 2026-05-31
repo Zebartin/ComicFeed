@@ -1,6 +1,6 @@
 import pytest
 
-from comicfeed.source_manager import SourceManager
+from comicfeed.infrastructure.source_manager import SourceManager
 from comicfeed.sources.base import AuthSchema, BaseSource
 
 

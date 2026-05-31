@@ -2,8 +2,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from comicfeed.config import get_source_proxy
-from comicfeed.credentials import get_source_credentials
+from comicfeed.infrastructure.config import get_source_proxy
+from comicfeed.infrastructure.config import get_source_credentials
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -36,8 +36,8 @@ async def search_source(req: SearchRequest):
 
     # 去重
     from comicfeed.io.cbz import normalize_title
-    from comicfeed.dedup import _similarity, find_similar_groups, resolve_duplicates
-    from comicfeed.database import get_session
+    from comicfeed.services.dedup import _similarity, find_similar_groups, resolve_duplicates
+    from comicfeed.infrastructure.database import get_session
     from comicfeed.models import Gallery
     from sqlalchemy import select
 

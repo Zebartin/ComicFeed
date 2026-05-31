@@ -75,8 +75,8 @@ class NhentaiSource(BaseSource):
         for item in data.get("result", []):
             thumbnail = item.get("thumbnail", "")
             cover_url = self._make_image_url("https://t.nhentai.net", thumbnail) if thumbnail else ""
-            from comicfeed.nhentai_tags import get_tag_name as _tn
-            from comicfeed.tag_translator import get_translator as _gt
+            from comicfeed.sources.nhentai_tags import get_tag_name as _tn
+            from comicfeed.infrastructure.tag_translator import get_translator as _gt
             tids = item.get("tag_ids", [])
             english = [_tn(t) for t in tids]
             _tt = _gt()
@@ -116,7 +116,7 @@ class NhentaiSource(BaseSource):
         cover_path = cover.get("path", "")
         cover_url = self._make_image_url("https://t.nhentai.net", cover_path) if cover_path else ""
 
-        from comicfeed.tag_translator import get_translator
+        from comicfeed.infrastructure.tag_translator import get_translator
         _tt = get_translator()
         tags = []
         writers = []
@@ -161,13 +161,13 @@ class NhentaiSource(BaseSource):
         )
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
-        from comicfeed.config import get_setting
+        from comicfeed.infrastructure.config import get_setting
         _retry = int(await get_setting("download_retry", "3") or "3")
         if detail is None:
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
         import httpx
-        from comicfeed.log import get
+        from comicfeed.infrastructure.log import get
         _log = get(__name__)
         async with httpx.AsyncClient(proxy=self.proxy, timeout=30, follow_redirects=True) as client:
             results = []

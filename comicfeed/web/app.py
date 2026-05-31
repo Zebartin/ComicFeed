@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from comicfeed.downloader import DownloadPool, DownloadTracker
-from comicfeed.source_manager import SourceManager
+from comicfeed.infrastructure.source_manager import SourceManager
 from comicfeed.web.routes.credentials import router as cred_router
 from comicfeed.web.routes.galleries import router as gallery_router
 from comicfeed.web.routes.logs import router as log_router
@@ -87,8 +87,8 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        from comicfeed.scheduler import create_scheduler
-        from comicfeed.config import get_setting
+        from comicfeed.infrastructure.scheduler import create_scheduler
+        from comicfeed.infrastructure.config import get_setting
         interval = int(await get_setting("check_interval", "10") or "10")
         scheduler = create_scheduler(_source_manager, download_pool, interval_minutes=interval)
         scheduler.start()

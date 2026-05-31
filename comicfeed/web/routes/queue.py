@@ -43,8 +43,8 @@ async def retry_failed(gallery_id: str):
     if not kw:
         return {"error": "缺少重试参数"}
 
-    from comicfeed.config import get_source_proxy, get_setting
-    from comicfeed.credentials import get_source_credentials
+    from comicfeed.infrastructure.config import get_source_proxy, get_setting
+    from comicfeed.infrastructure.config import get_source_credentials
     from comicfeed.web.app import get_source_manager
     from comicfeed.downloader import download_gallery
     import asyncio

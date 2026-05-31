@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from comicfeed.config import get_setting
+from comicfeed.infrastructure.config import get_setting
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
@@ -14,7 +14,7 @@ async def setup_status():
     checks["download_path"] = bool(dl)
 
     # 源凭证（至少一个源配置了）
-    from comicfeed.credentials import get_source_credentials
+    from comicfeed.infrastructure.config import get_source_credentials
     from comicfeed.web.app import get_source_manager
     mgr = get_source_manager()
     has_creds = False

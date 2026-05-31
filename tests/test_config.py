@@ -1,5 +1,5 @@
-from comicfeed.database import create_tables, init_db
-from comicfeed.config import get_setting, set_setting
+from comicfeed.infrastructure.database import create_tables, init_db
+from comicfeed.infrastructure.config import get_setting, set_setting
 
 
 async def test_get_and_set_setting():

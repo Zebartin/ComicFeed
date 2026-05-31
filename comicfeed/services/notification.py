@@ -3,9 +3,9 @@ import asyncio
 
 import httpx
 
-from comicfeed.config import get_setting
-from comicfeed.log import get
-from comicfeed.notifications import build_payload, send_email, send_webhook
+from comicfeed.infrastructure.config import get_setting
+from comicfeed.infrastructure.log import get
+from comicfeed.infrastructure.notifications import build_payload, send_email, send_webhook
 
 _log = get(__name__)
 
