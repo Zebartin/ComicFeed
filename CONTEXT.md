@@ -28,8 +28,7 @@
 
 关键属性：
 - **统一 ID**：格式 `{source_key}:{native_id}`，如 `exhentai:1234567`
-- **原始标题**：源返回的原始标题
-- **归一化标题**：去除括号标签 `(C97)` `[Digital]`、统一大小写、去空格之后的标题。用于去重匹配和 CBZ 文件命名
+- **归一化标题**：爬取时即去除括号标签 `(C97)` `[Digital]`、统一大小写、去空格。用于去重匹配、CBZ 文件命名、Gallery 列表显示
 - **报告页数**：源声称的页数（含可能的广告页）
 - **实际页数**：去广告后鉴定的有效页数
 - **页面 ID 列表**：每个页面在源上的唯一标识符（如 exhentai 的 `cc58247135`），用于增量更新时判定页面是否已下载
@@ -61,6 +60,8 @@ Gallery 中的一张图片。系统在内存中下载和处理单页，不落磁
 - **启用状态** (`enabled`)：能否被调度器触发
 
 一个 Gallery 可被多个订阅命中（N:M），物理存储只保留一份 CBZ，通过关联表追踪归属。
+
+每个订阅可配置**筛选条件** (`filter_rules`)：在搜索结果返回后、去重前，对页数、收藏数等做本地过滤（≥/≤）。
 
 ## CBZ
 
@@ -102,11 +103,12 @@ CBZ 内的元数据描述文件，字段包括：Title、Writer、Year/Month/Day
 
 ## 通知通道 (Notification Channel)
 
-当事件发生时（Gallery 创建/更新/下载失败、源不可达、磁盘不足等），向用户推送通知。内置支持：
+下载完成后由 `services/notification.py` 直接发送通知（邮件 + Webhook + Komga 扫描），无需事件总线中转。内置支持：
 - **Webhook**：通用 HTTP POST，可对接钉钉/飞书/Discord 等
 - **邮件**：SMTP 发送
+- **Komga**：下载完成后自动触称 library 扫描
 
-通知内容可含封面图和链接，数量有限制。每个事件可独立配置通知通道。
+通知含封面图、画廊链接、页数。失败时显示失败项及错误日志摘要。
 
 ## Komga 集成
 
@@ -124,13 +126,24 @@ CBZ 内的元数据描述文件，字段包括：Title、Writer、Year/Month/Day
 
 全部配置存储在 SQLite 中，WebUI 统一管理。凭证字段（cookie/token/password）加密存储（cryptography.fernet）。
 
+## 代码结构
+
+```
+comicfeed/
+  models.py              # SQLAlchemy ORM 模型
+  infrastructure/        # 基础设施（DB、日志、配置、缓存、源管理、翻译、通知、调度）
+  services/              # 业务编排（下载、订阅检查、去重、队列追踪）
+  repositories/          # 数据访问层（Gallery/Page CRUD）
+  io/                    # 纯 I/O（CBZ 打包、广告检测、页面下载）
+  sources/               # 漫画源插件（base + exhentai + nhentai）
+  web/                   # FastAPI Web 层（路由 + 模板）
+```
+
 ## 数据目录布局
 
 项目配置和用户数据分离：
-- **应用数据目录** `~/.comicfeed/`：数据库文件、源文件（`sources/`）、EhTagTranslation 缓存、日志文件
-- **下载目录**：用户指定的 Komga library 路径，CBZ 文件最终落盘于此
-
-备份只需复制 `~/.comicfeed/` 下的 `.db` 文件。
+- **应用数据目录** 项目根目录：数据库文件（`*.db`）、EhTagTranslation 缓存、`.cache/` 页面下载缓存
+- **下载目录**：用户指定的路径（可设为 Komga library 目录），CBZ 文件落盘于此
 
 ## WebUI 认证
 
@@ -150,4 +163,4 @@ WebUI 中支持：
 
 ## 数据库迁移
 
-使用 Alembic 自动管理 schema 变更。启动时自动执行待应用的迁移。迁移脚本随项目源代码管理。
+启动时自动执行 schema 迁移：检测缺失列 `ALTER TABLE ADD COLUMN`，删除已知过时列 `ALTER TABLE DROP COLUMN`。无需外部工具。
