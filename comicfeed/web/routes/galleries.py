@@ -31,7 +31,7 @@ _SORT_FIELDS = {
     "id": Gallery.id,
     "pages": Gallery.reported_pages,
     "favorites": Gallery.num_favorites,
-    "title": Gallery.display_title,
+    "title": Gallery.normalized_title,
 }
 
 
@@ -59,10 +59,10 @@ async def list_galleries(source_key: str | None = None, sort: str = "date",
             "items": [
                 {
                     "id": g.id, "source_key": g.source_key, "native_id": g.native_id,
-                    "display_title": g.display_title, "cover_url": g.cover_url,
+                    "display_title": g.normalized_title, "cover_url": g.cover_url,
                     "tags": _parse_tags(g.tags), "num_favorites": g.num_favorites,
                     "reported_pages": g.reported_pages, "actual_pages": g.actual_pages,
-                    "file_path": g.file_path, "downloaded_at": _fmt_time(g.downloaded_at),
+                    "downloaded_at": _fmt_time(g.downloaded_at),
                     "web_url": _web_url(g.source_key, g.native_id, g.web_url),
                 }
                 for g in galleries

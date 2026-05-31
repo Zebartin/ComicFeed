@@ -34,7 +34,7 @@ async def test_check_subscription_finds_new_galleries():
     async with get_session() as session:
         session.add(Gallery(
             id="fake:1", source_key="fake", native_id="1",
-            normalized_title="existing", display_title="Existing",
+            normalized_title="existing",
         ))
         sub = Subscription(name="test", source_key="fake", query="test", mode="SEARCH")
         session.add(sub)

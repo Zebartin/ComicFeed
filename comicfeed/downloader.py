@@ -252,8 +252,7 @@ async def download_gallery(
                 await get_or_create(session, full_gid, source.key, gallery_id,
                                     title, detail.cover_url, detail.web_url,
                                     detail.tags, detail.num_favorites,
-                                    total, downloaded,
-                                    result.files[0] if result.files else "")
+                                    total, downloaded)
                 await session.commit()
         except Exception:
             _log.exception("写入 DB 失败: %s", full_gid)

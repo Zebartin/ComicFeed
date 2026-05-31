@@ -9,7 +9,7 @@ async def test_delete_gallery():
 
     async with get_session() as session:
         session.add(Gallery(id="nhentai:1", source_key="nhentai", native_id="1",
-                    normalized_title="test", display_title="test"))
+                    normalized_title="test"))
         await session.commit()
 
     from httpx import ASGITransport, AsyncClient

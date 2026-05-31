@@ -11,13 +11,13 @@ from comicfeed.models import Gallery
 async def get_or_create(session: AsyncSession, full_gid: str, source_key: str,
                         native_id: str, title: str, cover_url: str, web_url: str,
                         tags: list[str], num_favorites: int, reported_pages: int,
-                        actual_pages: int, file_path: str = "") -> Gallery:
+                        actual_pages: int) -> Gallery:
     g = await session.get(Gallery, full_gid)
     now = datetime.now()
     if g is None:
         g = Gallery(
             id=full_gid, source_key=source_key, native_id=native_id,
-            normalized_title=title, display_title=title,
+            normalized_title=title,
             cover_url=cover_url, web_url=web_url,
             tags=json.dumps(tags, ensure_ascii=False),
             num_favorites=num_favorites,
@@ -33,7 +33,6 @@ async def get_or_create(session: AsyncSession, full_gid: str, source_key: str,
         g.tags = json.dumps(tags, ensure_ascii=False)
         g.num_favorites = num_favorites
         g.downloaded_at = now
-    g.file_path = file_path or None
     return g
 
 

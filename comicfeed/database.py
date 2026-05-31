@@ -26,7 +26,7 @@ async def create_tables():
 async def _migrate(conn):
     """简单迁移：自动添加缺失列、删除过时列。"""
     # 删除已知过时列
-    _drop_cols = {"page": ["page_index"]}
+    _drop_cols = {"page": ["page_index"], "gallery": ["display_title", "file_path"]}
     for table_name, cols in _drop_cols.items():
         result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
         existing = {row[1] for row in result.fetchall()}
