@@ -11,12 +11,12 @@ from comicfeed.infrastructure.config import get_source_credentials
 from comicfeed.sources.exhentai import ExhentaiSource
 from comicfeed.sources.nhentai import NhentaiSource
 
-_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "comicfeed.db")
+_DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "comicfeed.db")).replace("\\", "/")
 
 
 async def _init_db():
     from comicfeed.infrastructure.database import init_db
-    init_db(f"sqlite+aiosqlite:///{_DB_PATH}")
+    init_db(_DB_PATH)
 
 async def _check_network(url: str):
     """检查网络连通性。"""
