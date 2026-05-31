@@ -45,7 +45,6 @@ def _exhentai_source():
 @pytest.mark.live
 async def test_exhentai_search_smoke():
     """exhentai 搜索解析 + 翻页游标提取。"""
-    await _check_network("https://exhentai.org")
     s = _exhentai_source()
     result = await s.search("chinese", page=0)
     assert result.items, "搜索结果为空"
@@ -60,7 +59,6 @@ async def test_exhentai_search_smoke():
 @pytest.mark.live
 async def test_exhentai_gallery_detail_smoke():
     """exhentai 画廊详情解析。"""
-    await _check_network("https://exhentai.org")
     s = _exhentai_source()
     result = await s.search("chinese", page=0)
     assert result.items, "搜索无结果"
@@ -76,7 +74,6 @@ async def test_exhentai_gallery_detail_smoke():
 @pytest.mark.live
 async def test_exhentai_nl_extraction_smoke():
     """exhentai 图片页 nl token 提取。"""
-    await _check_network("https://exhentai.org")
     s = _exhentai_source()
     result = await s.search("chinese", page=0)
     assert result.items, "搜索无结果"
