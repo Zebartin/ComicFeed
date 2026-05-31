@@ -51,10 +51,9 @@ async def test_webhook(data: WebhookTest | None = None):
     if not url:
         return {"ok": False, "error": "未配置 Webhook URL"}
     import httpx
-    from comicfeed.hooks import Event
     from comicfeed.notifications import send_webhook
     try:
-        await send_webhook(url, Event("test.webhook", {"message": "ComicFeed 测试通知"}))
+        await send_webhook(url, {"name": "test.webhook", "data": {"message": "ComicFeed 测试通知"}})
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -128,7 +127,6 @@ async def test_email(data: EmailTest | None = None):
     if not to:
         return {"ok": False, "error": "未配置收件人"}
 
-    from comicfeed.hooks import Event
     from comicfeed.notifications import send_email
     config = {
         "host": host,
@@ -138,7 +136,7 @@ async def test_email(data: EmailTest | None = None):
         "to": to,
     }
     try:
-        await send_email(config, Event("test.email", {"message": "ComicFeed 测试邮件"}))
+        await send_email(config, {"name": "test.email", "data": {"message": "ComicFeed 测试邮件"}})
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "error": str(e)}

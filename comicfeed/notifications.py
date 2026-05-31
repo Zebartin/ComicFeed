@@ -5,13 +5,10 @@ from email.mime.text import MIMEText
 
 import httpx
 
-from comicfeed.hooks import Event
-
-
-def build_payload(event: Event) -> dict:
-    """构建 webhook JSON 负载。"""
-    payload = {"event": event.name}
-    for k, v in event.data.items():
+def build_payload(event: dict) -> dict:
+    """构建 webhook JSON 负载。event: {"name": str, "data": dict}"""
+    payload = {"event": event["name"]}
+    for k, v in event["data"].items():
         if isinstance(v, list) and len(v) > 5:
             payload[k] = v[:5]
             payload[f"{k}_count"] = len(v)
@@ -20,7 +17,7 @@ def build_payload(event: Event) -> dict:
     return payload
 
 
-async def send_webhook(url: str, event: Event, _client=None):
+async def send_webhook(url: str, event: dict, _client=None):
     """发送 webhook POST 请求。"""
     payload = build_payload(event)
     if _client is not None:
@@ -31,14 +28,15 @@ async def send_webhook(url: str, event: Event, _client=None):
             await client.post(url, json=payload)
 
 
-async def send_email(config: dict, event: Event):
-    """发送邮件通知。config 包含 host/port/user/password/to。"""
-    subject = f"[ComicFeed] {event.name}"
-    count = event.data.get("count", 0)
-    failed = event.data.get("failed", [])
-    failed_count = event.data.get("failed_count", 0)
+async def send_email(config: dict, event: dict):
+    """发送邮件通知。event: {"name": str, "data": dict}"""
+    subject = f"[ComicFeed] {event['name']}"
+    data = event.get("data", {})
+    count = data.get("count", 0)
+    failed = data.get("failed", [])
+    failed_count = data.get("failed_count", 0)
     if count or failed_count:
-        galleries = event.data.get("galleries", [])[:12]
+        galleries = data.get("galleries", [])[:12]
         label = f"{count} 个成功" + (f" / {failed_count} 个失败" if failed_count else "")
         html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui,sans-serif;color:#333;max-width:600px;margin:0 auto">
 <h2 style="color:#b8860b;border-bottom:1px solid #e5ded3;padding-bottom:8px">ComicFeed · 新下载</h2>
@@ -66,14 +64,14 @@ async def send_email(config: dict, event: Event):
         msg = MIMEMultipart("alternative")
         msg.attach(MIMEText(html, "html", "utf-8"))
     else:
-        title = event.data.get("title", "")
-        body = f"事件: {event.name}\n标题: {title}\n"
-        for k, v in event.data.items():
+        title = data.get("title", "")
+        body = f"事件: {event['name']}\n标题: {title}\n"
+        for k, v in data.items():
             if k in ("title", "files"):
                 continue
             body += f"{k}: {v}\n"
-        if "files" in event.data:
-            body += f"文件: {', '.join(event.data['files'][:5])}\n"
+        if "files" in data:
+            body += f"文件: {', '.join(data['files'][:5])}\n"
         msg = MIMEMultipart()
         msg.attach(MIMEText(body, "plain", "utf-8"))
 

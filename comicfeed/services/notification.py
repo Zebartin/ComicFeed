@@ -12,7 +12,7 @@ _log = get(__name__)
 
 async def notify_batch(data: dict):
     """批量下载完成通知（邮件 + Webhook + Komga 扫描）。"""
-    event = type("_Event", (), {"name": "gallery.created", "data": data})()
+    event = {"name": "gallery.created", "data": data}
 
     # 邮件
     try:
@@ -72,7 +72,7 @@ async def _komga_scan():
 
 async def notify_source_error(data: dict):
     """源错误通知。"""
-    event = type("_Event", (), {"name": "source.error", "data": data})()
+    event = {"name": "source.error", "data": data}
 
     # Webhook
     try:

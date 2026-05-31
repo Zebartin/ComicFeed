@@ -1,17 +1,16 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from comicfeed.hooks import Event
 from comicfeed.notifications import build_payload, send_email, send_webhook
 
 
 def test_build_payload():
     """构建 webhook 消息负载。"""
-    event = Event("gallery.created", {
+    event = {"name": "gallery.created", "data": {
         "gallery_id": "nhentai:123",
         "title": "Test Comic",
         "files": ["file1.cbz", "file2.cbz"],
-    })
+    }}
     payload = build_payload(event)
     assert payload["event"] == "gallery.created"
     assert payload["gallery_id"] == "nhentai:123"
@@ -37,7 +36,7 @@ async def test_send_webhook_with_mock_client():
             captured_data.append(json)
             return FakeResponse()
 
-    event = Event("gallery.created", {"gallery_id": "nh:1"})
+    event = {"name": "gallery.created", "data": {"gallery_id": "nh:1"}}
     client = FakeClient()
     await send_webhook("https://hook.example.com", event, _client=client)
 
@@ -47,9 +46,9 @@ async def test_send_webhook_with_mock_client():
 
 async def test_send_email_starttls():
     """send_email 发送 SMTP 邮件 (port 587 STARTTLS)。"""
-    event = Event("gallery.created", {
+    event = {"name": "gallery.created", "data": {
         "gallery_id": "nhentai:123", "title": "Test Comic", "files": ["a.cbz"],
-    })
+    }}
     config = {"host": "smtp.example.com", "port": 587, "user": "u", "password": "p", "to": "me@x.com"}
 
     with patch("smtplib.SMTP") as mock:
@@ -62,7 +61,7 @@ async def test_send_email_starttls():
 
 async def test_send_email_ssl():
     """send_email 发送 SMTP 邮件 (port 465 SSL)。"""
-    event = Event("gallery.created", {"gallery_id": "x", "title": "t", "files": []})
+    event = {"name": "gallery.created", "data": {"gallery_id": "x", "title": "t", "files": []}}
     config = {"host": "smtp.example.com", "port": 465, "user": "u", "password": "p", "to": "me@x.com"}
 
     with patch("smtplib.SMTP_SSL") as mock:
