@@ -397,10 +397,19 @@ class DownloadTracker:
                total_pages: int = 0, cover_url: str = "", web_url: str = ""):
         task = self._active.pop(gallery_id, None)
         if task is None:
-            self._pending = [t for t in self._pending if t["gallery_id"] != gallery_id]
+            pending_task = None
+            keep = []
+            for t in self._pending:
+                if t["gallery_id"] == gallery_id:
+                    pending_task = t
+                else:
+                    keep.append(t)
+            self._pending = keep
             task = {"gallery_id": gallery_id, "status": "failed", "error": error,
                     "title": title, "total_pages": total_pages,
                     "cover_url": cover_url, "web_url": web_url, "downloaded": 0}
+            if pending_task:
+                task["retry_kwargs"] = pending_task.get("retry_kwargs", {})
         else:
             task["error"] = error
         task["status"] = "failed"
