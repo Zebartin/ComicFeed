@@ -1,8 +1,9 @@
 """冒烟测试：打真实网站，验证解析器未因网站改版而失效。
 
-运行方式: pytest --run-live
-凭证自动从 comicfeed.db 读取，无需额外配置。
+运行方式: pytest --run-live -v
+凭证自动从项目根目录 comicfeed.db 读取。
 """
+import os
 import httpx
 import pytest
 
@@ -10,6 +11,12 @@ from comicfeed.infrastructure.config import get_source_credentials
 from comicfeed.sources.exhentai import ExhentaiSource
 from comicfeed.sources.nhentai import NhentaiSource
 
+_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "comicfeed.db")
+
+
+async def _init_db():
+    from comicfeed.infrastructure.database import init_db
+    init_db(f"sqlite+aiosqlite:///{_DB_PATH}")
 
 async def _check_network(url: str):
     """检查网络连通性。"""
@@ -26,6 +33,9 @@ async def _check_network(url: str):
 def _exhentai_source():
     """创建带凭证的 exhentai 源，无凭证则 skip。"""
     import asyncio
+    if not os.path.exists(_DB_PATH):
+        pytest.skip(f"数据库不存在: {_DB_PATH}")
+    asyncio.run(_init_db())
     creds = asyncio.run(get_source_credentials("exhentai"))
     if not creds:
         pytest.skip("未配置 exhentai Cookie")
