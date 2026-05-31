@@ -16,7 +16,11 @@ _DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "comicf
 
 async def _init_db():
     from comicfeed.infrastructure.database import init_db
+    from comicfeed.infrastructure.config import get_setting, init_crypto
     init_db(_DB_PATH)
+    key = await get_setting("_fernet_key", "")
+    if key:
+        init_crypto(key)
 
 async def _check_network(url: str):
     """检查网络连通性。"""
