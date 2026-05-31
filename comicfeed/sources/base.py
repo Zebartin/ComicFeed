@@ -32,7 +32,7 @@ class GallerySummary:
     cover_url: str
     web_url: str = ""
     page_count: int = 0
-    num_favorites: int = 0
+    num_favorites: int | None = None
     upload_date: str = ""
     tag_ids: list[int] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)

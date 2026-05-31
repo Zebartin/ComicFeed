@@ -178,13 +178,14 @@
     <label>名称 <input id="name"></label>
     <label>源 <select id="source_key"></select></label>
     <label class="full"><span id="query-label">查询串</span> <input id="query"></label>
-    <label>模式 <select id="mode" onchange="document.getElementById('query-label').textContent=this.value==='SPECIFIC_GALLERY'?'画廊URL':'查询串'"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
-    <label>排序 <select id="sort"></select></label>
+    <label>模式 <select id="mode" onchange="onModeChange()"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
+    <label class="search-only">排序 <select id="sort"></select></label>
     <label>间隔 (分钟) <input id="interval" type="number" value="1440"></label>
+    <label class="search-only">搜索页数 <input id="search_pages" type="number" value="1"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">自动检查翻页数</span></label>
     <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
     <label>下载目录 <input id="download_dir" placeholder="留空使用全局设置"></label>
   </div>
-  <div style="margin-top:12px">
+  <div style="margin-top:12px" class="search-only" id="filter-section">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">筛选条件</span>
       <button class="btn btn-ghost btn-xs" onclick="addFilterRow()">+ 添加</button>
@@ -282,7 +283,7 @@ function render() {
     </tr>`).join('')}</tbody></table>`
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
-function fmtInterval(m) { if (m>=1440 && m%1440===0) return (m/1440)+' 天'; if (m>=60 && m%60===0) return (m/60)+' 小时'; return m+' 分' }
+function fmtInterval(m) { if (m>=1440 && m%1440===0) return (m/1440)+' 天'; if (m>=60 && m%60===0) return (m/60)+' 小时'; return m+' 分钟' }
 
 /* Filter rows */
 const _flds = {num_favorites:'收藏数', page_count:'页数', upload_date:'上传日期'}
@@ -314,6 +315,11 @@ function setFilterRules(json) { $('filter-rows').innerHTML=''; try { JSON.parse(
 /* Form */
 function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','download_dir'].forEach(k=>$(k).value=''); $('interval').value='1440'; $('cbz_max_pages').value='0'; document.getElementById('query-label').textContent='查询串'; setFilterRules(''); $('form').classList.add('on') }
 function closeForm() { $('form').classList.remove('on') }
+function onModeChange() {
+  const isSearch = $('mode').value === 'SEARCH'
+  document.getElementById('query-label').textContent = isSearch ? '查询串' : '画廊URL'
+  document.querySelectorAll('.search-only').forEach(el => el.style.display = isSearch ? '' : 'none')
+}
 function updateSortForm() {
   const key = $('source_key').value
   const s = window._srcs?.find(x => x.key === key)
@@ -323,9 +329,10 @@ function updateSortForm() {
 
 async function editSub(id) {
   const s = await api('/api/subscriptions/'+id); $('sub-id').value = id
-  for (const k of ['name','source_key','query','mode','interval_minutes','cbz_max_pages','sort','download_dir']) $(k==='interval_minutes'?'interval':k).value = s[k] ?? ''
+  for (const k of ['name','source_key','query','mode','interval_minutes','cbz_max_pages','search_pages','download_dir']) $(k==='interval_minutes'?'interval':k).value = s[k] ?? ''
+  updateSortForm(); $('sort').value = s.sort || 'date'
   document.getElementById('query-label').textContent = s.mode === 'SPECIFIC_GALLERY' ? '画廊URL' : '查询串'
-  updateSortForm()
+  onModeChange()
   setFilterRules(s.filter_rules || '')
   $('enabled').checked = s.enabled; $('form').classList.add('on')
 }
@@ -333,7 +340,7 @@ async function saveSub() {
   let id = $('sub-id').value; const body = {
     name: $('name').value, source_key: $('source_key').value, query: $('query').value,
     mode: $('mode').value, interval_minutes: parseInt($('interval').value)||360,
-    cbz_max_pages: parseInt($('cbz_max_pages').value)||0, sort: $('sort').value||'date',
+    cbz_max_pages: parseInt($('cbz_max_pages').value)||0, search_pages: parseInt($('search_pages').value)||1, sort: $('sort').value||'date',
     download_dir: $('download_dir').value, enabled: $('enabled').checked,
     filter_rules: JSON.stringify(getFilterRules()),
   }
@@ -401,6 +408,7 @@ async function checkSub(id, loadMore=false) {
     }
     // 渲染卡片（追加或全量）
     if (newGals.length) {
+      if (loadMore) $('res-body').querySelector('.empty-state')?.remove()
       const startIdx = results.length - newGals.length
       const html = newGals.map((g,i) => {
         const idx = startIdx + i

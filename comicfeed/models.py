@@ -25,6 +25,7 @@ class Subscription(Base):
     mode: Mapped[str] = mapped_column(String(32), default="SEARCH")
     interval_minutes: Mapped[int] = mapped_column(Integer, default=360)
     cbz_max_pages: Mapped[int] = mapped_column(Integer, default=30)  # 0 = 不分卷
+    search_pages: Mapped[int] = mapped_column(Integer, default=1)  # 自动检查翻页数
     sort: Mapped[str] = mapped_column(String(32), default="date")
     download_dir: Mapped[str] = mapped_column(Text, default="")
     filter_rules: Mapped[str] = mapped_column(Text, default="")  # JSON: [{"field":"num_favorites","op":"gte","value":100}]

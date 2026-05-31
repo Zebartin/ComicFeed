@@ -4,7 +4,7 @@
 
 ## 功能
 
-- **多源支持** — exhentai / e-hentai、nhentai，源为插件式可扩展
+- **多源支持** — exhentai、nhentai，源为插件式可扩展
 - **订阅模式** — 搜索条件订阅（自动发现新画廊）、特定画廊追踪（增量更新检测），按间隔定时巡检
 - **增量更新** — exhentai 画廊新增页面后自动检测，只下载新页，合并到已有 CBZ
 - **本地筛选** — 收藏数、页数、上传日期条件过滤
@@ -147,4 +147,4 @@ Python · FastAPI · SQLAlchemy (aiosqlite) · APScheduler · BeautifulSoup · c
 
 ## Vibe Coding 声明
 
-本项目约 90% 的代码由 Claude Code (Claude Opus 4.7) 生成。人类负责需求定义、架构决策、领域知识（exhentai 行为）、代码审查和手工测试。所有 AI 生成的代码均经过人类审查后合入。
+本项目约 90% 的代码由 Claude Code (DeepSeek V4 Pro ) 生成。人类负责需求定义、架构决策、领域知识（exhentai 行为）、代码审查和手工测试。所有 AI 生成的代码均经过人类审查后合入。

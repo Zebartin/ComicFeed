@@ -41,7 +41,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 continue
 
             try:
-                new, _ = await check_subscription(session, sub.id, source, max_search_pages=1)
+                new, _ = await check_subscription(session, sub.id, source, max_search_pages=sub.search_pages)
                 _log.info("[%s] 检查完成: %d 个新画廊", sub.name, len(new))
             except Exception as e:
                 _log.error("[%s] 检查失败: %s", sub.name, e)
@@ -61,6 +61,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 cbz_max_pages=sub.cbz_max_pages,
                 detail=item.detail, append_pages=bool(item.new_page_ids),
                 replaces_native_id=item.replaces_native_id,
+                filter_rules=sub.filter_rules,
                 title=item.title, cover_url=item.cover_url or "",
                 page_count=item.page_count,
             ) for item in new]

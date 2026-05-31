@@ -12,7 +12,7 @@ from comicfeed.io.cbz_builder import AppendContext, pack_cbz_volumes, strip_ads
 from comicfeed.io.page_fetcher import cleanup_cache, fetch_pages
 from comicfeed.repositories.gallery import get_or_create
 from comicfeed.repositories.page import append_new, count_for_gallery, migrate_gallery, replace_all
-from comicfeed.sources.base import BaseSource, GalleryDetail
+from comicfeed.sources.base import BaseSource, GalleryDetail, GallerySummary
 
 _log = get(__name__)
 
@@ -34,6 +34,7 @@ class DownloadTask:
     output_dir: str
     gallery_url: str = ""
     cbz_max_pages: int = 0
+    filter_rules: str = ""
     detail: GalleryDetail | None = None
     append_pages: bool = False
     replaces_native_id: str = ""
@@ -75,6 +76,7 @@ class DownloadPool:
         detail: GalleryDetail | None = None,
         append_pages: bool = False,
         replaces_native_id: str = "",
+        filter_rules: str = "",
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
@@ -82,7 +84,8 @@ class DownloadPool:
                       cbz_max_pages=cbz_max_pages, tracker=tracker,
                       save_to_db=save_to_db, gallery_url=gallery_url,
                       detail=detail, append_pages=append_pages,
-                      replaces_native_id=replaces_native_id)
+                      replaces_native_id=replaces_native_id,
+                      filter_rules=filter_rules)
         async with self._global_sem:
             if src_sem:
                 async with src_sem:
@@ -102,6 +105,7 @@ async def _download_gallery(
     detail: GalleryDetail | None = None,
     append_pages: bool = False,
     replaces_native_id: str = "",
+    filter_rules: str = "",
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。"""
     os.makedirs(output_dir, exist_ok=True)
@@ -114,6 +118,24 @@ async def _download_gallery(
 
     title = detail.title
     total = detail.reported_pages
+
+    # 下载阶段筛选（exhentai 等源搜到时缺少 num_favorites/upload_date）
+    if filter_rules:
+        from comicfeed.services.subscription import _matches_filter
+        from json import loads as _jloads
+        try:
+            rules = _jloads(filter_rules)
+        except Exception:
+            rules = []
+        if rules:
+            gs = GallerySummary(native_id=gallery_id, title=title,
+                                cover_url=detail.cover_url, web_url=detail.web_url,
+                                page_count=total, num_favorites=detail.num_favorites,
+                                upload_date=detail.upload_date)
+            if not _matches_filter(gs, rules):
+                _log.info("筛选跳过: %s (不符合条件)", full_gid)
+                return result
+
     do_split = cbz_max_pages > 0
     if cbz_max_pages <= 0:
         cbz_max_pages = total
@@ -262,6 +284,7 @@ async def download_batch(
                     append_pages=t.append_pages,
                     replaces_native_id=t.replaces_native_id,
                     cbz_max_pages=t.cbz_max_pages,
+                    filter_rules=t.filter_rules,
                 )
             else:
                 result = await _download_gallery(
@@ -272,6 +295,7 @@ async def download_batch(
                     append_pages=t.append_pages,
                     replaces_native_id=t.replaces_native_id,
                     cbz_max_pages=t.cbz_max_pages,
+                    filter_rules=t.filter_rules,
                 )
             downloaded.append({
                 "gallery_id": full_gid,

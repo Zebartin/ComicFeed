@@ -14,53 +14,47 @@ from comicfeed.sources.base import BaseSource, GallerySummary
 _log = get(__name__)
 
 
+def _matches_filter(g: GallerySummary, rules: list[dict]) -> bool:
+    import json
+    from datetime import datetime, timedelta, timezone
+    for r in rules:
+        field = r.get("field", "")
+        op = r.get("op", "")
+        val = r.get("value")
+        if field == "upload_date" and op == "since_days":
+            if not g.upload_date:
+                continue  # 未知，跳过此条件
+            try:
+                dt = datetime.fromisoformat(g.upload_date)
+            except ValueError:
+                continue
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=int(val))
+            if not (dt >= cutoff):
+                return False
+            continue
+        actual = getattr(g, field, None)
+        if actual is None:
+            continue  # 未知，跳过此条件
+        if op == "gte":
+            if not (actual >= val):
+                return False
+        elif op == "lte":
+            if not (actual <= val):
+                return False
+    return True
+
+
 def _apply_filters(items: list[GallerySummary], rules_json: str) -> list[GallerySummary]:
     if not rules_json:
         return items
     import json
-    from datetime import datetime, timedelta, timezone
     try:
         rules = json.loads(rules_json)
     except (json.JSONDecodeError, TypeError):
         return items
     if not rules:
         return items
-    result = []
-    for g in items:
-        match = True
-        for r in rules:
-            field = r.get("field", "")
-            op = r.get("op", "")
-            val = r.get("value")
-            if field == "upload_date" and op == "since_days":
-                if not g.upload_date:
-                    match = False
-                    break
-                try:
-                    dt = datetime.fromisoformat(g.upload_date)
-                except ValueError:
-                    match = False
-                    break
-                cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=int(val))
-                if not (dt >= cutoff):
-                    match = False
-                    break
-                continue
-            actual = getattr(g, field, None)
-            if actual is None:
-                match = False
-                break
-            if op == "gte":
-                match = actual >= val
-            elif op == "lte":
-                match = actual <= val
-            else:
-                match = False
-            if not match:
-                break
-        if match:
-            result.append(g)
-    return result
+    return [g for g in items if _matches_filter(g, rules)]
 
 
 async def search_and_dedup(
