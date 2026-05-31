@@ -48,59 +48,35 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "search_failed"}))
                 continue
 
-            downloaded = []
-            failed = []
             from comicfeed.config import get_setting
             out_dir = sub.download_dir or await get_setting("download_path", ".")
+            from comicfeed.models import SubscriptionGallery
             from comicfeed.web.app import get_download_tracker
-            from comicfeed.models import Page, SubscriptionGallery
+            from comicfeed.services.download import DownloadTask, download_batch
+
             tracker = get_download_tracker()
+            tasks = [DownloadTask(
+                source_key=source.key, gallery_id=item.native_id,
+                output_dir=out_dir, gallery_url=item.web_url,
+                cbz_max_pages=sub.cbz_max_pages,
+                detail=item.detail, append_pages=bool(item.new_page_ids),
+                replaces_native_id=item.replaces_native_id,
+                title=item.title, cover_url=item.cover_url or "",
+                page_count=item.page_count,
+            ) for item in new]
 
-            # 一次性全部入列
+            downloaded, failed = await download_batch(source, download_pool, tracker,
+                                                       tasks, subscription_name=sub.name)
+
             for item in new:
                 gid = f"{source.key}:{item.native_id}"
-                tracker.enqueue(gid, title=item.title, total_pages=item.page_count,
-                                cover_url=item.cover_url or "", web_url=item.web_url or "",
-                                retry_kwargs={"source_key": source.key, "gallery_id": item.native_id,
-                                              "output_dir": out_dir, "cbz_max_pages": sub.cbz_max_pages,
-                                              "gallery_url": item.web_url,
-                                              "append_pages": bool(item.new_page_ids),
-                                              "replaces_native_id": item.replaces_native_id})
-
-            for item in new:
-                gid = f"{source.key}:{item.native_id}"
-                try:
-                    _log.info("开始下载: %s (%s)", gid, item.title)
-                    result = await download_pool.download(source, item.native_id, out_dir, tracker=tracker, fire_events=False, gallery_url=item.web_url, detail=item.detail, append_pages=bool(item.new_page_ids), replaces_native_id=item.replaces_native_id, cbz_max_pages=sub.cbz_max_pages)
-                    sg = await session.get(SubscriptionGallery, (sub.id, gid))
-                    if sg is None:
-                        session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
-                        await session.commit()
-                    # newer version：更新订阅 URL
-                    if item.replaces_native_id:
-                        sub.query = item.web_url
-                        await session.commit()
-                    downloaded.append({"id": gid, "title": result.title or item.title, "files": result.files, "cover_url": result.cover_url or item.cover_url, "web_url": result.web_url or item.web_url, "page_count": result.page_count or item.page_count})
-                except Exception as e:
-                    _log.error("下载失败: %s - %s", gid, e)
-                    tracker.failed(gid, str(e), title=item.title, total_pages=item.page_count,
-                                   cover_url=item.cover_url or "", web_url=item.web_url or "")
-                    failed.append({"id": gid, "title": item.title, "error": str(e)})
-
-            # 批量通知
-            if downloaded or failed:
-                await event_bus.fire(Event("gallery.created", {
-                    "subscription": sub.name,
-                    "source_key": sub.source_key,
-                    "galleries": [{
-                        "gallery_id": d["id"], "title": d["title"],
-                        "files": d["files"], "cover_url": d.get("cover_url", ""),
-                        "web_url": d.get("web_url", ""), "page_count": d.get("page_count", 0),
-                    } for d in downloaded],
-                    "count": len(downloaded),
-                    "failed": [{"gallery_id": f["id"], "title": f["title"], "error": f.get("error", "")} for f in failed],
-                    "failed_count": len(failed),
-                }))
+                sg = await session.get(SubscriptionGallery, (sub.id, gid))
+                if sg is None:
+                    session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
+                    await session.commit()
+                if item.replaces_native_id:
+                    sub.query = item.web_url
+                    await session.commit()
 
 
 def create_scheduler(source_manager: SourceManager, download_pool, interval_minutes: int = 10) -> AsyncIOScheduler:

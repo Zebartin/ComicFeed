@@ -174,65 +174,35 @@ async def batch_download(req: BatchDownloadRequest):
     tracker = get_download_tracker()
 
     async def _batch():
-        from comicfeed.downloader import download_gallery
-        from comicfeed.hooks import Event, bus
-        # 一次性全部入列
+        from comicfeed.services.download import DownloadTask, download_batch
+
+        tasks = []
         for gid in req.gallery_ids:
             meta = req.gallery_metas.get(gid, {})
-            tracker.enqueue(f"{req.source_key}:{gid}",
-                            title=meta.get("title", gid),
-                            total_pages=meta.get("page_count", 0),
-                            cover_url=meta.get("cover_url", ""),
-                            web_url=meta.get("web_url", ""),
-                            retry_kwargs={"source_key": req.source_key, "gallery_id": gid,
-                                          "output_dir": out_dir, "cbz_max_pages": sub_cbz_max,
-                                          "gallery_url": meta.get("web_url", ""),
-                                          "append_pages": bool(meta.get("new_page_ids") or []),
-                                          "replaces_native_id": meta.get("replaces_native_id", ""),
-                                          "subscription_id": req.subscription_id})
-        downloaded = []
-        failed_list = []
-        for gid in req.gallery_ids:
-            full_gid = f"{req.source_key}:{gid}"
-            try:
-                meta = req.gallery_metas.get(gid, {})
-                npid = meta.get("new_page_ids") or []
-                result = await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False,
-                                                gallery_url=meta.get("web_url", ""),
-                                                append_pages=bool(npid),
-                                                replaces_native_id=meta.get("replaces_native_id", ""),
-                                                cbz_max_pages=sub_cbz_max)
-                downloaded.append({
-                    "gallery_id": full_gid,
-                    "title": result.title, "files": result.files,
-                    "cover_url": result.cover_url, "web_url": result.web_url,
-                    "page_count": result.page_count,
-                })
-                # newer version：更新订阅 URL
-                rid = meta.get("replaces_native_id", "")
-                if rid and req.subscription_id:
-                    from comicfeed.models import Subscription
-                    async with get_session() as s:
-                        sub = await s.get(Subscription, req.subscription_id)
-                        if sub:
-                            sub.query = meta.get("web_url", "")
-                            await s.commit()
-            except Exception as e:
-                _log.error("下载失败: %s:%s - %s", req.source_key, gid, e)
-                meta = req.gallery_metas.get(gid, {})
-                tracker.failed(full_gid, str(e), title=meta.get("title", gid),
-                               total_pages=meta.get("page_count", 0),
-                               cover_url=meta.get("cover_url", ""),
-                               web_url=meta.get("web_url", ""))
-                failed_list.append({"gallery_id": full_gid, "title": meta.get("title", gid), "error": str(e)})
-        if downloaded or failed_list:
-            await bus.fire(Event("gallery.created", {
-                "subscription": f"手动下载 ({req.source_key})",
-                "galleries": downloaded,
-                "count": len(downloaded),
-                "failed": failed_list,
-                "failed_count": len(failed_list),
-            }))
+            tasks.append(DownloadTask(
+                source_key=req.source_key, gallery_id=gid,
+                output_dir=out_dir, gallery_url=meta.get("web_url", ""),
+                cbz_max_pages=sub_cbz_max,
+                append_pages=bool(meta.get("new_page_ids") or []),
+                replaces_native_id=meta.get("replaces_native_id", ""),
+                subscription_id=req.subscription_id,
+                title=meta.get("title", gid),
+                cover_url=meta.get("cover_url", ""),
+                page_count=meta.get("page_count", 0),
+            ))
+
+        _, _ = await download_batch(source, None, tracker, tasks,
+                                     subscription_name=f"手动下载 ({req.source_key})")
+
+        for meta in [req.gallery_metas.get(gid, {}) for gid in req.gallery_ids]:
+            rid = meta.get("replaces_native_id", "")
+            if rid and req.subscription_id:
+                from comicfeed.models import Subscription
+                async with get_session() as s:
+                    sub = await s.get(Subscription, req.subscription_id)
+                    if sub:
+                        sub.query = meta.get("web_url", "")
+                        await s.commit()
     asyncio.create_task(_batch())
     _log.info("提交批量下载: %s, %d 个画廊", req.source_key, len(req.gallery_ids))
     return {"status": "accepted", "count": len(req.gallery_ids)}
