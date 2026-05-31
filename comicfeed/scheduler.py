@@ -2,124 +2,15 @@ from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from comicfeed.database import get_session
 from comicfeed.hooks import Event, bus as event_bus
 from comicfeed.log import get
-from comicfeed.models import Gallery, Subscription
+from comicfeed.models import Subscription
+from comicfeed.services.subscription import check_subscription
 from comicfeed.source_manager import SourceManager
-from comicfeed.sources.base import BaseSource, GallerySummary
 
 _log = get(__name__)
-
-
-async def check_subscription(
-    session: AsyncSession,
-    subscription_id: int,
-    source: BaseSource,
-    max_search_pages: int = 1,
-    exclude_ids: set[str] | None = None,
-    existing_titles: list[str] | None = None,
-    start_page: int = 1,
-) -> tuple[list[GallerySummary], bool]:
-    """检查一个订阅，返回 (新画廊列表, 是否还有更多页)。"""
-    sub = await session.get(Subscription, subscription_id)
-    if sub is None:
-        return [], False
-
-    # SPECIFIC_GALLERY 模式：检查更新而非搜索
-    if sub.mode == "SPECIFIC_GALLERY":
-        gid = sub.query.strip()
-        gurl = ""
-        parsed = source.parse_url(gid)
-        if parsed:
-            gurl = gid  # 用户提供了完整 URL，直接使用
-            gid = parsed.split(":", 1)[-1]
-
-        # 从 DB 获取旧页面 ID 列表
-        from comicfeed.repositories.page import ids_for_gallery
-        full_gid = f"{source.key}:{gid}"
-        old_ids = await ids_for_gallery(session, full_gid)
-
-        result = await source.check_updates(gid, {"page_ids": old_ids}, gallery_url=gurl)
-        
-        sub.last_checked_at = datetime.now()
-        await session.commit()
-        if result.has_updates and result.gallery:
-            return [result.gallery], False
-        return [], False
-
-    exclude_ids = exclude_ids or set()
-    existing_titles = existing_titles or []
-    # 从 DB 加载已有标题用于去重
-    if not existing_titles:
-        from comicfeed.repositories.gallery import existing_titles as _load_titles
-        db_titles = await _load_titles(session, source.key)
-        existing_titles.extend(db_titles)
-    all_new: list[GallerySummary] = []
-    has_more = False
-
-    for page_offset in range(max_search_pages):
-        page = start_page + page_offset
-        result = await source.search(sub.query, page=page, sort=sub.sort)
-        if not result.items:
-            break
-
-        # 排掉 exclude_ids
-        raw_items = [g for g in result.items if g.native_id not in exclude_ids]
-        if not raw_items:
-            has_more = bool(result.next_url or (result.total_pages > page + 1))
-            continue
-
-        # 查询 DB 中去重
-        from comicfeed.repositories.gallery import existing_ids
-        ids = [f"{source.key}:{item.native_id}" for item in raw_items]
-        db_existing = await existing_ids(session, ids)
-        new = [g for g in raw_items if f"{source.key}:{g.native_id}" not in db_existing]
-
-        # 标题去重：排除与 existing_titles 相似的
-        from comicfeed.io.cbz import normalize_title
-        from comicfeed.dedup import _similarity
-        filtered = []
-        for g in new:
-            nt = normalize_title(g.title)
-            if any(_similarity(nt, et) > 0.999 for et in existing_titles):
-                continue
-            filtered.append(g)
-            existing_titles.append(nt)
-        new = filtered
-
-        # 批次内标题去重
-        if len(new) > 1:
-            from comicfeed.dedup import find_similar_groups, resolve_duplicates
-            groups = find_similar_groups(new)
-            if groups:
-                all_keep: set[str] = {g.native_id for g in new}
-                for group in groups:
-                    candidates = [(g.native_id, g.page_count) for g in group]
-                    keep = resolve_duplicates(candidates)
-                    all_keep -= {g.native_id for g in group}
-                    all_keep |= keep
-                new = [g for g in new if g.native_id in all_keep]
-                _log.info("去重: %d 组候选 → 保留 %d 个", len(groups), len(new))
-
-        all_new.extend(new)
-        for g in new:
-            exclude_ids.add(g.native_id)
-
-        # 判断是否还有更多页
-        has_more = bool(result.next_url or (result.total_pages > page + 1))
-        if not has_more:
-            break
-
-    # 仅在首次非追加检查时更新时间
-    if start_page <= 1:
-        sub.last_checked_at = datetime.now()
-        await session.commit()
-
-    _log.info("订阅 [%s] 检查完成: %d 个新画廊 (翻 %d 页, has_more=%s)", sub.name, len(all_new), max_search_pages, has_more)
-    return all_new, has_more
 
 
 async def run_all_checks(source_manager: SourceManager, download_pool):
