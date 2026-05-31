@@ -51,7 +51,6 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
 
             from comicfeed.infrastructure.config import get_setting
             out_dir = sub.download_dir or await get_setting("download_path", ".")
-            from comicfeed.models import SubscriptionGallery
             from comicfeed.web.app import get_download_tracker
             from comicfeed.services.download import DownloadTask, download_batch
 
@@ -70,11 +69,6 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                                                        tasks, subscription_name=sub.name)
 
             for item in new:
-                gid = f"{source.key}:{item.native_id}"
-                sg = await session.get(SubscriptionGallery, (sub.id, gid))
-                if sg is None:
-                    session.add(SubscriptionGallery(subscription_id=sub.id, gallery_id=gid))
-                    await session.commit()
                 if item.replaces_native_id:
                     sub.query = item.web_url
                     await session.commit()

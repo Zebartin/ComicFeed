@@ -8,14 +8,6 @@ class Base(DeclarativeBase):
     pass
 
 
-class Source(Base):
-    __tablename__ = "source"
-
-    key: Mapped[str] = mapped_column(String(64), primary_key=True)
-    name: Mapped[str] = mapped_column(String(128))
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-
-
 class GlobalSetting(Base):
     __tablename__ = "global_setting"
 
@@ -33,15 +25,12 @@ class Subscription(Base):
     mode: Mapped[str] = mapped_column(String(32), default="SEARCH")
     interval_minutes: Mapped[int] = mapped_column(Integer, default=360)
     cbz_max_pages: Mapped[int] = mapped_column(Integer, default=30)  # 0 = 不分卷
-    cross_source_dedup: Mapped[bool] = mapped_column(Boolean, default=True)
     sort: Mapped[str] = mapped_column(String(32), default="date")
     download_dir: Mapped[str] = mapped_column(Text, default="")
     filter_rules: Mapped[str] = mapped_column(Text, default="")  # JSON: [{"field":"num_favorites","op":"gte","value":100}]
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    galleries: Mapped[list["SubscriptionGallery"]] = relationship(back_populates="subscription", lazy="selectin")
 
 
 class Gallery(Base):
@@ -58,18 +47,6 @@ class Gallery(Base):
     actual_pages: Mapped[int] = mapped_column(Integer, default=0)
     web_url: Mapped[str] = mapped_column(Text, default="")
     downloaded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    subscriptions: Mapped[list["SubscriptionGallery"]] = relationship(back_populates="gallery", lazy="selectin")
-
-
-class SubscriptionGallery(Base):
-    __tablename__ = "subscription_gallery"
-
-    subscription_id: Mapped[int] = mapped_column(ForeignKey("subscription.id"), primary_key=True)
-    gallery_id: Mapped[str] = mapped_column(ForeignKey("gallery.id"), primary_key=True)
-
-    subscription: Mapped[Subscription] = relationship(back_populates="galleries")
-    gallery: Mapped[Gallery] = relationship(back_populates="subscriptions")
 
 
 class Page(Base):

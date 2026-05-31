@@ -17,7 +17,6 @@ class SubCreate(BaseModel):
     mode: str = "SEARCH"
     interval_minutes: int = 360
     cbz_max_pages: int = 30
-    cross_source_dedup: bool = True
     sort: str = "date"
     download_dir: str = ""
     filter_rules: str = ""
@@ -31,7 +30,6 @@ class SubUpdate(BaseModel):
     mode: str | None = None
     interval_minutes: int | None = None
     cbz_max_pages: int | None = None
-    cross_source_dedup: bool | None = None
     sort: str | None = None
     download_dir: str | None = None
     filter_rules: str | None = None
@@ -48,8 +46,8 @@ async def list_subscriptions():
             {
                 "id": s.id, "name": s.name, "source_key": s.source_key,
                 "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
-                "cbz_max_pages": s.cbz_max_pages, "cross_source_dedup": s.cross_source_dedup,
-                "download_dir": s.download_dir, "enabled": s.enabled,
+                "cbz_max_pages": s.cbz_max_pages, "sort": s.sort,
+                "download_dir": s.download_dir, "filter_rules": s.filter_rules, "enabled": s.enabled,
             }
             for s in subs
         ]
@@ -95,8 +93,6 @@ async def delete_subscription(sub_id: int):
         sub = await session.get(Subscription, sub_id)
         if sub is None:
             raise HTTPException(404, "未找到")
-        from sqlalchemy import text
-        await session.execute(text("DELETE FROM subscription_gallery WHERE subscription_id = :sid"), {"sid": sub_id})
         await session.delete(sub)
         _log.info("删除订阅: #%d %s", sub_id, sub.name)
         await session.commit()
@@ -159,6 +155,5 @@ def _sub_to_dict(s: Subscription) -> dict:
     return {
         "id": s.id, "name": s.name, "source_key": s.source_key,
         "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
-        "cbz_max_pages": s.cbz_max_pages, "cross_source_dedup": s.cross_source_dedup,
         "sort": s.sort, "download_dir": s.download_dir, "filter_rules": s.filter_rules, "enabled": s.enabled,
     }

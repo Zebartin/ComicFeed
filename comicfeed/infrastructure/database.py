@@ -24,15 +24,19 @@ async def create_tables():
 
 
 async def _migrate(conn):
-    """简单迁移：自动添加缺失列、删除过时列。"""
+    """简单迁移：自动添加缺失列、删除过时列和表。"""
     # 删除已知过时列
-    _drop_cols = {"page": ["page_index"], "gallery": ["display_title", "file_path"]}
+    _drop_cols = {"page": ["page_index"], "gallery": ["display_title", "file_path"],
+                  "subscription": ["cross_source_dedup"]}
     for table_name, cols in _drop_cols.items():
         result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
         existing = {row[1] for row in result.fetchall()}
         for col_name in cols:
             if col_name in existing:
                 await conn.execute(text(f'ALTER TABLE {table_name} DROP COLUMN "{col_name}"'))
+    # 删除已知过时表
+    for t in ["source", "subscription_gallery"]:
+        await conn.execute(text(f"DROP TABLE IF EXISTS {t}"))
 
     for table in Base.metadata.sorted_tables:
         # 获取表中已有列
