@@ -285,7 +285,7 @@ function esc(s) { const d=document.createElement('div'); d.textContent=s; return
 
 /* Filter rows */
 const _flds = {num_favorites:'收藏数', page_count:'页数', upload_date:'上传日期'}
-const _ops = {num_favorites:[['gte','≥'],['lte','≤'],['gt','>'],['lt','<'],['eq','=']], page_count:[['gte','≥'],['lte','≤'],['gt','>'],['lt','<'],['eq','=']], upload_date:[['since_days','最近']]}
+const _ops = {num_favorites:[['gte','≥'],['lte','≤']], page_count:[['gte','≥'],['lte','≤']], upload_date:[['since_days','最近']]}
 function addFilterRow(fld, op, val) {
   const r = document.createElement('div'); r.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px'
   const sf = document.createElement('select'); sf.style.cssText='padding:4px 6px;font-size:11px'

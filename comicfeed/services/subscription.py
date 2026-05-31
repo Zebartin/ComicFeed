@@ -54,12 +54,6 @@ def _apply_filters(items: list[GallerySummary], rules_json: str) -> list[Gallery
                 match = actual >= val
             elif op == "lte":
                 match = actual <= val
-            elif op == "gt":
-                match = actual > val
-            elif op == "lt":
-                match = actual < val
-            elif op == "eq":
-                match = actual == val
             else:
                 match = False
             if not match:
