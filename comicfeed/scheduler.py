@@ -193,7 +193,8 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                     downloaded.append({"id": gid, "title": result.title or item.title, "files": result.files, "cover_url": result.cover_url or item.cover_url, "web_url": result.web_url or item.web_url, "page_count": result.page_count or item.page_count})
                 except Exception as e:
                     _log.error("下载失败: %s - %s", gid, e)
-                    tracker.failed(gid, str(e))
+                    tracker.failed(gid, str(e), title=item.title, total_pages=item.page_count,
+                                   cover_url=item.cover_url or "", web_url=item.web_url or "")
                     failed.append({"id": gid, "title": item.title, "error": str(e)})
 
             # 批量通知

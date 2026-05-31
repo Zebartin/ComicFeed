@@ -219,8 +219,11 @@ async def batch_download(req: BatchDownloadRequest):
                             await s.commit()
             except Exception as e:
                 _log.error("下载失败: %s:%s - %s", req.source_key, gid, e)
-                tracker.failed(full_gid, str(e))
                 meta = req.gallery_metas.get(gid, {})
+                tracker.failed(full_gid, str(e), title=meta.get("title", gid),
+                               total_pages=meta.get("page_count", 0),
+                               cover_url=meta.get("cover_url", ""),
+                               web_url=meta.get("web_url", ""))
                 failed_list.append({"gallery_id": full_gid, "title": meta.get("title", gid), "error": str(e)})
         if downloaded or failed_list:
             await bus.fire(Event("gallery.created", {

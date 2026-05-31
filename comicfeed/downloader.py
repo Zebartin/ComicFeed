@@ -393,14 +393,17 @@ class DownloadTracker:
             if len(self._completed) > self._keep:
                 self._completed = self._completed[-self._keep:]
 
-    def failed(self, gallery_id: str, error: str = ""):
+    def failed(self, gallery_id: str, error: str = "", title: str = "",
+               total_pages: int = 0, cover_url: str = "", web_url: str = ""):
         task = self._active.pop(gallery_id, None)
         if task is None:
-            # 可能是从 pending 直接失败（还未开始下载）
             self._pending = [t for t in self._pending if t["gallery_id"] != gallery_id]
-            task = {"gallery_id": gallery_id, "status": "failed", "error": error}
+            task = {"gallery_id": gallery_id, "status": "failed", "error": error,
+                    "title": title, "total_pages": total_pages,
+                    "cover_url": cover_url, "web_url": web_url, "downloaded": 0}
+        else:
+            task["error"] = error
         task["status"] = "failed"
-        task["error"] = error
         self._failed.append(task)
         if len(self._failed) > self._keep:
             self._failed = self._failed[-self._keep:]
