@@ -30,13 +30,12 @@ async def _check_network(url: str):
 
 # --- exhentai ---
 
-def _exhentai_source():
+async def _exhentai_source():
     """创建带凭证的 exhentai 源，无凭证则 skip。"""
-    import asyncio
     if not os.path.exists(_DB_PATH):
         pytest.skip(f"数据库不存在: {_DB_PATH}")
-    asyncio.run(_init_db())
-    creds = asyncio.run(get_source_credentials("exhentai"))
+    await _init_db()
+    creds = await get_source_credentials("exhentai")
     if not creds:
         pytest.skip("未配置 exhentai Cookie")
     return ExhentaiSource(credentials=creds)
@@ -45,7 +44,7 @@ def _exhentai_source():
 @pytest.mark.live
 async def test_exhentai_search_smoke():
     """exhentai 搜索解析 + 翻页游标提取。"""
-    s = _exhentai_source()
+    s = await _exhentai_source()
     result = await s.search("chinese", page=0)
     assert result.items, "搜索结果为空"
     g = result.items[0]
@@ -59,7 +58,7 @@ async def test_exhentai_search_smoke():
 @pytest.mark.live
 async def test_exhentai_gallery_detail_smoke():
     """exhentai 画廊详情解析。"""
-    s = _exhentai_source()
+    s = await _exhentai_source()
     result = await s.search("chinese", page=0)
     assert result.items, "搜索无结果"
     gid = result.items[0].native_id
@@ -74,7 +73,7 @@ async def test_exhentai_gallery_detail_smoke():
 @pytest.mark.live
 async def test_exhentai_nl_extraction_smoke():
     """exhentai 图片页 nl token 提取。"""
-    s = _exhentai_source()
+    s = await _exhentai_source()
     result = await s.search("chinese", page=0)
     assert result.items, "搜索无结果"
     gid = result.items[0].native_id
@@ -88,9 +87,8 @@ async def test_exhentai_nl_extraction_smoke():
 
 # --- nhentai ---
 
-def _nhentai_source():
-    import asyncio
-    creds = asyncio.run(get_source_credentials("nhentai"))
+async def _nhentai_source():
+    creds = await get_source_credentials("nhentai")
     return NhentaiSource(credentials=creds)
 
 
@@ -98,7 +96,7 @@ def _nhentai_source():
 async def test_nhentai_search_smoke():
     """nhentai 搜索 API 响应解析。"""
     await _check_network("https://nhentai.net")
-    s = _nhentai_source()
+    s = await _nhentai_source()
     result = await s.search("chinese", page=1)
     assert result.items, "搜索结果为空"
     g = result.items[0]
@@ -112,7 +110,7 @@ async def test_nhentai_search_smoke():
 async def test_nhentai_gallery_detail_smoke():
     """nhentai 画廊详情 API 响应解析。"""
     await _check_network("https://nhentai.net")
-    s = _nhentai_source()
+    s = await _nhentai_source()
     result = await s.search("chinese", page=1)
     assert result.items, "搜索无结果"
     gid = result.items[0].native_id
