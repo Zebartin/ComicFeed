@@ -119,13 +119,10 @@ async def download_gallery(
     _old_cbz: list[str] = []  # 下载成功后删除的旧 CBZ
     if append_pages:
         from comicfeed.database import get_session
+        from comicfeed.repositories.page import count_for_gallery
         async with get_session() as s:
-            from sqlalchemy import func, select as sa_select
-            from comicfeed.models import Page as PageModel2
             lookup_gid = f"{source.key}:{replaces_native_id}" if replaces_native_id else full_gid
-            _old_count = (await s.execute(
-                sa_select(func.count()).where(PageModel2.gallery_id == lookup_gid)
-            )).scalar() or 0
+            _old_count = await count_for_gallery(s, lookup_gid)
         _log.debug("增量模式: lookup_gid=%s old_count=%d", lookup_gid, _old_count)
         if _old_count > 0:
             lookup_id = replaces_native_id or gallery_id
@@ -251,31 +248,14 @@ async def download_gallery(
     # 写入数据库
     if save_to_db:
         try:
-            from datetime import datetime
             from comicfeed.database import get_session
-            from comicfeed.models import Gallery
-            import json
-            now = datetime.now()
+            from comicfeed.repositories.gallery import get_or_create
             async with get_session() as session:
-                g = await session.get(Gallery, full_gid)
-                if g is None:
-                    g = Gallery(id=full_gid, source_key=source.key, native_id=gallery_id,
-                                normalized_title=title, display_title=title,
-                                cover_url=detail.cover_url, web_url=detail.web_url,
-                                tags=json.dumps(detail.tags, ensure_ascii=False),
-                                num_favorites=detail.num_favorites,
-                                reported_pages=total, actual_pages=downloaded,
-                                downloaded_at=now)
-                    session.add(g)
-                else:
-                    g.actual_pages = downloaded
-                    g.reported_pages = total
-                    g.cover_url = detail.cover_url
-                    g.web_url = detail.web_url
-                    g.tags = json.dumps(detail.tags, ensure_ascii=False)
-                    g.num_favorites = detail.num_favorites
-                    g.downloaded_at = now
-                g.file_path = result.files[0] if result.files else None
+                await get_or_create(session, full_gid, source.key, gallery_id,
+                                    title, detail.cover_url, detail.web_url,
+                                    detail.tags, detail.num_favorites,
+                                    total, downloaded,
+                                    result.files[0] if result.files else "")
                 await session.commit()
         except Exception:
             _log.exception("写入 DB 失败: %s", full_gid)
@@ -283,17 +263,16 @@ async def download_gallery(
     # 写入页面记录（必须在 Gallery 写入之后，FK 约束）
     if save_to_db and detail.page_native_ids:
         try:
-            from comicfeed.models import Page as PageModel
-            from sqlalchemy import delete, update as sqla_update
+            from comicfeed.database import get_session
+            from comicfeed.repositories.page import append_new, replace_all, migrate_gallery
             async with get_session() as session:
-                if not append_pages:
-                    await session.execute(delete(PageModel).where(PageModel.gallery_id == full_gid))
-                for pid in detail.page_native_ids:
-                    session.add(PageModel(gallery_id=full_gid, page_native_id=pid))
-                # newer version：迁移旧 Page 到新 gallery_id
+                if append_pages:
+                    await append_new(session, full_gid, detail.page_native_ids)
+                else:
+                    await replace_all(session, full_gid, detail.page_native_ids)
                 if replaces_native_id:
-                    old_gid = f"{source.key}:{replaces_native_id}"
-                    await session.execute(sqla_update(PageModel).where(PageModel.gallery_id == old_gid).values(gallery_id=full_gid))
+                    await migrate_gallery(session,
+                                          f"{source.key}:{replaces_native_id}", full_gid)
                 await session.commit()
         except Exception:
             _log.exception("写入页面记录失败: %s", full_gid)

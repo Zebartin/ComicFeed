@@ -38,10 +38,9 @@ async def check_subscription(
             gid = parsed.split(":", 1)[-1]
 
         # 从 DB 获取旧页面 ID 列表
-        from comicfeed.models import Page
+        from comicfeed.repositories.page import ids_for_gallery
         full_gid = f"{source.key}:{gid}"
-        stmt = select(Page.page_native_id).where(Page.gallery_id == full_gid)
-        old_ids = [row[0] for row in (await session.execute(stmt)).fetchall()]
+        old_ids = await ids_for_gallery(session, full_gid)
 
         result = await source.check_updates(gid, {"page_ids": old_ids}, gallery_url=gurl)
         
@@ -55,8 +54,8 @@ async def check_subscription(
     existing_titles = existing_titles or []
     # 从 DB 加载已有标题用于去重
     if not existing_titles:
-        stmt = select(Gallery.normalized_title).where(Gallery.source_key == source.key)
-        db_titles = [row[0] for row in (await session.execute(stmt)).fetchall()]
+        from comicfeed.repositories.gallery import existing_titles as _load_titles
+        db_titles = await _load_titles(session, source.key)
         existing_titles.extend(db_titles)
     all_new: list[GallerySummary] = []
     has_more = False
@@ -74,9 +73,9 @@ async def check_subscription(
             continue
 
         # 查询 DB 中去重
+        from comicfeed.repositories.gallery import existing_ids
         ids = [f"{source.key}:{item.native_id}" for item in raw_items]
-        stmt = select(Gallery.id).where(Gallery.id.in_(ids))
-        db_existing = {row[0] for row in (await session.execute(stmt)).fetchall()}
+        db_existing = await existing_ids(session, ids)
         new = [g for g in raw_items if f"{source.key}:{g.native_id}" not in db_existing]
 
         # 标题去重：排除与 existing_titles 相似的
