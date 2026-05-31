@@ -180,7 +180,7 @@
     <label class="full"><span id="query-label">查询串</span> <input id="query"></label>
     <label>模式 <select id="mode" onchange="document.getElementById('query-label').textContent=this.value==='SPECIFIC_GALLERY'?'画廊URL':'查询串'"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
     <label>排序 <select id="sort"></select></label>
-    <label>间隔 (分钟) <input id="interval" type="number" value="360"></label>
+    <label>间隔 (分钟) <input id="interval" type="number" value="1440"></label>
     <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
     <label>下载目录 <input id="download_dir" placeholder="留空使用全局设置"></label>
   </div>
@@ -269,10 +269,10 @@ function render() {
   $('sub-list').innerHTML = `<table>
     <thead><tr><th>名称</th><th>源</th><th>查询</th><th>间隔</th><th>状态</th><th style="width:200px">操作</th></tr></thead>
     <tbody>${filtered.map(s => `<tr>
-      <td style="font-weight:500">${esc(s.name)}</td>
+      <td style="font-weight:500">${esc(s.name)}<div style="font-size:10px;color:#bbb;margin-top:1px">${s.created_at||''}</div></td>
       <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">${esc(s.source_key)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.query)}</td>
-      <td>${s.interval_minutes} 分</td>
+      <td>${fmtInterval(s.interval_minutes)}</td>
       <td>${s.enabled ? '<span class="badge badge-on">启用</span>' : '<span class="badge badge-off">停用</span>'}</td>
       <td>
         <button class="btn btn-ghost btn-xs" onclick="editSub(${s.id})">编辑</button>
@@ -282,6 +282,7 @@ function render() {
     </tr>`).join('')}</tbody></table>`
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
+function fmtInterval(m) { if (m>=1440 && m%1440===0) return (m/1440)+' 天'; if (m>=60 && m%60===0) return (m/60)+' 小时'; return m+' 分' }
 
 /* Filter rows */
 const _flds = {num_favorites:'收藏数', page_count:'页数', upload_date:'上传日期'}
@@ -311,7 +312,7 @@ function getFilterRules() {
 function setFilterRules(json) { $('filter-rows').innerHTML=''; try { JSON.parse(json||'[]').forEach(r => addFilterRow(r.field, r.op, r.value)) } catch(_){} }
 
 /* Form */
-function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','download_dir'].forEach(k=>$(k).value=''); document.getElementById('query-label').textContent='查询串'; setFilterRules(''); $('form').classList.add('on') }
+function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','download_dir'].forEach(k=>$(k).value=''); $('interval').value='1440'; $('cbz_max_pages').value='0'; document.getElementById('query-label').textContent='查询串'; setFilterRules(''); $('form').classList.add('on') }
 function closeForm() { $('form').classList.remove('on') }
 function updateSortForm() {
   const key = $('source_key').value
@@ -320,9 +321,6 @@ function updateSortForm() {
   $('sort').innerHTML = opts.length ? opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('') : '<option value="">(无)</option>'
 }
 
-/* Form */
-function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','download_dir'].forEach(k=>$(k).value=''); document.getElementById('query-label').textContent='查询串'; $('form').classList.add('on') }
-function closeForm() { $('form').classList.remove('on') }
 async function editSub(id) {
   const s = await api('/api/subscriptions/'+id); $('sub-id').value = id
   for (const k of ['name','source_key','query','mode','interval_minutes','cbz_max_pages','sort','download_dir']) $(k==='interval_minutes'?'interval':k).value = s[k] ?? ''

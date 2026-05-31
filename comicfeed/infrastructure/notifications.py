@@ -40,7 +40,7 @@ async def send_email(config: dict, event: dict):
         label = f"{count} 个成功" + (f" / {failed_count} 个失败" if failed_count else "")
         html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui,sans-serif;color:#333;max-width:600px;margin:0 auto">
 <h2 style="color:#b8860b;border-bottom:1px solid #e5ded3;padding-bottom:8px">ComicFeed · 新下载</h2>
-<p style="color:#666;font-size:14px">订阅: {event.data.get('subscription', '')} · {label}</p>
+<p style="color:#666;font-size:14px">订阅: {data.get('subscription', '')} · {label}</p>
 """
         for g in galleries:
             cover = g.get('cover_url', '')

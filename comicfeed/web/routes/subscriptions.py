@@ -15,7 +15,7 @@ class SubCreate(BaseModel):
     source_key: str
     query: str
     mode: str = "SEARCH"
-    interval_minutes: int = 360
+    interval_minutes: int = 1440
     cbz_max_pages: int = 30
     sort: str = "date"
     download_dir: str = ""
@@ -48,6 +48,7 @@ async def list_subscriptions():
                 "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
                 "cbz_max_pages": s.cbz_max_pages, "sort": s.sort,
                 "download_dir": s.download_dir, "filter_rules": s.filter_rules, "enabled": s.enabled,
+                "created_at": s.created_at.strftime("%Y-%m-%d") if s.created_at else "",
             }
             for s in subs
         ]
@@ -152,8 +153,11 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
 
 
 def _sub_to_dict(s: Subscription) -> dict:
+    created = s.created_at.strftime("%Y-%m-%d") if s.created_at else ""
     return {
         "id": s.id, "name": s.name, "source_key": s.source_key,
         "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
-        "sort": s.sort, "download_dir": s.download_dir, "filter_rules": s.filter_rules, "enabled": s.enabled,
+        "cbz_max_pages": s.cbz_max_pages, "sort": s.sort,
+        "download_dir": s.download_dir, "filter_rules": s.filter_rules, "enabled": s.enabled,
+        "created_at": created,
     }
