@@ -35,7 +35,7 @@ async def search_source(req: SearchRequest):
     next_url = getattr(source, '_next_url', '')
 
     # 去重
-    from comicfeed.cbz import normalize_title
+    from comicfeed.io.cbz import normalize_title
     from comicfeed.dedup import _similarity, find_similar_groups, resolve_duplicates
     from comicfeed.database import get_session
     from comicfeed.models import Gallery

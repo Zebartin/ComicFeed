@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 
 from comicfeed.config import get_setting as _cfg
 from comicfeed.database import get_session
-from comicfeed.hooks import Event, bus
 from comicfeed.io.cbz import make_cbz_name, pack_cbz, read_cbz_pages
 from comicfeed.io.detect_ad import detect_ads_from_tail
 from comicfeed.log import get
@@ -72,19 +71,13 @@ async def download_gallery(
     output_dir: str,
     cbz_max_pages: int = 0,
     tracker: "DownloadTracker | None" = None,
-    fire_events: bool = True,
     save_to_db: bool = True,
     gallery_url: str = "",
     detail: GalleryDetail | None = None,
     append_pages: bool = False,
     replaces_native_id: str = "",
 ) -> DownloadResult:
-    """下载完整画廊并打包为 CBZ。fire_events=False 时不触发事件。
-
-    detail: 已预取的 GalleryDetail（增量更新时仅含新页面），跳过 get_gallery。
-    append_pages: True 时只 INSERT 新 page 记录，不删旧（增量更新用）。
-    replaces_native_id: 增量时被替换的旧画廊 native_id（用于查找已有 CBZ）。
-    """
+    """下载完整画廊并打包为 CBZ。"""
     os.makedirs(output_dir, exist_ok=True)
 
     if detail is None:
@@ -240,11 +233,6 @@ async def download_gallery(
 
     _log.info("下载完成: %s (%d 页) → %s", full_gid, downloaded, os.path.basename(result.files[0]) if result.files else "")
 
-    if fire_events:
-        await bus.fire(Event("gallery.created", {
-            "gallery_id": full_gid, "title": title, "files": result.files,
-        }))
-
     # 写入数据库
     if save_to_db:
         try:
@@ -301,7 +289,6 @@ class DownloadPool:
         output_dir: str,
         cbz_max_pages: int = 0,
         tracker: "DownloadTracker | None" = None,
-        fire_events: bool = True,
         save_to_db: bool = True,
         gallery_url: str = "",
         detail: GalleryDetail | None = None,
@@ -312,7 +299,7 @@ class DownloadPool:
         src_sem = self._source_sem(source)
         async with self._global_sem:
             kwargs = dict(source=source, gallery_id=gallery_id, output_dir=output_dir,
-                          cbz_max_pages=cbz_max_pages, tracker=tracker, fire_events=fire_events,
+                          cbz_max_pages=cbz_max_pages, tracker=tracker,
                           save_to_db=save_to_db, gallery_url=gallery_url,
                           detail=detail, append_pages=append_pages,
                           replaces_native_id=replaces_native_id)

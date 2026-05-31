@@ -65,7 +65,7 @@ async def retry_failed(gallery_id: str):
 
     async def _retry():
         try:
-            await download_gallery(source, gid, out_dir, tracker=tracker, fire_events=False,
+            await download_gallery(source, gid, out_dir, tracker=tracker,
                                    gallery_url=kw.get("gallery_url", ""),
                                    append_pages=kw.get("append_pages", False),
                                    replaces_native_id=kw.get("replaces_native_id", ""),

@@ -1,7 +1,7 @@
 from io import BytesIO
 from zipfile import ZipFile
 
-from comicfeed.cbz import make_cbz_name, normalize_title, pack_cbz
+from comicfeed.io.cbz import make_cbz_name, normalize_title, pack_cbz
 from comicfeed.sources.base import GalleryDetail
 
 
@@ -61,7 +61,7 @@ def test_make_cbz_name_multi_volume():
 
 def test_sanitize_filename():
     """替换非法字符为全角。"""
-    from comicfeed.cbz import sanitize_filename
+    from comicfeed.io.cbz import sanitize_filename
     assert sanitize_filename("a|b") == "a｜b"
     assert sanitize_filename("a:b") == "a：b"
     assert sanitize_filename("a<b>c") == "a＜b＞c"

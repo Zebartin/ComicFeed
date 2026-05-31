@@ -50,7 +50,6 @@ async def test_gallery_subscription_nm_relation():
             source_key="nhentai",
             native_id="455819",
             normalized_title="sample comic",
-            display_title="Sample Comic",
             reported_pages=32,
         )
         session.add(gallery)

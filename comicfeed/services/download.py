@@ -56,7 +56,7 @@ async def download_batch(
             if pool:
                 result = await pool.download(
                     source, t.gallery_id, t.output_dir,
-                    tracker=tracker, fire_events=False,
+                    tracker=tracker,
                     gallery_url=t.gallery_url,
                     detail=t.detail,
                     append_pages=t.append_pages,
@@ -66,7 +66,7 @@ async def download_batch(
             else:
                 result = await download_gallery(
                     source, t.gallery_id, t.output_dir,
-                    tracker=tracker, fire_events=False,
+                    tracker=tracker,
                     gallery_url=t.gallery_url,
                     detail=t.detail,
                     append_pages=t.append_pages,

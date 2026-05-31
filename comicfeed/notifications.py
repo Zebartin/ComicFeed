@@ -96,26 +96,3 @@ async def send_email(config: dict, event: Event):
             s.send_message(msg)
 
     await asyncio.to_thread(_send)
-
-
-async def _on_event_send_email(event: Event):
-    """事件钩子：发送邮件通知。"""
-    from comicfeed.config import get_setting
-    host = await get_setting("smtp_host", "")
-    if not host:
-        return
-    config = {
-        "host": host,
-        "port": int(await get_setting("smtp_port", "587") or "587"),
-        "user": await get_setting("smtp_user", "") or "",
-        "password": await get_setting("smtp_password", "") or "",
-        "to": await get_setting("smtp_to", "") or "",
-    }
-    if not config["to"]:
-        return
-    await send_email(config, event)
-
-
-def register_email_hook():
-    from comicfeed.hooks import bus
-    bus.on("gallery.created", _on_event_send_email)

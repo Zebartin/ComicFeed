@@ -2,7 +2,7 @@
 import io
 from PIL import Image
 
-from comicfeed.detect_ad import detect_ads_from_tail, is_ad_image
+from comicfeed.io.detect_ad import detect_ads_from_tail, is_ad_image
 
 
 def _make_img(width, height, color=True):
