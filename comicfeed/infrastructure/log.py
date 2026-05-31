@@ -33,6 +33,22 @@ class DBLogHandler(logging.Handler):
             traceback.print_exc()
 
 
+def _cleanup_log_db(db_path: str, keep_days: int = 30, keep_count: int = 10000):
+    """清理旧日志：保留最近 N 天 + 最近 N 条。"""
+    try:
+        conn = sqlite3.connect(db_path)
+        cutoff = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        from datetime import timedelta
+        conn.execute("DELETE FROM system_log WHERE timestamp < ?",
+                     (cutoff - timedelta(days=keep_days)).isoformat())
+        conn.execute("DELETE FROM system_log WHERE id NOT IN (SELECT id FROM system_log ORDER BY id DESC LIMIT ?)",
+                     (keep_count,))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
 def setup(level: int = logging.INFO, db_path: str | None = None):
     global _db_path
     _db_path = db_path
@@ -47,6 +63,7 @@ def setup(level: int = logging.INFO, db_path: str | None = None):
         db.setLevel(logging.INFO)
         db.setFormatter(logging.Formatter("%(message)s"))
         root.addHandler(db)
+        _cleanup_log_db(db_path)
 
 
 def get(name: str) -> logging.Logger:
