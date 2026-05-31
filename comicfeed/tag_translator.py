@@ -75,14 +75,20 @@ class TagTranslator:
             return f"{cn_ns}：{name}"
         return name
 
-    def translate(self, ns: str, name: str) -> str:
-        """翻译单个标签。不支持的返回原文。"""
+    def translate(self, ns: str, name: str, avoid_ns: set[str] | None = None) -> str:
+        """翻译单个标签。avoid_ns 指定无 namespace 时优先避开的命名空间。"""
         if ns and ns in self._tags and name in self._tags[ns]:
             return self._format(ns, self._tags[ns][name])
         # 无 namespace 时，在所有 namespace 中搜索
+        found = None
         for tns, tmap in self._tags.items():
             if name in tmap:
-                return self._format(tns, tmap[name])
+                if avoid_ns and tns in avoid_ns:
+                    found = found or (tns, tmap[name])  # 保留第一个 writer 命中作为回退
+                else:
+                    return self._format(tns, tmap[name])
+        if found:
+            return self._format(found[0], found[1])
         if ns:
             return self._format(ns, name)
         return name
