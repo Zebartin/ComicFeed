@@ -95,6 +95,8 @@ async def delete_subscription(sub_id: int):
         sub = await session.get(Subscription, sub_id)
         if sub is None:
             raise HTTPException(404, "未找到")
+        from sqlalchemy import text
+        await session.execute(text("DELETE FROM subscription_gallery WHERE subscription_id = :sid"), {"sid": sub_id})
         await session.delete(sub)
         _log.info("删除订阅: #%d %s", sub_id, sub.name)
         await session.commit()
