@@ -36,6 +36,7 @@ class Subscription(Base):
     cross_source_dedup: Mapped[bool] = mapped_column(Boolean, default=True)
     sort: Mapped[str] = mapped_column(String(32), default="date")
     download_dir: Mapped[str] = mapped_column(Text, default="")
+    filter_rules: Mapped[str] = mapped_column(Text, default="")  # JSON: [{"field":"num_favorites","op":"gte","value":100}]
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

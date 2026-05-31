@@ -183,6 +183,15 @@
     <label>间隔 (分钟) <input id="interval" type="number" value="360"></label>
     <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
     <label>下载目录 <input id="download_dir" placeholder="留空使用全局设置"></label>
+  </div>
+  <div style="margin-top:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">筛选条件</span>
+      <button class="btn btn-ghost btn-xs" onclick="addFilterRow()">+ 添加</button>
+    </div>
+    <div id="filter-rows"></div>
+  </div>
+  <div class="form-grid" style="margin-top:12px">
     <label class="inline"><input id="enabled" type="checkbox" checked> 启用</label>
   </div>
   <input type="hidden" id="sub-id">
@@ -274,6 +283,36 @@ function render() {
 }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML }
 
+/* Filter rows */
+const _flds = {num_favorites:'收藏数', page_count:'页数', upload_date:'上传日期'}
+const _ops = {num_favorites:[['gte','≥'],['lte','≤'],['gt','>'],['lt','<'],['eq','=']], page_count:[['gte','≥'],['lte','≤'],['gt','>'],['lt','<'],['eq','=']], upload_date:[['since_days','最近']]}
+function addFilterRow(fld, op, val) {
+  const r = document.createElement('div'); r.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px'
+  const sf = document.createElement('select'); sf.style.cssText='padding:4px 6px;font-size:11px'
+  Object.entries(_flds).forEach(([k,v])=>{ sf.innerHTML += `<option value="${k}" ${k===fld?'selected':''}>${v}</option>` })
+  const so = document.createElement('select'); so.style.cssText='padding:4px 6px;font-size:11px'
+  const updateOps = () => { const f=sf.value; so.innerHTML = (_ops[f]||[]).map(([k,v])=>`<option value="${k}" ${k===op?'selected':''}>${v}</option>`).join('') }
+  sf.onchange = updateOps
+  const vi = document.createElement('input'); vi.type='number'; vi.style.cssText='padding:4px 6px;font-size:11px;width:80px'; vi.value = val||''
+  if (fld==='upload_date' && op==='since_days') { const sp = document.createElement('span'); sp.textContent='天'; sp.style.cssText='font-size:11px;color:var(--text-muted)'; r.append(sf,so,vi,sp) }
+  else r.append(sf,so,vi)
+  const del = document.createElement('button'); del.textContent='×'; del.className='btn btn-ghost btn-xs'; del.onclick = () => r.remove(); r.append(del)
+  updateOps()
+  $('filter-rows').appendChild(r)
+}
+function getFilterRules() {
+  const rules = []
+  $('filter-rows').querySelectorAll('div').forEach(r => {
+    const sels = r.querySelectorAll('select'); const inp = r.querySelector('input')
+    if (sels.length>=2 && inp) rules.push({field:sels[0].value, op:sels[1].value, value:inp.value.includes('.')?parseFloat(inp.value):parseInt(inp.value)})
+  })
+  return rules
+}
+function setFilterRules(json) { $('filter-rows').innerHTML=''; try { JSON.parse(json||'[]').forEach(r => addFilterRow(r.field, r.op, r.value)) } catch(_){} }
+
+/* Form */
+function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','download_dir'].forEach(k=>$(k).value=''); document.getElementById('query-label').textContent='查询串'; setFilterRules(''); $('form').classList.add('on') }
+function closeForm() { $('form').classList.remove('on') }
 function updateSortForm() {
   const key = $('source_key').value
   const s = window._srcs?.find(x => x.key === key)
@@ -289,6 +328,7 @@ async function editSub(id) {
   for (const k of ['name','source_key','query','mode','interval_minutes','cbz_max_pages','sort','download_dir']) $(k==='interval_minutes'?'interval':k).value = s[k] ?? ''
   document.getElementById('query-label').textContent = s.mode === 'SPECIFIC_GALLERY' ? '画廊URL' : '查询串'
   updateSortForm()
+  setFilterRules(s.filter_rules || '')
   $('enabled').checked = s.enabled; $('form').classList.add('on')
 }
 async function saveSub() {
@@ -297,6 +337,7 @@ async function saveSub() {
     mode: $('mode').value, interval_minutes: parseInt($('interval').value)||360,
     cbz_max_pages: parseInt($('cbz_max_pages').value)||0, sort: $('sort').value||'date',
     download_dir: $('download_dir').value, enabled: $('enabled').checked,
+    filter_rules: JSON.stringify(getFilterRules()),
   }
   const isNew = !id
   try {

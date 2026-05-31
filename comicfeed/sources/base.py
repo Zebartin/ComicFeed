@@ -33,6 +33,7 @@ class GallerySummary:
     web_url: str = ""
     page_count: int = 0
     num_favorites: int = 0
+    upload_date: str = ""
     tag_ids: list[int] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     new_page_ids: list[str] = field(default_factory=list)  # 增量更新：仅新增的 page ID
