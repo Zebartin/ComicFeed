@@ -44,6 +44,9 @@ async def check_subscription(
         old_ids = [row[0] for row in (await session.execute(stmt)).fetchall()]
 
         result = await source.check_updates(gid, {"page_ids": old_ids}, gallery_url=gurl)
+        
+        sub.last_checked_at = datetime.now()
+        await session.commit()
         if result.has_updates and result.gallery:
             return [result.gallery], False
         return [], False
