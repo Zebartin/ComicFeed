@@ -60,6 +60,7 @@ async def retry_failed(gallery_id: str):
     out_dir = kw.get("output_dir") or await get_setting("download_path", ".")
     gid = kw["gallery_id"]
     full_gid = f"{source_key}:{gid}"
+    tracker.remove_failed(gallery_id)
     tracker.enqueue(full_gid, title=gid, total_pages=0, retry_kwargs=kw)
 
     async def _retry():

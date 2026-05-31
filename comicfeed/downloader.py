@@ -411,6 +411,9 @@ class DownloadTracker:
     def clear_failed(self):
         self._failed.clear()
 
+    def remove_failed(self, gallery_id: str):
+        self._failed = [t for t in self._failed if t["gallery_id"] != gallery_id]
+
     def snapshot(self) -> dict:
         return {
             "pending": list(self._pending),
