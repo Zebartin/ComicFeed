@@ -5,8 +5,14 @@ import shutil
 import time
 from dataclasses import dataclass, field
 
+from comicfeed.config import get_setting as _cfg
+from comicfeed.database import get_session
+from comicfeed.hooks import Event, bus
 from comicfeed.io.cbz import make_cbz_name, pack_cbz, read_cbz_pages
+from comicfeed.io.detect_ad import detect_ads_from_tail
 from comicfeed.log import get
+from comicfeed.repositories.gallery import get_or_create
+from comicfeed.repositories.page import append_new, count_for_gallery, migrate_gallery, replace_all
 from comicfeed.sources.base import BaseSource, GalleryDetail
 
 _log = get(__name__)
@@ -79,8 +85,6 @@ async def download_gallery(
     append_pages: True 时只 INSERT 新 page 记录，不删旧（增量更新用）。
     replaces_native_id: 增量时被替换的旧画廊 native_id（用于查找已有 CBZ）。
     """
-    from comicfeed.hooks import Event, bus
-
     os.makedirs(output_dir, exist_ok=True)
 
     if detail is None:
@@ -118,8 +122,6 @@ async def download_gallery(
     _vacancy = 0
     _old_cbz: list[str] = []  # 下载成功后删除的旧 CBZ
     if append_pages:
-        from comicfeed.database import get_session
-        from comicfeed.repositories.page import count_for_gallery
         async with get_session() as s:
             lookup_gid = f"{source.key}:{replaces_native_id}" if replaces_native_id else full_gid
             _old_count = await count_for_gallery(s, lookup_gid)
@@ -148,7 +150,6 @@ async def download_gallery(
 
     # 逐页下载（带磁盘缓存）
     try:
-        from comicfeed.config import get_setting as _cfg
         _chunk_retry = int((await _cfg("download_retry", "3")) or "3")
     except Exception:
         _chunk_retry = 3
@@ -186,7 +187,6 @@ async def download_gallery(
                     raise
 
     # 广告页检测
-    from comicfeed.io.detect_ad import detect_ads_from_tail
     ad_count = detect_ads_from_tail(all_new_pages)
     if ad_count > 0:
         _log.info("检测到 %d 页广告 (共 %d 页)", ad_count, len(all_new_pages))
@@ -248,8 +248,6 @@ async def download_gallery(
     # 写入数据库
     if save_to_db:
         try:
-            from comicfeed.database import get_session
-            from comicfeed.repositories.gallery import get_or_create
             async with get_session() as session:
                 await get_or_create(session, full_gid, source.key, gallery_id,
                                     title, detail.cover_url, detail.web_url,
@@ -263,8 +261,6 @@ async def download_gallery(
     # 写入页面记录（必须在 Gallery 写入之后，FK 约束）
     if save_to_db and detail.page_native_ids:
         try:
-            from comicfeed.database import get_session
-            from comicfeed.repositories.page import append_new, replace_all, migrate_gallery
             async with get_session() as session:
                 if append_pages:
                     await append_new(session, full_gid, detail.page_native_ids)
