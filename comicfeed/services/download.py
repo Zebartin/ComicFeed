@@ -1,7 +1,6 @@
 """下载编排：批量下载 + 通知。"""
 from dataclasses import dataclass, field
 
-from comicfeed.hooks import Event, bus as event_bus
 from comicfeed.log import get
 from comicfeed.sources.base import GalleryDetail
 
@@ -95,12 +94,13 @@ async def download_batch(
 
     # 批量通知
     if downloaded or failed:
-        await event_bus.fire(Event("gallery.created", {
+        from comicfeed.services.notification import notify_batch
+        await notify_batch({
             "subscription": subscription_name or "手动下载",
             "galleries": downloaded,
             "count": len(downloaded),
             "failed": failed,
             "failed_count": len(failed),
-        }))
+        })
 
     return downloaded, failed

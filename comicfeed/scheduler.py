@@ -4,7 +4,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from comicfeed.database import get_session
-from comicfeed.hooks import Event, bus as event_bus
 from comicfeed.log import get
 from comicfeed.models import Subscription
 from comicfeed.services.subscription import check_subscription
@@ -37,7 +36,8 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
             source = source_manager.get_source(sub.source_key, credentials=creds, proxy=proxy)
             if source is None:
                 _log.warning("源不可用: %s", sub.source_key)
-                await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "not_found"}))
+                from comicfeed.services.notification import notify_source_error
+                await notify_source_error({"source_key": sub.source_key, "reason": "not_found"})
                 continue
 
             try:
@@ -45,7 +45,8 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 _log.info("[%s] 检查完成: %d 个新画廊", sub.name, len(new))
             except Exception as e:
                 _log.error("[%s] 检查失败: %s", sub.name, e)
-                await event_bus.fire(Event("source.error", {"source_key": sub.source_key, "reason": "search_failed"}))
+                from comicfeed.services.notification import notify_source_error
+                await notify_source_error({"source_key": sub.source_key, "reason": "search_failed"})
                 continue
 
             from comicfeed.config import get_setting
