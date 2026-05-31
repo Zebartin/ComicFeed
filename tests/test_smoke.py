@@ -17,10 +17,12 @@ _DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "comicf
 async def _init_db():
     from comicfeed.infrastructure.database import init_db
     from comicfeed.infrastructure.config import get_setting, init_crypto
+    from comicfeed.infrastructure.tag_translator import get_translator
     init_db(_DB_PATH)
     key = await get_setting("_fernet_key", "")
     if key:
         init_crypto(key)
+    await get_translator().load()
 
 async def _check_network(url: str):
     """检查网络连通性。"""
@@ -62,29 +64,29 @@ async def test_exhentai_search_smoke():
 @pytest.mark.live
 async def test_exhentai_gallery_detail_smoke():
     """exhentai 画廊详情解析。"""
+    gid = 3653399
+    gurl = "https://exhentai.org/g/3653399/27fefb4871/"
     s = await _exhentai_source()
-    result = await s.search("chinese", page=0)
-    assert result.items, "搜索无结果"
-    gid = result.items[0].native_id
-    detail = await s.get_gallery(gid, gallery_url=result.items[0].web_url)
-    assert detail.title, "缺少 title"
-    assert detail.cover_url, "缺少 cover_url"
-    assert detail.tags, "缺少 tags"
-    assert detail.reported_pages > 0, f"reported_pages 异常: {detail.reported_pages}"
-    assert detail.page_urls, "缺少 page_urls"
+    detail = await s.get_gallery(gid, gallery_url=gurl)
+    assert detail.title == '[Fanbox] 加瀬大輝 2025.07', "缺少 title"
+    assert detail.cover_url == 'https://ehgt.org/w/02/126/11833-na1tg4et.webp', "缺少 cover_url"
+    assert len(detail.tags) == 7, "缺少 tags"
+    # 此时 translator 没有生效
+    assert detail.writers == ['artist：kase daiki'], f"作者解析异常: {detail.writers}"
+    assert detail.reported_pages == 40, f"reported_pages 异常: {detail.reported_pages}"
+    assert len(detail.page_urls) == 40, "缺少 page_urls"
 
 
 @pytest.mark.live
 async def test_exhentai_nl_extraction_smoke():
     """exhentai 图片页 nl token 提取。"""
+    gid = 3653399
+    gurl = "https://exhentai.org/g/3653399/27fefb4871/"
     s = await _exhentai_source()
-    result = await s.search("chinese", page=0)
-    assert result.items, "搜索无结果"
-    gid = result.items[0].native_id
-    detail = await s.get_gallery(gid, gallery_url=result.items[0].web_url)
-    assert detail.page_urls, "画廊无页面"
+    detail = await s.get_gallery(gid, gallery_url=gurl)
+    assert len(detail.page_urls) == 40, "画廊无页面"
     pages = await s.download_pages(gid, slice(0, 1),
-                                    gallery_url=result.items[0].web_url, detail=detail)
+                                    gallery_url=gurl, detail=detail)
     assert len(pages) == 1
     assert len(pages[0]) > 0, "图片数据为空"
 
@@ -99,7 +101,6 @@ async def _nhentai_source():
 @pytest.mark.live
 async def test_nhentai_search_smoke():
     """nhentai 搜索 API 响应解析。"""
-    await _check_network("https://nhentai.net")
     s = await _nhentai_source()
     result = await s.search("chinese", page=1)
     assert result.items, "搜索结果为空"
@@ -113,14 +114,13 @@ async def test_nhentai_search_smoke():
 @pytest.mark.live
 async def test_nhentai_gallery_detail_smoke():
     """nhentai 画廊详情 API 响应解析。"""
-    await _check_network("https://nhentai.net")
     s = await _nhentai_source()
-    result = await s.search("chinese", page=1)
-    assert result.items, "搜索无结果"
-    gid = result.items[0].native_id
-    detail = await s.get_gallery(gid)
-    assert detail.title, "缺少 title"
-    assert detail.cover_url, "缺少 cover_url"
-    assert detail.tags, "缺少 tags"
-    assert detail.reported_pages > 0, f"reported_pages 异常: {detail.reported_pages}"
-    assert detail.page_urls, "缺少 page_urls"
+    detail = await s.get_gallery(450767)
+    assert detail.title == '[鋼鉄しゃぼん玉 (玉ぼん)] 大人になる夏 －おぼえたてHにドハマりする田舎おねショタ－', "缺少 title"
+    assert detail.cover_url == 'https://t.nhentai.net/galleries/2523394/cover.jpg', "缺少 cover_url"
+    assert len(detail.tags) >= 25, "缺少 tags"
+    # 此时 translator 没有生效
+    assert detail.writers == ['artist：tamayura banko', 'group：koutetsu shabon dama'], f"作者解析异常: {detail.writers}"
+    assert detail.reported_pages == 85, f"reported_pages 异常: {detail.reported_pages}"
+    assert len(detail.page_urls) == 85, "缺少 page_urls"
+    assert detail.num_favorites > 29000, f"收藏数异常: {detail.num_favorites}"
