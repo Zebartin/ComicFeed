@@ -28,9 +28,6 @@ async def check_subscription(
     if sub is None:
         return [], False
 
-    sub.last_checked_at = datetime.now()
-    await session.commit()
-
     # SPECIFIC_GALLERY 模式：检查更新而非搜索
     if sub.mode == "SPECIFIC_GALLERY":
         gid = sub.query.strip()
@@ -113,6 +110,11 @@ async def check_subscription(
         has_more = bool(result.next_url or (result.total_pages > page + 1))
         if not has_more:
             break
+
+    # 仅在首次非追加检查时更新时间
+    if start_page <= 1:
+        sub.last_checked_at = datetime.now()
+        await session.commit()
 
     _log.info("订阅 [%s] 检查完成: %d 个新画廊 (翻 %d 页, has_more=%s)", sub.name, len(all_new), max_search_pages, has_more)
     return all_new, has_more
