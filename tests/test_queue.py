@@ -1,4 +1,4 @@
-from comicfeed.downloader import DownloadTracker
+from comicfeed.services.queue import DownloadTracker
 
 
 def test_tracker_start_and_finish():

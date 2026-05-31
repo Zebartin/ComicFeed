@@ -9,7 +9,8 @@ from starlette.responses import JSONResponse
 
 from contextlib import asynccontextmanager
 
-from comicfeed.downloader import DownloadPool, DownloadTracker
+from comicfeed.services.download import DownloadPool
+from comicfeed.services.queue import DownloadTracker
 from comicfeed.infrastructure.source_manager import SourceManager
 from comicfeed.web.routes.credentials import router as cred_router
 from comicfeed.web.routes.galleries import router as gallery_router

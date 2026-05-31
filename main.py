@@ -57,7 +57,7 @@ def main():
     from comicfeed.infrastructure.tag_translator import get_translator
     asyncio.run(get_translator().load())
 
-    from comicfeed.downloader import DownloadPool
+    from comicfeed.services.download import DownloadPool
     download_pool = DownloadPool(max_workers=5)
 
     config = {"auth_username": args.auth_user, "auth_password": args.auth_pass}

@@ -136,7 +136,7 @@ async def download_by_id(req: DownloadRequest):
     full_gid = f"{req.source_key}:{gid}"
     tracker.enqueue(full_gid, retry_kwargs={"source_key": req.source_key, "gallery_id": gid, "output_dir": out_dir, "gallery_url": req.url or ""})
     import asyncio
-    from comicfeed.downloader import download_gallery
+    from comicfeed.services.download import download_gallery
     async def _dl():
         try:
             await download_gallery(source, gid, out_dir, tracker=tracker, gallery_url=req.url or "")

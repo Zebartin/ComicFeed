@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from comicfeed.downloader import DownloadPool, DownloadResult, download_gallery
+from comicfeed.services.download import DownloadPool, DownloadResult, download_gallery
 from comicfeed.sources.base import (
     AuthSchema,
     BaseSource,
