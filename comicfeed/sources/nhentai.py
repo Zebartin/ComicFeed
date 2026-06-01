@@ -62,7 +62,6 @@ class NhentaiSource(BaseSource):
                 f"{self._BASE}/api/v2/search",
                 params={"query": query, "page": page, "sort": sort},
             )
-            print(resp.request.url)
             resp.raise_for_status()
             return self._parse_search_response(resp.json(), page)
 

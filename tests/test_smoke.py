@@ -115,7 +115,7 @@ async def test_nhentai_gallery_detail_smoke():
     """nhentai 画廊详情 API 响应解析。"""
     s = await _nhentai_source()
     detail = await s.get_gallery(450767)
-    assert detail.title == '[鋼鉄しゃぼん玉 (玉ぼん)] 大人になる夏 －おぼえたてHにドハマりする田舎おねショタ－', "缺少 title"
+    assert detail.title == '[鋼鉄しゃぼん玉 (玉ぼん)] 大人になる夏 -おぼえたてHにドハマりする田舎おねショタ-', "缺少 title"
     assert detail.cover_url == 'https://t.nhentai.net/galleries/2523394/cover.jpg', "缺少 cover_url"
     assert len(detail.tags) >= 25, "缺少 tags"
     assert detail.writers == ['画师：玉ぼん', '团队：钢铁しゃぼん玉'], f"作者解析异常: {detail.writers}"

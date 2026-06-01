@@ -66,7 +66,6 @@ async def _build_query(sub) -> str:
     parts = [sub.query]
     try:
         defaults = json.loads(await get_setting("search_defaults"))
-        print(defaults)
         for item in defaults:
             parts.append(str(item))
     except Exception:
@@ -103,16 +102,18 @@ async def search_and_dedup(
     for page_offset in range(max_search_pages):
         page = start_page + page_offset
         query = await _build_query(sub)
-        print(query)
         result = await source.search(query, page=page, sort=sub.sort)
         if not result.items:
             break
+        has_more = result.next_url or (result.total_pages > page)
 
         raw_items = [g for g in result.items if g.native_id not in exclude_ids]
         raw_items = _apply_filters(raw_items, sub.filter_rules)
         if not raw_items:
-            has_more = bool(result.next_url or (result.total_pages > page + 1))
-            continue
+            if has_more:
+                continue
+            else:
+                break
 
         ids = [f"{source.key}:{item.native_id}" for item in raw_items]
         db_existing = await existing_ids(session, ids)
@@ -143,7 +144,6 @@ async def search_and_dedup(
         for g in new:
             exclude_ids.add(g.native_id)
 
-        has_more = bool(result.next_url or (result.total_pages > page + 1))
         if not has_more:
             break
 
