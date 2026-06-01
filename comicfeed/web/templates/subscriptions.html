@@ -182,11 +182,12 @@
     <label class="search-only">排序 <select id="sort"></select></label>
     <label>间隔 (分钟) <input id="interval" type="number" value="1440"></label>
     <label class="search-only">搜索页数 <input id="search_pages" type="number" value="1"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">自动检查翻页数</span></label>
-    <label class="search-only inline"><input id="use_global_search" type="checkbox" checked> 应用全局搜索条件</label>
     <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
     <label>下载目录 <input id="download_dir" placeholder="留空使用全局设置"></label>
   </div>
   <div style="margin-top:12px" class="search-only" id="filter-section">
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--text-secondary)">
+      <input id="use_global_search" type="checkbox" checked> 应用全局搜索条件（设置页可编辑）</label>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">筛选条件</span>
       <button class="btn btn-ghost btn-xs" onclick="addFilterRow()">+ 添加</button>
