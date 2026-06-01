@@ -107,7 +107,7 @@ function addSearchRow(type, val) {
   collectSearchRows(type)
 }
 function renderSearchRows(type, json) { document.getElementById('search-'+type+'-rows').innerHTML=''; try { JSON.parse(json||'[]').forEach(v => addSearchRow(type, v)) } catch(_){} }
-function collectSearchRows(type) { const vals=[]; document.getElementById('search-'+type+'-rows').querySelectorAll('input').forEach(i=>vals.push(i.value)); document.getElementById(type).value=JSON.stringify(vals.filter(v=>v)) }
+function collectSearchRows(type) { const vals=[]; document.getElementById('search-'+type+'-rows').querySelectorAll('input').forEach(i=>vals.push(i.value)); document.getElementById('search_'+type).value=JSON.stringify(vals.filter(v=>v)) }
 function _val(id){return document.getElementById(id)?.value||''}
 async function testWebhook() {
   const r = await fetch('/api/settings/test-webhook', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:_val('webhook_url')})})
