@@ -1,3 +1,4 @@
+import re
 from difflib import SequenceMatcher
 from itertools import combinations
 
@@ -7,7 +8,7 @@ _DEDUP_THRESHOLD = 0.999
 
 
 def _similarity(a: str, b: str) -> float:
-    return SequenceMatcher(None, a, b).ratio()
+    return SequenceMatcher(None, re.sub(r"\s+", "", a), re.sub(r"\s+", "", b)).ratio()
 
 
 def find_similar_groups(items: list) -> list[list]:
