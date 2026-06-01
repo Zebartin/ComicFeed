@@ -1,4 +1,5 @@
 import re
+import unicodedata
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -26,8 +27,9 @@ _BLACKLIST = re.compile(
 
 
 def normalize_title(title: str) -> str:
-    """去除事件标记和尾部格式标签，归一化空格。"""
-    t = _HEAD_PAREN.sub("", title.strip())
+    """去除事件标记和尾部格式标签，归一化空格、Unicode NFKC。"""
+    t = unicodedata.normalize("NFKC", title.strip())
+    t = _HEAD_PAREN.sub("", t)
 
     def _filter_tail(m: re.Match) -> str:
         brackets = _SINGLE_BRACKET.findall(m.group())
