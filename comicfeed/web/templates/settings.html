@@ -92,7 +92,7 @@ async function load() {
   for (const k of Object.keys(s)) {
     const el = document.getElementById(k)
     if (!el) continue
-    if (k==='search_defaults'||k==='search_blocklist') { renderSearchRows(k, s[k]); continue }
+    if (k==='search_defaults'||k==='search_blocklist') { renderSearchRows(k.replace('search_',''), s[k]); continue }
     el.value = s[k] || ''
   }
 }
