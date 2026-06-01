@@ -65,13 +65,14 @@ async def _build_query(sub) -> str:
     import json
     parts = [sub.query]
     try:
-        defaults = json.loads(await get_setting("search_defaults", "[]") or "[]")
+        defaults = json.loads(await get_setting("search_defaults"))
+        print(defaults)
         for item in defaults:
             parts.append(str(item))
     except Exception:
         pass
     try:
-        blocklist = json.loads(await get_setting("search_blocklist", "[]") or "[]")
+        blocklist = json.loads(await get_setting("search_blocklist"))
         for item in blocklist:
             parts.append(f"-{item}")
     except Exception:
@@ -101,7 +102,8 @@ async def search_and_dedup(
 
     for page_offset in range(max_search_pages):
         page = start_page + page_offset
-        query = _build_query(sub)
+        query = await _build_query(sub)
+        print(query)
         result = await source.search(query, page=page, sort=sub.sort)
         if not result.items:
             break

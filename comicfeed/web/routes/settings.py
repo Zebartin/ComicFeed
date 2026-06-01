@@ -5,34 +5,22 @@ from comicfeed.infrastructure.config import get_setting, set_setting
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-DEFAULTS = {
-    "check_interval": "10",
-    "download_path": "",
-    "download_retry": "3",
-    "search_defaults": '["language:chinese"]',
-    "search_blocklist": '["tag:incomplete"]',
-    "proxy": "",
-    "global_concurrency": "5",
-    "komga_url": "",
-    "komga_user": "",
-    "komga_password": "",
-    "komga_library_id": "",
-    "smtp_host": "",
-    "smtp_port": "587",
-    "smtp_user": "",
-    "smtp_password": "",
-    "smtp_to": "",
-    "webhook_url": "",
-    "auth_username": "admin",
-    "auth_password": "",
-}
+_SETTING_KEYS = [
+    "check_interval", "download_path", "download_retry",
+    "search_defaults", "search_blocklist",
+    "proxy", "global_concurrency",
+    "komga_url", "komga_user", "komga_password", "komga_library_id",
+    "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_to",
+    "webhook_url",
+    "auth_username", "auth_password",
+]
 
 
 @router.get("")
 async def list_settings():
     result = {}
-    for key, default in DEFAULTS.items():
-        result[key] = await get_setting(key, default)
+    for key in _SETTING_KEYS:
+        result[key] = await get_setting(key)
     return result
 
 

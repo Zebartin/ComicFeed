@@ -130,7 +130,7 @@ async def download_by_id(req: DownloadRequest):
     # 返回已接受，后台执行下载
     from comicfeed.infrastructure.config import get_setting
     from comicfeed.web.app import get_download_tracker
-    out_dir = await get_setting("download_path", ".")
+    out_dir = await get_setting("download_path")
     tracker = get_download_tracker()
     full_gid = f"{req.source_key}:{gid}"
     tracker.enqueue(full_gid, retry_kwargs={"source_key": req.source_key, "gallery_id": gid, "output_dir": out_dir, "gallery_url": req.url or ""})
@@ -169,7 +169,7 @@ async def batch_download(req: BatchDownloadRequest):
             if sub:
                 sub_down_dir = sub.download_dir or ""
                 sub_cbz_max = sub.cbz_max_pages or 0
-    out_dir = sub_down_dir or await get_setting("download_path", ".")
+    out_dir = sub_down_dir or await get_setting("download_path")
     tracker = get_download_tracker()
 
     async def _batch():

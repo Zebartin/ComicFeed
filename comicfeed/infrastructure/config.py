@@ -12,10 +12,25 @@ _FERNET: Fernet | None = None
 
 # --- Global settings ---
 
+_DEFAULTS = {
+    "check_interval": "10",
+    "download_path": ".",
+    "download_retry": "3",
+    "search_defaults": '["language:chinese"]',
+    "search_blocklist": '["tag:incomplete"]',
+    "proxy": "",
+    "global_concurrency": "5",
+    "komga_url": "", "komga_user": "", "komga_password": "", "komga_library_id": "",
+    "smtp_host": "", "smtp_port": "587", "smtp_user": "", "smtp_password": "", "smtp_to": "",
+    "webhook_url": "",
+    "auth_username": "admin", "auth_password": "",
+}
+
+
 async def get_setting(key: str, default: str | None = None) -> str | None:
     async with get_session() as session:
         result = await session.get(GlobalSetting, key)
-        return result.value if result else default
+        return result.value if result else (default if default is not None else _DEFAULTS.get(key))
 
 
 async def set_setting(key: str, value: str):

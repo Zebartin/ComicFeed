@@ -62,6 +62,7 @@ class NhentaiSource(BaseSource):
                 f"{self._BASE}/api/v2/search",
                 params={"query": query, "page": page, "sort": sort},
             )
+            print(resp.request.url)
             resp.raise_for_status()
             return self._parse_search_response(resp.json(), page)
 
@@ -162,7 +163,7 @@ class NhentaiSource(BaseSource):
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
         from comicfeed.infrastructure.config import get_setting
-        _retry = int(await get_setting("download_retry", "3") or "3")
+        _retry = int(await get_setting("download_retry"))
         if detail is None:
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]

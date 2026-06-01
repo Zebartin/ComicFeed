@@ -306,7 +306,7 @@ class ExhentaiSource(BaseSource):
         from comicfeed.infrastructure.config import get_setting
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
-        _retry = int(await get_setting("download_retry", "3") or "3")
+        _retry = int(await get_setting("download_retry"))
         if detail is None:
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]

@@ -50,7 +50,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 continue
 
             from comicfeed.infrastructure.config import get_setting
-            out_dir = sub.download_dir or await get_setting("download_path", ".")
+            out_dir = sub.download_dir or await get_setting("download_path")
             from comicfeed.web.app import get_download_tracker
             from comicfeed.services.download import DownloadTask, download_batch
 

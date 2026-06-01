@@ -57,7 +57,7 @@ async def retry_failed(gallery_id: str):
     if source is None:
         return {"error": f"源 {source_key} 不可用"}
 
-    out_dir = kw.get("output_dir") or await get_setting("download_path", ".")
+    out_dir = kw.get("output_dir") or await get_setting("download_path")
     gid = kw["gallery_id"]
     full_gid = f"{source_key}:{gid}"
     tracker.remove_failed(gallery_id)
