@@ -28,7 +28,8 @@ class Subscription(Base):
     search_pages: Mapped[int] = mapped_column(Integer, default=1)  # 自动检查翻页数
     sort: Mapped[str] = mapped_column(String(32), default="date")
     download_dir: Mapped[str] = mapped_column(Text, default="")
-    filter_rules: Mapped[str] = mapped_column(Text, default="")  # JSON: [{"field":"num_favorites","op":"gte","value":100}]
+    filter_rules: Mapped[str] = mapped_column(Text, default="")
+    use_global_search: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

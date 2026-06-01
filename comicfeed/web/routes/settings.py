@@ -9,6 +9,8 @@ DEFAULTS = {
     "check_interval": "10",
     "download_path": "",
     "download_retry": "3",
+    "search_defaults": '["language:chinese"]',
+    "search_blocklist": '["tag:incomplete"]',
     "proxy": "",
     "global_concurrency": "5",
     "komga_url": "",

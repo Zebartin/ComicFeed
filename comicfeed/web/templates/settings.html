@@ -26,6 +26,19 @@
     <div class="field"><label>并发数</label><input id="global_concurrency" placeholder="5"></div>
     <div class="field"><label>代理</label><input id="proxy" placeholder="http://localhost:8889"></div>
   </div>
+  <div class="sub" style="margin-top:12px">
+    <h3>全局搜索条件</h3>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <span style="font-size:11px;color:var(--text-muted)">默认条件</span>
+      <button class="btn btn-ghost btn-xs" onclick="addSearchRow('defaults')">+ 添加</button>
+    </div>
+    <div id="search-defaults-rows"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;margin-top:12px">
+      <span style="font-size:11px;color:var(--text-muted)">排除条件</span>
+      <button class="btn btn-ghost btn-xs" onclick="addSearchRow('blocklist')">+ 添加</button>
+    </div>
+    <div id="search-blocklist-rows"></div>
+  </div>
 </div>
 
 <div class="section">
@@ -69,6 +82,7 @@
 </div>
 
 <div style="margin-top: 8px">
+  <input type="hidden" id="search_defaults"><input type="hidden" id="search_blocklist">
   <button class="btn btn-primary" onclick="saveAll()">保存所有设置</button>
 </div>
 
@@ -76,9 +90,24 @@
 async function load() {
   const r = await fetch('/api/settings'); const s = await r.json()
   for (const k of Object.keys(s)) {
-    const el = document.getElementById(k); if (el) el.value = s[k] || ''
+    const el = document.getElementById(k)
+    if (!el) continue
+    if (k==='search_defaults'||k==='search_blocklist') { renderSearchRows(k, s[k]); continue }
+    el.value = s[k] || ''
   }
 }
+
+function addSearchRow(type, val) {
+  const div = document.createElement('div'); div.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:4px'
+  const inp = document.createElement('input'); inp.style.cssText='padding:4px 6px;font-size:11px;flex:1;max-width:300px'; inp.value=val||''
+  inp.oninput = () => collectSearchRows(type)
+  const del = document.createElement('button'); del.textContent='×'; del.className='btn btn-ghost btn-xs'; del.onclick=()=>{div.remove();collectSearchRows(type)}
+  div.append(inp, del)
+  document.getElementById('search-'+type+'-rows').appendChild(div)
+  collectSearchRows(type)
+}
+function renderSearchRows(type, json) { document.getElementById('search-'+type+'-rows').innerHTML=''; try { JSON.parse(json||'[]').forEach(v => addSearchRow(type, v)) } catch(_){} }
+function collectSearchRows(type) { const vals=[]; document.getElementById('search-'+type+'-rows').querySelectorAll('input').forEach(i=>vals.push(i.value)); document.getElementById(type).value=JSON.stringify(vals.filter(v=>v)) }
 function _val(id){return document.getElementById(id)?.value||''}
 async function testWebhook() {
   const r = await fetch('/api/settings/test-webhook', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:_val('webhook_url')})})

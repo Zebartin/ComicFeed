@@ -71,8 +71,7 @@ async def test_exhentai_gallery_detail_smoke():
     assert detail.title == '[Fanbox] 加瀬大輝 2025.07', "缺少 title"
     assert detail.cover_url == 'https://ehgt.org/w/02/126/11833-na1tg4et.webp', "缺少 cover_url"
     assert len(detail.tags) == 7, "缺少 tags"
-    # 此时 translator 没有生效
-    assert detail.writers == ['artist：kase daiki'], f"作者解析异常: {detail.writers}"
+    assert detail.writers == ['画师：加濑大辉'], f"作者解析异常: {detail.writers}"
     assert detail.reported_pages == 40, f"reported_pages 异常: {detail.reported_pages}"
     assert len(detail.page_urls) == 40, "缺少 page_urls"
 
@@ -119,8 +118,7 @@ async def test_nhentai_gallery_detail_smoke():
     assert detail.title == '[鋼鉄しゃぼん玉 (玉ぼん)] 大人になる夏 －おぼえたてHにドハマりする田舎おねショタ－', "缺少 title"
     assert detail.cover_url == 'https://t.nhentai.net/galleries/2523394/cover.jpg', "缺少 cover_url"
     assert len(detail.tags) >= 25, "缺少 tags"
-    # 此时 translator 没有生效
-    assert detail.writers == ['artist：tamayura banko', 'group：koutetsu shabon dama'], f"作者解析异常: {detail.writers}"
+    assert detail.writers == ['画师：玉ぼん', '团队：钢铁しゃぼん玉'], f"作者解析异常: {detail.writers}"
     assert detail.reported_pages == 85, f"reported_pages 异常: {detail.reported_pages}"
     assert len(detail.page_urls) == 85, "缺少 page_urls"
     assert detail.num_favorites > 29000, f"收藏数异常: {detail.num_favorites}"

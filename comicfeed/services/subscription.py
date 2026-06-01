@@ -57,6 +57,28 @@ def _apply_filters(items: list[GallerySummary], rules_json: str) -> list[Gallery
     return [g for g in items if _matches_filter(g, rules)]
 
 
+async def _build_query(sub) -> str:
+    """拼接全局搜索条件。"""
+    if not getattr(sub, 'use_global_search', False):
+        return sub.query
+    from comicfeed.infrastructure.config import get_setting
+    import json
+    parts = [sub.query]
+    try:
+        defaults = json.loads(await get_setting("search_defaults", "[]") or "[]")
+        for item in defaults:
+            parts.append(str(item))
+    except Exception:
+        pass
+    try:
+        blocklist = json.loads(await get_setting("search_blocklist", "[]") or "[]")
+        for item in blocklist:
+            parts.append(f"-{item}")
+    except Exception:
+        pass
+    return " ".join(parts)
+
+
 async def search_and_dedup(
     session: AsyncSession,
     sub: Subscription,
@@ -79,7 +101,8 @@ async def search_and_dedup(
 
     for page_offset in range(max_search_pages):
         page = start_page + page_offset
-        result = await source.search(sub.query, page=page, sort=sub.sort)
+        query = _build_query(sub)
+        result = await source.search(query, page=page, sort=sub.sort)
         if not result.items:
             break
 
