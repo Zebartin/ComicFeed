@@ -40,7 +40,7 @@ def _cleanup_log_db(db_path: str, keep_days: int = 30, keep_count: int = 10000):
         cutoff = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         from datetime import timedelta
         conn.execute("DELETE FROM system_log WHERE timestamp < ?",
-                     (cutoff - timedelta(days=keep_days)).isoformat())
+                     ((cutoff - timedelta(days=keep_days)).isoformat(),))
         conn.execute("DELETE FROM system_log WHERE id NOT IN (SELECT id FROM system_log ORDER BY id DESC LIMIT ?)",
                      (keep_count,))
         conn.commit()
