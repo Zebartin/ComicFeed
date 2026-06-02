@@ -88,5 +88,14 @@ def create_scheduler(source_manager: SourceManager, download_pool, interval_minu
         minutes=interval_minutes,
         id="check_all_subscriptions",
     )
+    from comicfeed.infrastructure.log import cleanup_system_log
+    async def _log_cleanup():
+        cleanup_system_log()
+    scheduler.add_job(
+        _log_cleanup,
+        "interval",
+        weeks=1,
+        id="cleanup_system_log",
+    )
     return scheduler
 

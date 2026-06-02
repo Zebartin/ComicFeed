@@ -49,6 +49,12 @@ def _cleanup_log_db(db_path: str, keep_days: int = 30, keep_count: int = 10000):
         pass
 
 
+def cleanup_system_log():
+    """定期清理 system_log 表（供 scheduler 调用）。"""
+    if _db_path:
+        _cleanup_log_db(_db_path)
+
+
 def setup(level: int = logging.INFO, db_path: str | None = None):
     global _db_path
     _db_path = db_path
