@@ -50,7 +50,8 @@ def is_ad_image(data: bytes) -> bool:
     """判断单张图片是否为广告页。"""
     try:
         img = Image.open(BytesIO(data))
-    except Exception:
+    except Exception as e:
+        print(e)
         return False
 
     # 灰度图不算广告
@@ -77,23 +78,18 @@ def is_ad_image(data: bytes) -> bool:
 def detect_ads_from_tail(pages: list[bytes], consecutive_ok: int = 3) -> int:
     """从尾部扫描，返回尾部广告页数量。
 
-    从最后一页往前扫描。核心逻辑：
-    - 遇到明显广告 → 之前的可疑页全部确认为广告，重置
-    - 遇到正常页但之前见过广告 → 进入可疑区（可能是夹心页）
-    - 可疑区内累计 >= consecutive_ok 正常页 → 解除可疑，视为真正内容
-    - 可疑区内遇到新广告 → 刷新可疑区
+    从最后一页往前扫描。ad_end 记录最后一个广告的位置（靠尾部的）。
+    遇到广告 → 更新 ad_end，重置连续计数。
+    连续 >= consecutive_ok 个非广告 → 已退出广告区，停止。
     """
-    ad_count = 0
-    seen_ad = False
-    suspicious = 0  # 可疑区页数
+    ad_end = len(pages)
+    consecutive = 0
     for i in range(len(pages) - 1, -1, -1):
         if is_ad_image(pages[i]):
-            ad_count += 1 + suspicious
-            suspicious = 0
-            seen_ad = True
-        elif seen_ad:
-            suspicious += 1
-            if suspicious >= consecutive_ok:
-                # 连续 N 页正常 → 退出广告区，前面的都是正常内容，无需继续扫描
+            ad_end = i
+            consecutive = 0
+        else:
+            consecutive += 1
+            if consecutive >= consecutive_ok:
                 break
-    return ad_count
+    return len(pages) - ad_end
