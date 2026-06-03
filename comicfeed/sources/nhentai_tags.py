@@ -3,6 +3,8 @@ import asyncio
 import json
 from pathlib import Path
 
+from comicfeed.infrastructure.http_retry import retry_get
+
 _DB: dict[str, str] = {}
 _DATA_PATH = Path(__file__).parent.parent / "data" / "nhentai_tags.json"
 
@@ -37,7 +39,6 @@ async def resolve_tags(tag_ids: list[int], client) -> dict[str, str]:
 
     if unknown:
         try:
-            from comicfeed.infrastructure.http_retry import retry_get
             resp = await retry_get(client, "https://nhentai.net/api/v2/tags/ids",
                                    params={"ids": ",".join(unknown)})
             for tag in resp.json():

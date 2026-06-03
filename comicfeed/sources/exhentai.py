@@ -15,6 +15,7 @@ from comicfeed.sources.base import (
 )
 
 from comicfeed.infrastructure import gallery_cache as _gc
+from comicfeed.infrastructure.http_retry import retry_get
 
 
 class ExhentaiSource(BaseSource):
@@ -73,12 +74,12 @@ class ExhentaiSource(BaseSource):
             if page <= 1 and not self._next_url:
                 self._next_url = ""
                 url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page=0")
-                from comicfeed.infrastructure.http_retry import retry_get; resp = await retry_get(client, url)
+                resp = await retry_get(client, url)
             elif self._next_url:
-                resp = await client.get(self._ensure_inline_set(self._next_url))
+                resp = await retry_get(client, self._ensure_inline_set(self._next_url))
             else:
                 url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page={page}")
-                resp = await client.get(url)
+                resp = await retry_get(client, url)
 
             result = self._parse_search_html(resp.text, page)
             self._next_url = result.next_url
@@ -178,7 +179,7 @@ class ExhentaiSource(BaseSource):
         if cached:
             return cached
         async with self._client() as client:
-            resp = await client.get(gurl)
+            resp = await retry_get(client, gurl)
 
             detail = self._parse_gallery_html(resp.text, gallery_id)
             detail.web_url = gurl
@@ -190,7 +191,7 @@ class ExhentaiSource(BaseSource):
                 page_idx = 1
                 while len(all_urls) < detail.reported_pages:
                     paged_url = gurl.rstrip("/") + f"?p={page_idx}"
-                    r = await client.get(paged_url)
+                    r = await retry_get(client, paged_url)
 
                     soup = BeautifulSoup(r.text, "lxml")
                     more = [a.get("href", "") for a in soup.select("div#gdt a") if a.get("href")]
@@ -381,7 +382,7 @@ class ExhentaiSource(BaseSource):
         gurl = gallery_url
 
         async with self._client() as client:
-            resp = await client.get(gurl)
+            resp = await retry_get(client, gurl)
 
             soup = BeautifulSoup(resp.text, "lxml")
 

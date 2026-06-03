@@ -12,7 +12,7 @@ from comicfeed.sources.base import (
     SearchResult,
     UpdateResult,
 )
-
+from comicfeed.infrastructure.http_retry import retry_get
 
 class NhentaiSource(BaseSource):
     key = "nhentai"
@@ -58,7 +58,6 @@ class NhentaiSource(BaseSource):
 
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
         async with self._client() as client:
-            from comicfeed.infrastructure.http_retry import retry_get
             resp = await retry_get(client, f"{self._BASE}/api/v2/search",
                                    params={"query": query, "page": page, "sort": sort})
             return await self._parse_search_response(resp.json(), page, client)
@@ -107,7 +106,6 @@ class NhentaiSource(BaseSource):
 
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:
         async with self._client() as client:
-            from comicfeed.infrastructure.http_retry import retry_get
             resp = await retry_get(client, f"{self._BASE}/api/v2/galleries/{gallery_id}")
             return self._parse_gallery_response(resp.json())
 
