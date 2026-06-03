@@ -36,11 +36,10 @@ async def resolve_tags(tag_ids: list[int], client) -> dict[str, str]:
             unknown.append(str(tid))
 
     if unknown:
-        resp = await client.get(
-            "https://nhentai.net/api/v2/tags/ids",
-            params={"ids": ",".join(unknown)},
-        )
-        if resp.status_code == 200:
+        try:
+            from comicfeed.infrastructure.http_retry import retry_get
+            resp = await retry_get(client, "https://nhentai.net/api/v2/tags/ids",
+                                   params={"ids": ",".join(unknown)})
             for tag in resp.json():
                 tid = str(tag["id"])
                 name = tag.get("name", "")
@@ -48,6 +47,8 @@ async def resolve_tags(tag_ids: list[int], client) -> dict[str, str]:
                     _DB[tid] = name
                     result[tid] = name
             asyncio.create_task(_async_save())
+        except Exception:
+            pass  # 标签补全失败不阻塞搜索
 
     return result
 

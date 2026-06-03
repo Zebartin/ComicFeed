@@ -58,11 +58,9 @@ class NhentaiSource(BaseSource):
 
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
         async with self._client() as client:
-            resp = await client.get(
-                f"{self._BASE}/api/v2/search",
-                params={"query": query, "page": page, "sort": sort},
-            )
-            resp.raise_for_status()
+            from comicfeed.infrastructure.http_retry import retry_get
+            resp = await retry_get(client, f"{self._BASE}/api/v2/search",
+                                   params={"query": query, "page": page, "sort": sort})
             return await self._parse_search_response(resp.json(), page, client)
 
     @staticmethod
@@ -109,8 +107,8 @@ class NhentaiSource(BaseSource):
 
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:
         async with self._client() as client:
-            resp = await client.get(f"{self._BASE}/api/v2/galleries/{gallery_id}")
-            resp.raise_for_status()
+            from comicfeed.infrastructure.http_retry import retry_get
+            resp = await retry_get(client, f"{self._BASE}/api/v2/galleries/{gallery_id}")
             return self._parse_gallery_response(resp.json())
 
     def _parse_gallery_response(self, data: dict) -> GalleryDetail:

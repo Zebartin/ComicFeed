@@ -73,13 +73,13 @@ class ExhentaiSource(BaseSource):
             if page <= 1 and not self._next_url:
                 self._next_url = ""
                 url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page=0")
-                resp = await client.get(url)
+                from comicfeed.infrastructure.http_retry import retry_get; resp = await retry_get(client, url)
             elif self._next_url:
                 resp = await client.get(self._ensure_inline_set(self._next_url))
             else:
                 url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page={page}")
                 resp = await client.get(url)
-            resp.raise_for_status()
+
             result = self._parse_search_html(resp.text, page)
             self._next_url = result.next_url
             return result
@@ -179,7 +179,7 @@ class ExhentaiSource(BaseSource):
             return cached
         async with self._client() as client:
             resp = await client.get(gurl)
-            resp.raise_for_status()
+
             detail = self._parse_gallery_html(resp.text, gallery_id)
             detail.web_url = gurl
 
@@ -191,7 +191,7 @@ class ExhentaiSource(BaseSource):
                 while len(all_urls) < detail.reported_pages:
                     paged_url = gurl.rstrip("/") + f"?p={page_idx}"
                     r = await client.get(paged_url)
-                    r.raise_for_status()
+
                     soup = BeautifulSoup(r.text, "lxml")
                     more = [a.get("href", "") for a in soup.select("div#gdt a") if a.get("href")]
                     if not more:
@@ -326,7 +326,7 @@ class ExhentaiSource(BaseSource):
                             req_url = viewer_url + sep + "nl=" + nl
                             _log.debug("重试带 nl: %s", nl)
                         resp = await client.get(req_url)
-                        resp.raise_for_status()
+
                         soup = BeautifulSoup(resp.text, "lxml")
 
                         # 提取 nl（每次访问 viewer 页都可能更新）
@@ -382,7 +382,7 @@ class ExhentaiSource(BaseSource):
 
         async with self._client() as client:
             resp = await client.get(gurl)
-            resp.raise_for_status()
+
             soup = BeautifulSoup(resp.text, "lxml")
 
             newer = soup.select_one("#gnd")
