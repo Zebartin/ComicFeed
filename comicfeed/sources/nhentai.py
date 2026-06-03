@@ -63,24 +63,29 @@ class NhentaiSource(BaseSource):
                 params={"query": query, "page": page, "sort": sort},
             )
             resp.raise_for_status()
-            return self._parse_search_response(resp.json(), page)
+            return await self._parse_search_response(resp.json(), page, client)
 
     @staticmethod
     def _make_image_url(base: str, path: str) -> str:
         """拼接图片 URL，兼容 path 有无前导 /。"""
         return f"{base}{path}" if path.startswith("/") else f"{base}/{path}"
 
-    def _parse_search_response(self, data: dict, page: int) -> SearchResult:
+    async def _parse_search_response(self, data: dict, page: int, client) -> SearchResult:
+        # 收集全部 tag_id，批量查询
+        from comicfeed.sources.nhentai_tags import resolve_tags
+        from comicfeed.infrastructure.tag_translator import get_translator as _gt
+        all_ids = set()
+        for item in data.get("result", []):
+            all_ids.update(item.get("tag_ids", []))
+        tag_map = await resolve_tags(list(all_ids), client) if all_ids else {}
+        _tt = _gt()
+
         items = []
         for item in data.get("result", []):
             thumbnail = item.get("thumbnail", "")
             cover_url = self._make_image_url("https://t.nhentai.net", thumbnail) if thumbnail else ""
-            from comicfeed.sources.nhentai_tags import get_tag_name as _tn
-            from comicfeed.infrastructure.tag_translator import get_translator as _gt
             tids = item.get("tag_ids", [])
-            english = [_tn(t) for t in tids]
-            _tt = _gt()
-            # 搜索无 namespace，全库搜索翻译
+            english = [tag_map.get(str(t)) for t in tids]
             tags = [_tt.translate("", t) for t in english if t]
             tags = [t for t in tags if t]
             nid = str(item.get("id", ""))

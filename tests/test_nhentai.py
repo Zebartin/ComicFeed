@@ -65,10 +65,13 @@ async def test_parse_url_extracts_gallery_id():
     assert source.parse_url("not-a-valid-url") is None
 
 
-def test_parse_search_response():
+async def test_parse_search_response():
     """解析 v2 API 搜索响应 JSON。"""
+    class FakeClient:
+        async def get(self, url, **kw):
+            return type("R", (), {"status_code": 404})()
     source = NhentaiSource()
-    result = source._parse_search_response(_SAMPLE_SEARCH, page=1)
+    result = await source._parse_search_response(_SAMPLE_SEARCH, page=1, client=FakeClient())
     assert result.current_page == 1
     assert result.total_pages == 1
     assert len(result.items) == 2

@@ -1,4 +1,5 @@
-"""nhentai tag_id → tag_name 映射，数据文件可定期更新。"""
+"""nhentai tag_id → tag_name 映射。本地缓存 + API 自动补全。"""
+import asyncio
 import json
 from pathlib import Path
 
@@ -13,12 +14,46 @@ def _load():
     return _DB
 
 
+def _save():
+    _DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _DATA_PATH.write_text(json.dumps(_DB, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def get_tag_name(tag_id: int | str) -> str | None:
     return (_DB or _load()).get(str(tag_id))
 
 
-async def update_from_api():
-    """从 nhentai API 更新标签映射表（需要 cf_clearance）。"""
-    # nhentai 没有公开的标签列表 API，暂不实现自动更新
-    # 可手动替换 data/nhentai_tags.json
-    pass
+async def resolve_tags(tag_ids: list[int], client) -> dict[str, str]:
+    """批量获取标签名。先查本地，未知的从 API 补全。返回 {id: name}。"""
+    _DB or _load()
+    result = {}
+    unknown = []
+    for tid in tag_ids:
+        name = _DB.get(str(tid))
+        if name:
+            result[str(tid)] = name
+        else:
+            unknown.append(str(tid))
+
+    if unknown:
+        resp = await client.get(
+            "https://nhentai.net/api/v2/tags/ids",
+            params={"ids": ",".join(unknown)},
+        )
+        if resp.status_code == 200:
+            for tag in resp.json():
+                tid = str(tag["id"])
+                name = tag.get("name", "")
+                if name:
+                    _DB[tid] = name
+                    result[tid] = name
+            asyncio.create_task(_async_save())
+
+    return result
+
+
+async def _async_save():
+    try:
+        _save()
+    except Exception:
+        pass
