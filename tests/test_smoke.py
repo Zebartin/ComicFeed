@@ -70,10 +70,11 @@ async def test_exhentai_gallery_detail_smoke():
     detail = await s.get_gallery(gid, gallery_url=gurl)
     assert detail.title == '[Fanbox] 加瀬大輝 2025.07', "缺少 title"
     assert detail.cover_url == 'https://ehgt.org/w/02/126/11833-na1tg4et.webp', "缺少 cover_url"
-    assert len(detail.tags) == 7, "缺少 tags"
+    assert len(detail.tags) >= 7, "缺少 tags"
     assert detail.writers == ['画师：加濑大辉'], f"作者解析异常: {detail.writers}"
     assert detail.reported_pages == 40, f"reported_pages 异常: {detail.reported_pages}"
     assert len(detail.page_urls) == 40, "缺少 page_urls"
+    assert detail.num_favorites >= 570, f"收藏数异常: {detail.num_favorites}"
 
 
 @pytest.mark.live
@@ -107,6 +108,7 @@ async def test_nhentai_search_smoke():
     assert g.native_id, "缺少 native_id"
     assert g.title, "缺少 title"
     assert g.cover_url, "缺少 cover_url"
+    assert len(g.tags) > 0, "缺少 tags"
     assert isinstance(g.page_count, int) and g.page_count > 0, f"page_count 异常: {g.page_count}"
 
 

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 _DB: dict[str, str] = {}
-_DATA_PATH = Path(__file__).parent / "data" / "nhentai_tags.json"
+_DATA_PATH = Path(__file__).parent.parent / "data" / "nhentai_tags.json"
 
 
 def _load():

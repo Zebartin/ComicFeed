@@ -198,6 +198,7 @@ async def _download_gallery(
     # 广告检测
     all_new_pages, ad_count, detail.tags = strip_ads(all_new_pages, detail.tags)
     downloaded -= ad_count
+    result.page_count = downloaded
 
     # 打包 CBZ
     result.files = pack_cbz_volumes(
