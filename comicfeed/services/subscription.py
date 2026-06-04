@@ -57,23 +57,36 @@ def _apply_filters(items: list[GallerySummary], rules_json: str) -> list[Gallery
     return [g for g in items if _matches_filter(g, rules)]
 
 
-async def _build_query(sub) -> str:
-    """拼接全局搜索条件。"""
+async def _build_query(sub, source) -> str:
+    """拼接全局搜索条件。exhentai 源会将 tag:xxx 转换为真实 namespace。"""
     if not getattr(sub, 'use_global_search', False):
         return sub.query
     from comicfeed.infrastructure.config import get_setting
+    from comicfeed.infrastructure.tag_translator import get_translator
     import json
+    _tt = get_translator()
     parts = [sub.query]
+
+    def _expand(item: str) -> list[str]:
+        if not item.startswith("tag:") or source.key != "exhentai":
+            return [item]
+        name = item[4:]
+        namespaces = _tt.find_namespaces(name)
+        if not namespaces:
+            return [f"other:{name}"]
+        return [f"{ns}:{name}" for ns in namespaces]
+
     try:
         defaults = json.loads(await get_setting("search_defaults"))
         for item in defaults:
-            parts.append(str(item))
+            parts.extend(_expand(str(item)))
     except Exception:
         pass
     try:
         blocklist = json.loads(await get_setting("search_blocklist"))
         for item in blocklist:
-            parts.append(f"-{item}")
+            for e in _expand(str(item)):
+                parts.append(f"-{e}")
     except Exception:
         pass
     return " ".join(parts)
@@ -101,7 +114,7 @@ async def search_and_dedup(
 
     for page_offset in range(max_search_pages):
         page = start_page + page_offset
-        query = await _build_query(sub)
+        query = await _build_query(sub, source)
         result = await source.search(query, page=page, sort=sub.sort)
         if not result.items:
             break

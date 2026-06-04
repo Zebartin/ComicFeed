@@ -6,6 +6,7 @@
 import gzip
 import json
 from datetime import datetime
+from functools import cache
 from logging import getLogger
 
 from curl_cffi.requests import AsyncSession
@@ -74,6 +75,15 @@ class TagTranslator:
             cn_ns = self._namespaces.get(ns, ns)
             return f"{cn_ns}：{name}"
         return name
+
+    @cache
+    def find_namespaces(self, name: str) -> tuple[str, ...]:
+        """反查标签名所属的 namespace（仅搜索非 _SHOW_NS）。"""
+        result = []
+        for ns, tmap in self._tags.items():
+            if ns not in self._SHOW_NS and name in tmap:
+                result.append(ns)
+        return tuple(result)
 
     def translate(self, ns: str, name: str, avoid_ns: set[str] | None = _SHOW_NS) -> str:
         """翻译单个标签。avoid_ns 指定无 namespace 时优先避开的命名空间。"""
