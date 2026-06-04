@@ -70,7 +70,7 @@ async def _build_query(sub, source) -> str:
     def _expand(item: str) -> list[str]:
         if not item.startswith("tag:") or source.key != "exhentai":
             return [item]
-        name = item[4:]
+        name = item[4:].strip()
         namespaces = _tt.find_namespaces(name)
         if not namespaces:
             return [f"other:{name}"]
@@ -118,7 +118,7 @@ async def search_and_dedup(
         result = await source.search(query, page=page, sort=sub.sort)
         if not result.items:
             break
-        has_more = result.next_url or (result.total_pages > page)
+        has_more = hasattr(result, "next_url") or (result.total_pages > page)
 
         raw_items = [g for g in result.items if g.native_id not in exclude_ids]
         raw_items = _apply_filters(raw_items, sub.filter_rules)

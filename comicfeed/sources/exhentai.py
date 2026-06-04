@@ -73,7 +73,7 @@ class ExhentaiSource(BaseSource):
         async with self._client() as client:
             if page <= 1 and not self._next_url:
                 self._next_url = ""
-                url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page=0")
+                url = self._ensure_inline_set(f"{self._base}/?f_search={query}")
                 resp = await retry_get(client, url)
             elif self._next_url:
                 resp = await retry_get(client, self._ensure_inline_set(self._next_url))
