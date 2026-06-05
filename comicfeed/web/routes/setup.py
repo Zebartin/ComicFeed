@@ -37,8 +37,8 @@ async def setup_status():
     checks["notifications"] = bool(wh or smtp)
 
     # 代理
-    proxy = await get_setting("proxy", "")
-    checks["proxy"] = bool(proxy)
+    # proxy = await get_setting("proxy", "")
+    # checks["proxy"] = bool(proxy)
 
     all_done = all(checks.values())
     checks["all_done"] = all_done
