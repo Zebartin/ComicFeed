@@ -1,6 +1,7 @@
 import base64
 import secrets
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -25,7 +26,7 @@ from comicfeed.web.routes.subscriptions import router as sub_router
 
 _source_manager: SourceManager | None = None
 _download_tracker: DownloadTracker | None = None
-_scheduler: object | None = None
+_scheduler: AsyncIOScheduler | None = None
 
 
 def get_source_manager() -> SourceManager | None:
