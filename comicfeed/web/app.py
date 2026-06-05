@@ -96,7 +96,9 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
         yield
         scheduler.shutdown()
 
+    from fastapi.staticfiles import StaticFiles
     app = FastAPI(lifespan=lifespan)
+    app.mount("/static", StaticFiles(directory="comicfeed/web/static"), name="static")
 
     auth_user = config.get("auth_username", "")
     auth_pass = config.get("auth_password", "")
