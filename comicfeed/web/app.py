@@ -88,6 +88,18 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     app = FastAPI()
     app.mount("/static", StaticFiles(directory="comicfeed/web/static"), name="static")
 
+    # 认证：优先 DB，其次 config 字典（测试兼容），最后默认值
+    import asyncio as _asyncio
+    from comicfeed.infrastructure.config import get_setting as _gs
+    if config:
+        u = config.get("auth_username", "") or "admin"
+        p = config.get("auth_password", "")
+    else:
+        u = _asyncio.run(_gs("auth_username")) or "admin"
+        p = _asyncio.run(_gs("auth_password")) or ""
+    if u and p:
+        app.add_middleware(BasicAuthMiddleware, username=u, password=p, exclude_paths=["/health"])
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from comicfeed.infrastructure.scheduler import create_scheduler
@@ -95,22 +107,10 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
         interval = int(await get_setting("check_interval") or "10")
         scheduler = create_scheduler(_source_manager, download_pool, interval_minutes=interval)
         scheduler.start()
-        if not config:
-            auth_user = await get_setting("auth_username") or "admin"
-            auth_pass = await get_setting("auth_password") or ""
-            if auth_user and auth_pass:
-                app.add_middleware(BasicAuthMiddleware, username=auth_user, password=auth_pass, exclude_paths=["/health"])
         yield
         scheduler.shutdown()
 
     app.router.lifespan_context = lifespan
-
-    # 测试兼容：config 字典直接添加认证（不依赖 lifespan）
-    if config:
-        u = config.get("auth_username", "") or "admin"
-        p = config.get("auth_password", "")
-        if u and p:
-            app.add_middleware(BasicAuthMiddleware, username=u, password=p, exclude_paths=["/health"])
 
     @app.get("/health")
     async def health():
