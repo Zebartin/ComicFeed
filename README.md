@@ -18,9 +18,9 @@
 
 ## 截图
 
-![订阅管理页](./docs/images/订阅.png)
-![搜索 + 结果面板](./docs/images/搜索.png)
-![下载队列页](./docs/images/下载.png)
+<img src="https://raw.githubusercontent.com/Zebartin/ComicFeed/master/docs/images/订阅.png" alt="订阅管理页" style="max-width: 75%;display: block;margin: auto">
+<img src="https://raw.githubusercontent.com/Zebartin/ComicFeed/master/docs/images/搜索.png" alt="搜索 + 结果面板" style="max-width: 75%;display: block;margin: auto">
+<img src="https://raw.githubusercontent.com/Zebartin/ComicFeed/master/docs/images/下载.png" alt="下载队列页" style="max-width: 75%;display: block;margin: auto">
 
 ## 快速开始（Docker）
 
