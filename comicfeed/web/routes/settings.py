@@ -27,6 +27,12 @@ async def list_settings():
 @router.put("/{key}")
 async def update_setting(key: str, value: str = ""):
     await set_setting(key, value)
+    if key == "check_interval":
+        try:
+            from comicfeed.web.app import reschedule_checks
+            reschedule_checks(int(value))
+        except Exception:
+            pass
     return {"key": key, "value": value}
 
 

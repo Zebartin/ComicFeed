@@ -25,6 +25,7 @@ from comicfeed.web.routes.subscriptions import router as sub_router
 
 _source_manager: SourceManager | None = None
 _download_tracker: DownloadTracker | None = None
+_scheduler: object | None = None
 
 
 def get_source_manager() -> SourceManager | None:
@@ -33,6 +34,11 @@ def get_source_manager() -> SourceManager | None:
 
 def get_download_tracker() -> DownloadTracker | None:
     return _download_tracker
+
+
+def reschedule_checks(interval_minutes: int):
+    if _scheduler:
+        _scheduler.reschedule_job("check_all_subscriptions", trigger="interval", minutes=interval_minutes)
 
 
 class BasicAuthMiddleware(BaseHTTPMiddleware):
@@ -102,13 +108,14 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        global _scheduler
         from comicfeed.infrastructure.scheduler import create_scheduler
         from comicfeed.infrastructure.config import get_setting
         interval = int(await get_setting("check_interval") or "10")
-        scheduler = create_scheduler(_source_manager, download_pool, interval_minutes=interval)
-        scheduler.start()
+        _scheduler = create_scheduler(_source_manager, download_pool, interval_minutes=interval)
+        _scheduler.start()
         yield
-        scheduler.shutdown()
+        _scheduler.shutdown()
 
     app.router.lifespan_context = lifespan
 
