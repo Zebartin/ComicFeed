@@ -60,8 +60,13 @@ def main():
     from comicfeed.services.download import DownloadPool
     download_pool = DownloadPool(max_workers=5)
 
-    config = {"auth_username": args.auth_user, "auth_password": args.auth_pass}
-    app = create_app(config, source_manager=source_mgr, download_pool=download_pool)
+    # 首次运行时写入认证信息到 DB
+    import asyncio as _asyncio
+    for k, v in [("auth_username", args.auth_user), ("auth_password", args.auth_pass)]:
+        if v and not _asyncio.run(get_setting(k)):
+            _asyncio.run(set_setting(k, v))
+
+    app = create_app(source_manager=source_mgr, download_pool=download_pool)
 
     print(f"ComicFeed 启动: http://{args.host}:{args.port}")
     print(f"  定时检查: 每 10 分钟 (按订阅间隔执行)")

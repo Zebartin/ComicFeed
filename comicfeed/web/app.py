@@ -80,30 +80,37 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
 def create_app(config: dict | None = None, source_manager: SourceManager | None = None,
                download_tracker: DownloadTracker | None = None, download_pool: DownloadPool | None = None) -> FastAPI:
     global _source_manager, _download_tracker
-    if config is None:
-        config = {}
     _source_manager = source_manager or SourceManager()
     _download_tracker = download_tracker or DownloadTracker()
     download_pool = download_pool or DownloadPool()
+
+    from fastapi.staticfiles import StaticFiles
+    app = FastAPI()
+    app.mount("/static", StaticFiles(directory="comicfeed/web/static"), name="static")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from comicfeed.infrastructure.scheduler import create_scheduler
         from comicfeed.infrastructure.config import get_setting
-        interval = int(await get_setting("check_interval", "10") or "10")
+        interval = int(await get_setting("check_interval") or "10")
         scheduler = create_scheduler(_source_manager, download_pool, interval_minutes=interval)
         scheduler.start()
+        if not config:
+            auth_user = await get_setting("auth_username") or "admin"
+            auth_pass = await get_setting("auth_password") or ""
+            if auth_user and auth_pass:
+                app.add_middleware(BasicAuthMiddleware, username=auth_user, password=auth_pass, exclude_paths=["/health"])
         yield
         scheduler.shutdown()
 
-    from fastapi.staticfiles import StaticFiles
-    app = FastAPI(lifespan=lifespan)
-    app.mount("/static", StaticFiles(directory="comicfeed/web/static"), name="static")
+    app.router.lifespan_context = lifespan
 
-    auth_user = config.get("auth_username", "")
-    auth_pass = config.get("auth_password", "")
-    if auth_user and auth_pass:
-        app.add_middleware(BasicAuthMiddleware, username=auth_user, password=auth_pass, exclude_paths=["/health"])
+    # 测试兼容：config 字典直接添加认证（不依赖 lifespan）
+    if config:
+        u = config.get("auth_username", "") or "admin"
+        p = config.get("auth_password", "")
+        if u and p:
+            app.add_middleware(BasicAuthMiddleware, username=u, password=p, exclude_paths=["/health"])
 
     @app.get("/health")
     async def health():
