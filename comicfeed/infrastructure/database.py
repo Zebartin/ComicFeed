@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from comicfeed.models import Base
@@ -7,9 +7,14 @@ _engine = None
 _sessionmaker = None
 
 
+def _set_wal(dbapi_connection, _connection_record):
+    dbapi_connection.execute("PRAGMA journal_mode=WAL")
+
+
 def init_db(path: str):
     global _engine, _sessionmaker
     _engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
+    event.listen(_engine.sync_engine, "connect", _set_wal)
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False)
 
 
