@@ -407,6 +407,7 @@ async function checkSub(id, loadMore=false) {
       results = newGals; picked.clear()
       $('res-title').textContent = '检查结果'
       $('res-body').innerHTML = newGals.length ? '' : '<div class="empty-state"><div class="icon">&para;</div><h3>没有新发现</h3><p>所有匹配的画廊都已下载</p></div>'
+      load()  // 刷新下次检查时间
     } else {
       results = results.concat(newGals)
     }
