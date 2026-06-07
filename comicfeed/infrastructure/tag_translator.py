@@ -36,6 +36,7 @@ class TagTranslator:
                     db = json.load(f)
                 self._namespaces = db.get("namespaces", {})
                 self._tags = db.get("tags", {})
+                self.find_namespaces.cache_clear()
                 logger.info("标签翻译数据库已加载 (%d 个命名空间)", len(self._namespaces))
                 return
         except (FileNotFoundError, json.JSONDecodeError):
@@ -61,6 +62,7 @@ class TagTranslator:
             else:
                 self._tags[ns] = {k: v["name"] for k, v in item["data"].items()}
 
+        self.find_namespaces.cache_clear()
         with open(self._db_path, "w", encoding="utf-8") as f:
             json.dump({"namespaces": self._namespaces, "tags": self._tags}, f, ensure_ascii=False)
         logger.info("标签翻译数据库已更新 (%d 命名空间, %d 标签)", len(self._namespaces),
