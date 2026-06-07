@@ -41,9 +41,10 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
                               start_page + len(vol_pages),
                               total_pages=0 if do_split else len(vol_pages))
         fpath = os.path.join(output_dir, fname)
+        number = f"{gallery_id}{(start_page // cbz_max_pages) + 1:04d}" if do_split else gallery_id
         _log.debug("打包 CBZ: %s (%d 页)", os.path.basename(fpath), len(vol_pages))
         with open(fpath, "wb") as f:
-            pack_cbz(f, fname, detail, vol_pages, start_page=start_page + 1)
+            pack_cbz(f, fname, detail, vol_pages, start_page=start_page + 1, number=number)
         return fpath
 
     files = []

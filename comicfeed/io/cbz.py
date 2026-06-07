@@ -77,10 +77,10 @@ def read_cbz_pages(path: str) -> list[bytes]:
     return pages
 
 
-def _build_comicinfo(detail: GalleryDetail) -> bytes:
+def _build_comicinfo(detail: GalleryDetail, number: str = "") -> bytes:
     root = ET.Element("ComicInfo")
     ET.SubElement(root, "Title").text = detail.title
-    ET.SubElement(root, "Number").text = detail.native_id
+    ET.SubElement(root, "Number").text = number or detail.native_id
     if detail.writers:
         ET.SubElement(root, "Writer").text = ", ".join(detail.writers)
     ET.SubElement(root, "Tags").text = ", ".join(detail.tags)
@@ -104,9 +104,9 @@ def _build_comicinfo(detail: GalleryDetail) -> bytes:
     return buf.getvalue()
 
 
-def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1):
-    """打包 CBZ 文件到 output，页码从 start_page 开始编号。"""
+def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1, number: str = ""):
+    """打包 CBZ 文件到 output，页码从 start_page 开始编号。number 为 ComicInfo Number。"""
     with ZipFile(output, "w", ZIP_DEFLATED) as z:
         for i, data in enumerate(pages, start_page):
             z.writestr(f"{i:04d}.jpg", data)
-        z.writestr("ComicInfo.xml", _build_comicinfo(detail))
+        z.writestr("ComicInfo.xml", _build_comicinfo(detail, number))
