@@ -8,6 +8,39 @@ from comicfeed.infrastructure.config import get_source_credentials
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
+async def _merge_global(source_key: str, query: str) -> str:
+    """合并全局搜索条件（复用 subscription.py 的 _expand 逻辑）。"""
+    from comicfeed.infrastructure.config import get_setting
+    from comicfeed.infrastructure.tag_translator import get_translator
+    import json
+    _tt = get_translator()
+    parts = [query]
+
+    def _expand(item: str) -> list[str]:
+        if not item.startswith("tag:") or source_key != "exhentai":
+            return [item]
+        name = item[4:].strip()
+        namespaces = _tt.find_namespaces(name)
+        if not namespaces:
+            return [f"other:{name}"]
+        return [f"{ns}:{name}" for ns in namespaces]
+
+    try:
+        defaults = json.loads(await get_setting("search_defaults"))
+        for item in defaults:
+            parts.extend(_expand(str(item)))
+    except Exception:
+        pass
+    try:
+        blocklist = json.loads(await get_setting("search_blocklist"))
+        for item in blocklist:
+            for e in _expand(str(item)):
+                parts.append(f"-{e}")
+    except Exception:
+        pass
+    return " ".join(parts)
+
+
 class SearchRequest(BaseModel):
     source_key: str
     query: str
@@ -16,6 +49,7 @@ class SearchRequest(BaseModel):
     next_url: str = ""
     exclude_ids: list[str] = []
     existing_titles: list[str] = []
+    use_global_search: bool = False
 
 
 @router.post("")
@@ -31,7 +65,11 @@ async def search_source(req: SearchRequest):
     if req.next_url and hasattr(source, '_next_url'):
         source._next_url = req.next_url
 
-    result = await source.search(req.query, page=req.page, sort=req.sort)
+    query = req.query
+    if req.use_global_search:
+        query = await _merge_global(req.source_key, req.query)
+
+    result = await source.search(query, page=req.page, sort=req.sort)
     next_url = getattr(source, '_next_url', '')
 
     # 去重

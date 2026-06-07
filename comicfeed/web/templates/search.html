@@ -39,6 +39,7 @@
   <label>源 <select id="src-key"></select></label>
   <label>查询串 <input id="query" placeholder="如 chinese、artist:xxx" style="min-width:240px"></label>
   <label>排序 <select id="sort"></select></label>
+  <label style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:4px"><input id="use-global" type="checkbox" checked> 全局条件</label>
   <button class="btn btn-primary" onclick="doSearch()">搜索</button>
 </div>
 
@@ -88,7 +89,7 @@ async function fetchPage(loadMore=false) {
   if(!loadMore){pagesLoaded++;pageNum=1}
   else pagesLoaded++
   $('load-more-btn').textContent='加载中…';$('load-more-btn').disabled=true
-  const r=await api('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,query:searchQuery,sort:sortBy,page:pageNum,next_url:nextUrl,exclude_ids:excludeIds,existing_titles:existingTitles})})
+  const r=await api('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_key:srcKey,query:searchQuery,sort:sortBy,page:pageNum,next_url:nextUrl,exclude_ids:excludeIds,existing_titles:existingTitles,use_global_search:$('use-global').checked})})
   if(r.error){$('res-body').innerHTML='<div class="empty-state"><p style="color:var(--red)">'+r.error+'</p></div>';return}
   const items=r.items||[];hasMore=r.has_more;nextUrl=r.next_url||'';pageNum=r.current_page+1
   results=loadMore?results.concat(items):items
