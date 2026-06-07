@@ -30,6 +30,7 @@
 <div class="page-header"><h1>画廊</h1></div>
 
 <div class="toolbar" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+  <input id="search" type="text" placeholder="搜索标题或 ID..." oninput="load(0)" style="padding:6px 10px;font-size:12px;min-width:180px">
   <select id="filter-src" onchange="load(0)" style="padding:6px 10px;font-size:12px;min-width:120px">
     <option value="">所有源</option>
   </select>
@@ -63,8 +64,10 @@ async function load(page) {
   currentPage = page; picked.clear()
   const src = document.getElementById('filter-src').value
   const sort = document.getElementById('sort-by').value
+  const q = document.getElementById('search').value.trim()
   const params = new URLSearchParams({limit: PAGE_SIZE, offset: page * PAGE_SIZE, sort, sort_dir: sortDir})
   if (src) params.set('source_key', src)
+  if (q) params.set('search', q)
 
   const r = await fetch('/api/galleries?' + params); const data = await r.json()
   total = data.total; allGals = data.items

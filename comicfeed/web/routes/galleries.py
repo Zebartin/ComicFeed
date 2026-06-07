@@ -36,22 +36,32 @@ _SORT_FIELDS = {
 
 
 @router.get("")
-async def list_galleries(source_key: str | None = None, sort: str = "date",
-                         sort_dir: str = "desc", limit: int = 50, offset: int = 0):
+async def list_galleries(source_key: str | None = None, search: str = "",
+                         sort: str = "date", sort_dir: str = "desc",
+                         limit: int = 50, offset: int = 0):
     async with get_session() as session:
+        from sqlalchemy import or_
+
+        def _apply_filters(stmt):
+            if source_key:
+                stmt = stmt.where(Gallery.source_key == source_key)
+            if search:
+                pattern = f"%{search}%"
+                stmt = stmt.where(or_(
+                    Gallery.normalized_title.ilike(pattern),
+                    Gallery.native_id.ilike(pattern),
+                    Gallery.id.ilike(pattern),
+                ))
+            return stmt
+
         # 总数
-        count_stmt = select(Gallery.id)
-        if source_key:
-            count_stmt = count_stmt.where(Gallery.source_key == source_key)
-        total = (await session.execute(count_stmt)).fetchall()
+        total = (await session.execute(_apply_filters(select(Gallery.id)))).fetchall()
 
         # 排序
         order_col = _SORT_FIELDS.get(sort, Gallery.downloaded_at)
         order = order_col.desc() if sort_dir == "desc" else order_col.asc()
 
-        stmt = select(Gallery).order_by(order).offset(offset).limit(limit)
-        if source_key:
-            stmt = stmt.where(Gallery.source_key == source_key)
+        stmt = _apply_filters(select(Gallery)).order_by(order).offset(offset).limit(limit)
         result = await session.execute(stmt)
         galleries = result.scalars().all()
         return {
