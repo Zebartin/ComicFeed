@@ -53,6 +53,7 @@ async def list_subscriptions():
                 "cbz_max_pages": s.cbz_max_pages, "search_pages": s.search_pages, "sort": s.sort,
                 "download_dir": s.download_dir, "filter_rules": s.filter_rules, "use_global_search": s.use_global_search, "enabled": s.enabled,
                 "created_at": s.created_at.strftime("%Y-%m-%d") if s.created_at else "",
+                "last_checked_at": s.last_checked_at.strftime("%Y-%m-%dT%H:%M") if s.last_checked_at else "",
             }
             for s in subs
         ]
@@ -158,10 +159,11 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
 
 def _sub_to_dict(s: Subscription) -> dict:
     created = s.created_at.strftime("%Y-%m-%d") if s.created_at else ""
+    last_checked = s.last_checked_at.strftime("%Y-%m-%dT%H:%M") if s.last_checked_at else ""
     return {
         "id": s.id, "name": s.name, "source_key": s.source_key,
         "query": s.query, "mode": s.mode, "interval_minutes": s.interval_minutes,
         "cbz_max_pages": s.cbz_max_pages, "search_pages": s.search_pages, "sort": s.sort,
         "download_dir": s.download_dir, "filter_rules": s.filter_rules, "use_global_search": s.use_global_search, "enabled": s.enabled,
-        "created_at": created,
+        "created_at": created, "last_checked_at": last_checked,
     }
