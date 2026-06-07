@@ -9,7 +9,7 @@ from comicfeed.infrastructure.database import get_session
 from comicfeed.infrastructure.log import get
 from comicfeed.io.cbz import read_cbz_pages
 from comicfeed.io.cbz_builder import AppendContext, pack_cbz_volumes, strip_ads
-from comicfeed.io.page_fetcher import cleanup_cache, fetch_pages
+from comicfeed.io.page_fetcher import cleanup_cache, fetch_pages, read_from_cache
 from comicfeed.repositories.gallery import get_or_create
 from comicfeed.repositories.page import append_new, count_for_gallery, migrate_gallery, replace_all
 from comicfeed.sources.base import BaseSource, GalleryDetail, GallerySummary
@@ -185,24 +185,24 @@ async def _download_gallery(
                         old_cbz_paths=[existing[0]],
                     )
 
-    # 下载页面
+    # 下载页面到磁盘缓存
     cache_root = os.path.join(os.getcwd(), ".cache")
     cleanup_cache(cache_root)
     cache_dir = os.path.join(cache_root, gallery_id)
     os.makedirs(cache_dir, exist_ok=True)
 
-    all_new_pages, downloaded = await fetch_pages(
+    downloaded = await fetch_pages(
         source, gallery_id, gallery_url, detail, total, cache_dir, tracker, full_gid
     )
 
-    # 广告检测
-    all_new_pages, ad_count, detail.tags = strip_ads(all_new_pages, detail.tags)
+    # 广告检测（从缓存读尾部页）
+    ad_count, detail.tags = strip_ads(cache_dir, detail, total, detail.tags)
     downloaded -= ad_count
     result.page_count = downloaded
 
-    # 打包 CBZ
+    # 打包 CBZ（从缓存逐卷读取）
     result.files = pack_cbz_volumes(
-        all_new_pages, detail, gallery_id, title, output_dir,
+        cache_dir, detail, total, gallery_id, title, output_dir,
         cbz_max_pages, do_split, append_ctx
     )
 

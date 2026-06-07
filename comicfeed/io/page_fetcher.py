@@ -50,21 +50,19 @@ def cleanup_cache(root: str):
 
 async def fetch_pages(source, gallery_id: str, gallery_url: str, detail,
                        total: int, cache_dir: str, tracker=None,
-                       full_gid: str = "") -> tuple[list[bytes], int]:
-    """逐页下载，返回 (页面数据列表, 已下载数量)。优先命中磁盘缓存。"""
+                       full_gid: str = "") -> int:
+    """逐页下载到磁盘缓存。返回已下载数量。"""
     try:
         retry_count = int((await _cfg("download_retry", "3")) or "3")
     except Exception:
         retry_count = 3
 
-    pages: list[bytes] = []
     downloaded = 0
     for abs_idx in range(0, total):
         pid = detail.page_native_ids[abs_idx] if abs_idx < len(detail.page_native_ids) else ""
         cache_name = (pid + ".dat") if pid else f"{abs_idx:04d}.dat"
         cache_file = os.path.join(cache_dir, cache_name)
         if os.path.exists(cache_file):
-            pages.append(open(cache_file, "rb").read())
             downloaded += 1
             _log.debug("缓存命中: %s page=%d pid=%s", gallery_id, abs_idx + 1, pid)
             if tracker:
@@ -77,7 +75,6 @@ async def fetch_pages(source, gallery_id: str, gallery_url: str, detail,
                 data = chunk[0]
                 with open(cache_file, "wb") as f:
                     f.write(data)
-                pages.append(data)
                 downloaded += 1
                 if tracker:
                     tracker.progress(full_gid, downloaded)
@@ -90,4 +87,18 @@ async def fetch_pages(source, gallery_id: str, gallery_url: str, detail,
                 else:
                     _log.error("下载失败: %s page=%d - %r", gallery_id, abs_idx + 1, e)
                     raise
-    return pages, downloaded
+    return downloaded
+
+
+def read_from_cache(cache_dir: str, detail, start: int, count: int) -> list[bytes]:
+    """从磁盘缓存读取指定范围的页面。"""
+    pages = []
+    for abs_idx in range(start, start + count):
+        pid = detail.page_native_ids[abs_idx] if abs_idx < len(detail.page_native_ids) else ""
+        cache_name = (pid + ".dat") if pid else f"{abs_idx:04d}.dat"
+        cache_file = os.path.join(cache_dir, cache_name)
+        if os.path.exists(cache_file):
+            pages.append(open(cache_file, "rb").read())
+        else:
+            pages.append(b"")
+    return pages
