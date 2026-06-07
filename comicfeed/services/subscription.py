@@ -118,7 +118,7 @@ async def search_and_dedup(
         result = await source.search(query, page=page, sort=sub.sort)
         if not result.items:
             break
-        has_more = hasattr(result, "next_url") or (result.total_pages > page)
+        has_more = bool(result.next_url) or (result.total_pages > page)
 
         raw_items = [g for g in result.items if g.native_id not in exclude_ids]
         raw_items = _apply_filters(raw_items, sub.filter_rules)
