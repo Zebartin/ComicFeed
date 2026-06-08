@@ -1,10 +1,18 @@
 """Komga 书架清理工具：遍历已读书籍，逐个决定删除或转移。
 
 用法:
-  uv run python tools/komga_cleanup.py --series-id <ID> --target-dir <转移目录>
-  uv run python tools/komga_cleanup.py --series-id <ID> --target-dir <转移目录> --komga-url <URL> --komga-user <user> --komga-pass <pass>
+  uv run python tools/komga_cleanup.py -c cleanup.toml
+  uv run python tools/komga_cleanup.py --series-ids id1 id2 --target-dir ./out
 
-依赖: httpx, tkinter (Python 自带)
+配置文件 (cleanup.toml):
+  komga_url = "http://localhost:25600"
+  komga_user = ""
+  komga_pass = ""
+  target_dir = "./_transferred"
+  series_ids = ["abc123", "def456"]
+
+CLI 参数覆盖配置文件。
+依赖: httpx, tkinter (Python 自带), tomli (Python<3.11 需安装)
 """
 import argparse
 import asyncio
@@ -12,7 +20,13 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tkinter as tk
+
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 from tkinter import messagebox, simpledialog
 from urllib.parse import urlencode
 
@@ -221,94 +235,124 @@ class BookDialog:
 
 # ── 主流程 ───────────────────────────────────────────────────────
 
+def _load_config(path: str) -> dict:
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
 async def main():
     parser = argparse.ArgumentParser(description="Komga 书架清理工具")
-    parser.add_argument("--series-id", required=True, help="Komga 系列 ID")
-    parser.add_argument("--target-dir", default="./_transferred", help="转移目标目录")
-    parser.add_argument("--komga-url", default="http://localhost:25600", help="Komga 地址")
-    parser.add_argument("--komga-user", default="")
-    parser.add_argument("--komga-pass", default="")
+    parser.add_argument("-c", "--config", help="TOML 配置文件路径")
+    parser.add_argument("--series-ids", nargs="*", help="Komga 系列 ID（可多个）")
+    parser.add_argument("--target-dir", help="转移目标目录")
+    parser.add_argument("--komga-url", help="Komga 地址")
+    parser.add_argument("--komga-user", help="Komga 用户名")
+    parser.add_argument("--komga-pass", help="Komga 密码")
     args = parser.parse_args()
 
-    base = args.komga_url.rstrip("/")
+    # 加载配置 + CLI 覆盖
+    cfg = {}
+    if args.config:
+        if not os.path.exists(args.config):
+            print(f"配置文件不存在: {args.config}")
+            sys.exit(1)
+        cfg = _load_config(args.config)
+
+    def _get(key, default=None):
+        return getattr(args, key, None) or cfg.get(key, default)
+
+    base = _get("komga_url", "http://localhost:25600").rstrip("/")
+    target_dir = _get("target_dir", "./_transferred")
+    series_ids = _get("series_ids", [])
+    if not series_ids:
+        print("错误: 必须指定 --series-ids 或在配置文件中设置 series_ids")
+        sys.exit(1)
+
     auth = ""
-    if args.komga_user:
+    user = _get("komga_user", "")
+    passwd = _get("komga_pass", "")
+    if user:
         import base64
-        auth = "Basic " + base64.b64encode(
-            f"{args.komga_user}:{args.komga_pass}".encode()
-        ).decode()
+        auth = "Basic " + base64.b64encode(f"{user}:{passwd}".encode()).decode()
 
-    # 1. 获取书籍列表
-    print(f"正在获取系列 {args.series_id} 的已读书籍...")
-    books = await get_series_books(base, args.series_id, auth)
-    print(f"找到 {len(books)} 本已读书籍")
+    os.makedirs(target_dir, exist_ok=True)
+    all_transferred = []
+    total_deleted = 0
+    total_skipped = 0
 
-    os.makedirs(args.target_dir, exist_ok=True)
-    transferred = []
-    deleted = 0
-    skipped = 0
+    for sid in series_ids:
+        print(f"\n{'='*60}")
+        print(f"系列: {sid}")
+        books = await get_series_books(base, sid, auth)
+        print(f"找到 {len(books)} 本已读书籍")
 
-    for i, book in enumerate(books):
-        name = book.get("name", book.get("metadata", {}).get("title", "?"))
-        komga_path = book.get("filePath", "")
-        if not komga_path:
-            print(f"\n[{i+1}/{len(books)}] {name} — 无文件路径，跳过")
-            skipped += 1
-            continue
+        transferred = []
+        deleted = 0
+        skipped = 0
 
-        # i. 路径转换
-        real_path = komga_path_to_real(komga_path)
-        if not real_path:
-            print(f"\n[{i+1}/{len(books)}] {name} — 路径转换失败，跳过")
-            skipped += 1
-            continue
+        for i, book in enumerate(books):
+            name = book.get("name", book.get("metadata", {}).get("title", "?"))
+            komga_path = book.get("filePath", "")
+            if not komga_path:
+                print(f"\n[{i+1}/{len(books)}] {name} — 无文件路径，跳过")
+                skipped += 1
+                continue
 
-        print(f"\n[{i+1}/{len(books)}] {name}")
+            real_path = komga_path_to_real(komga_path)
+            if not real_path:
+                print(f"\n[{i+1}/{len(books)}] {name} — 路径转换失败，跳过")
+                skipped += 1
+                continue
 
-        # ii. 打开 CBZ + 提问
-        open_file(real_path)
+            print(f"\n[{i+1}/{len(books)}] {name}")
+            open_file(real_path)
 
-        root = tk.Tk()
-        dialog = BookDialog(root, book, real_path, args.target_dir)
+            root = tk.Tk()
+            dialog = BookDialog(root, book, real_path, target_dir)
 
-        # v. 检查 nhentai 链接
-        try:
-            detail = await get_book_detail(base, book["id"], auth)
-            links = detail.get("metadata", {}).get("links", [])
-            nhentai_id = extract_nhentai_id(links)
-            if nhentai_id:
-                gallery = await get_nhentai_gallery(nhentai_id)
-                artists, groups = extract_artist_group(gallery)
-                bracket = extract_bracket_title(name)
-                dialog._extract_info = bracket
-                dialog.set_nhentai_info(artists, groups)
-        except Exception as e:
-            dialog.info_label.config(text=f"获取画廊信息失败: {e}")
+            try:
+                detail = await get_book_detail(base, book["id"], auth)
+                links = detail.get("metadata", {}).get("links", [])
+                nhentai_id = extract_nhentai_id(links)
+                if nhentai_id:
+                    gallery = await get_nhentai_gallery(nhentai_id)
+                    artists, groups = extract_artist_group(gallery)
+                    dialog._extract_info = extract_bracket_title(name)
+                    dialog.set_nhentai_info(artists, groups)
+            except Exception as e:
+                dialog.info_label.config(text=f"获取画廊信息失败: {e}")
 
-        root.mainloop()
-        try:
-            root.destroy()
-        except Exception:
-            pass
+            root.mainloop()
+            try:
+                root.destroy()
+            except Exception:
+                pass
 
-        if dialog.result == "delete":
-            os.remove(real_path)
-            deleted += 1
-            print(f"  已删除")
-        elif dialog.result == "transfer":
-            dest = os.path.join(args.target_dir, os.path.basename(real_path))
-            os.rename(real_path, dest)
-            transferred.append({"book": name, "from": real_path, "to": dest})
-            print(f"  已转移到 {dest}")
-        else:
-            skipped += 1
-            print(f"  已跳过")
+            if dialog.result == "delete":
+                os.remove(real_path)
+                deleted += 1
+                print(f"  已删除")
+            elif dialog.result == "transfer":
+                dest = os.path.join(target_dir, os.path.basename(real_path))
+                os.rename(real_path, dest)
+                transferred.append({"book": name, "from": real_path, "to": dest})
+                print(f"  已转移到 {dest}")
+            else:
+                skipped += 1
+                print(f"  已跳过")
 
-    print(f"\n完成: 删除 {deleted}, 转移 {len(transferred)}, 跳过 {skipped}")
-    if transferred:
-        with open(os.path.join(args.target_dir, "_transferred.json"), "w", encoding="utf-8") as f:
-            json.dump(transferred, f, ensure_ascii=False, indent=2)
-        print(f"转移记录已保存到 {args.target_dir}/_transferred.json")
+        print(f"\n系列 {sid} 完成: 删除 {deleted}, 转移 {len(transferred)}, 跳过 {skipped}")
+        all_transferred.extend(transferred)
+        total_deleted += deleted
+        total_skipped += skipped
+
+    print(f"\n{'='*60}")
+    print(f"全部完成: 删除 {total_deleted}, 转移 {len(all_transferred)}, 跳过 {total_skipped}")
+    if all_transferred:
+        record_path = os.path.join(target_dir, "_transferred.json")
+        with open(record_path, "w", encoding="utf-8") as f:
+            json.dump(all_transferred, f, ensure_ascii=False, indent=2)
+        print(f"转移记录已保存到 {record_path}")
 
 
 if __name__ == "__main__":
