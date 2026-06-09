@@ -16,7 +16,7 @@ CLI 参数覆盖配置文件。
 """
 import argparse
 import asyncio
-import json
+from pathlib import Path
 import os
 import re
 import subprocess
@@ -39,57 +39,69 @@ def komga_path_to_real(komga_path: str) -> str | None:
 
     例如 Komga 的 Docker 路径 /books/xxx.cbz → 宿主机路径 /mnt/data/xxx.cbz
     """
-    # TODO: 在此实现你的路径映射
-    return komga_path
+    return komga_path.replace("/komga", "//fnos/komga")
 
 
 # ── 预留接口：打开文件 ──────────────────────────────────────────
 def open_file(path: str):
     """用系统默认程序打开文件。"""
     if os.name == "nt":
-        os.startfile(path)
+        os.startfile(Path(path))
     elif os.name == "posix":
         subprocess.run(["xdg-open", path])
 
 
 # ── Komga API ────────────────────────────────────────────────────
 
-async def get_series_books(base_url: str, series_id: str, auth: str) -> list[dict]:
-    """获取系列下所有已读且可用的 book。"""
+async def get_series_books(base_url: str, series_ids: list[str], auth: str) -> list[dict]:
+    """获取所有已读且可用的 book。"""
     books = []
     page = 0
+    payload = {
+        "condition": {
+            "allOf":[{
+                "deleted":{
+                    "operator": "isFalse",
+                }
+            }, {
+                "readStatus": {
+                    "operator": "is",
+                    "value": "READ"
+                }
+            }, {
+                "anyOf": [
+                {
+                    "seriesId": {
+                        "operator": "is",
+                        "value": sid
+                    }
+                } for sid in series_ids]
+            }]
+        },
+        # "fullTextSearch": ""
+    }
     async with httpx.AsyncClient(timeout=30) as client:
         while True:
-            r = await client.get(
-                f"{base_url}/api/v1/series/{series_id}/books",
+            r = await client.post(
+                f"{base_url}/api/v1/books/list",
                 params={"page": page, "size": 100, "unpaged": "true"},
-                headers={"Authorization": auth} if auth else {},
+                json=payload,
+                headers={
+                    "Authorization": auth,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                }
             )
             r.raise_for_status()
             data = r.json()
             content = data.get("content", [])
             if not content:
                 break
-            for b in content:
-                progress = b.get("readProgress", {})
-                if progress.get("completed") and b.get("filePath"):
-                    books.append(b)
+            books.extend(content)
             if data.get("last"):
                 break
             page += 1
     return books
-
-
-async def get_book_detail(base_url: str, book_id: str, auth: str) -> dict:
-    """获取 book 详情（含 metadata.links 外部链接）。"""
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.get(
-            f"{base_url}/api/v1/books/{book_id}",
-            headers={"Authorization": auth} if auth else {},
-        )
-        r.raise_for_status()
-        return r.json()
-
 
 async def get_nhentai_gallery(native_id: str) -> dict:
     """获取 nhentai 画廊详情，返回 API 响应 dict。"""
@@ -101,19 +113,7 @@ async def get_nhentai_gallery(native_id: str) -> dict:
 
 # ── 解析 ─────────────────────────────────────────────────────────
 
-_NHENTAI_URL = re.compile(r"https?://nhentai\.net/g/(\d+)/?")
-
 _BRACKET = re.compile(r"\[([^\]]+)\]")
-
-
-def extract_nhentai_id(links: list[dict]) -> str | None:
-    """从 book 的 metadata.links 中提取 nhentai gallery ID。"""
-    for link in links:
-        url = link.get("url", "")
-        m = _NHENTAI_URL.search(url)
-        if m:
-            return m.group(1)
-    return None
 
 
 def extract_artist_group(gallery: dict) -> tuple[list[str], list[str]]:
@@ -276,83 +276,71 @@ async def main():
         auth = "Basic " + base64.b64encode(f"{user}:{passwd}".encode()).decode()
 
     os.makedirs(target_dir, exist_ok=True)
-    all_transferred = []
-    total_deleted = 0
-    total_skipped = 0
-
-    for sid in series_ids:
-        print(f"\n{'='*60}")
-        print(f"系列: {sid}")
-        books = await get_series_books(base, sid, auth)
-        print(f"找到 {len(books)} 本已读书籍")
-
-        transferred = []
-        deleted = 0
-        skipped = 0
-
-        for i, book in enumerate(books):
-            name = book.get("name", book.get("metadata", {}).get("title", "?"))
-            komga_path = book.get("filePath", "")
-            if not komga_path:
-                print(f"\n[{i+1}/{len(books)}] {name} — 无文件路径，跳过")
-                skipped += 1
-                continue
-
-            real_path = komga_path_to_real(komga_path)
-            if not real_path:
-                print(f"\n[{i+1}/{len(books)}] {name} — 路径转换失败，跳过")
-                skipped += 1
-                continue
-
-            print(f"\n[{i+1}/{len(books)}] {name}")
-            open_file(real_path)
-
-            root = tk.Tk()
-            dialog = BookDialog(root, book, real_path, target_dir)
-
-            try:
-                detail = await get_book_detail(base, book["id"], auth)
-                links = detail.get("metadata", {}).get("links", [])
-                nhentai_id = extract_nhentai_id(links)
-                if nhentai_id:
-                    gallery = await get_nhentai_gallery(nhentai_id)
-                    artists, groups = extract_artist_group(gallery)
-                    dialog._extract_info = extract_bracket_title(name)
-                    dialog.set_nhentai_info(artists, groups)
-            except Exception as e:
-                dialog.info_label.config(text=f"获取画廊信息失败: {e}")
-
-            root.mainloop()
-            try:
-                root.destroy()
-            except Exception:
-                pass
-
-            if dialog.result == "delete":
-                os.remove(real_path)
-                deleted += 1
-                print(f"  已删除")
-            elif dialog.result == "transfer":
-                dest = os.path.join(target_dir, os.path.basename(real_path))
-                os.rename(real_path, dest)
-                transferred.append({"book": name, "from": real_path, "to": dest})
-                print(f"  已转移到 {dest}")
-            else:
-                skipped += 1
-                print(f"  已跳过")
-
-        print(f"\n系列 {sid} 完成: 删除 {deleted}, 转移 {len(transferred)}, 跳过 {skipped}")
-        all_transferred.extend(transferred)
-        total_deleted += deleted
-        total_skipped += skipped
+    books = await get_series_books(base, series_ids, auth)
 
     print(f"\n{'='*60}")
-    print(f"全部完成: 删除 {total_deleted}, 转移 {len(all_transferred)}, 跳过 {total_skipped}")
-    if all_transferred:
-        record_path = os.path.join(target_dir, "_transferred.json")
-        with open(record_path, "w", encoding="utf-8") as f:
-            json.dump(all_transferred, f, ensure_ascii=False, indent=2)
-        print(f"转移记录已保存到 {record_path}")
+    print(f"找到 {len(books)} 本已读书籍")
+
+    transferred = []
+    deleted = 0
+    skipped = 0
+
+    for i, book in enumerate(books):
+        name = book.get("name", book.get("metadata", {}).get("title", "?"))
+        komga_path = book.get("url", "")
+        if not komga_path:
+            print(f"\n[{i+1}/{len(books)}] {name} — 无文件路径，跳过")
+            skipped += 1
+            continue
+
+        real_path = komga_path_to_real(komga_path)
+        if not real_path:
+            print(f"\n[{i+1}/{len(books)}] {name} — 路径转换失败，跳过")
+            skipped += 1
+            continue
+
+        print(f"\n[{i+1}/{len(books)}] {name}")
+        open_file(real_path)
+
+        root = tk.Tk()
+        dialog = BookDialog(root, book, real_path, target_dir)
+
+        try:
+            nhentai_id = book.get("metadata", {}).get("number", "")
+            title = book.get("metadata", {}).get("title", "")
+            if nhentai_id:
+                gallery = await get_nhentai_gallery(nhentai_id)
+                artists, groups = extract_artist_group(gallery)
+                dialog._extract_info = extract_bracket_title(title)
+                dialog.set_nhentai_info(artists, groups)
+        except Exception as e:
+            dialog.info_label.config(text=f"获取画廊信息失败: {e}")
+
+        root.mainloop()
+        try:
+            root.destroy()
+        except Exception:
+            pass
+
+        if dialog.result == "delete":
+            os.remove(real_path)
+            deleted += 1
+            print(f"  已删除")
+        elif dialog.result == "transfer":
+            dest = os.path.join(target_dir, os.path.basename(real_path))
+            os.rename(real_path, dest)
+            transferred.append({"book": name, "from": real_path, "to": dest})
+            print(f"  已转移到 {dest}")
+        else:
+            skipped += 1
+            print(f"  已跳过")
+
+    print(f"\n{'='*60}")
+    print(f"全部完成: 删除 {deleted}, 转移 {len(transferred)}, 跳过 {skipped}")
+    if transferred:
+        print("\n转移详情:")
+        for item in transferred:
+            print(f"  {item['book']}: {item['from']} → {item['to']}")
 
 
 if __name__ == "__main__":
