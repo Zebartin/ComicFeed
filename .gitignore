@@ -9,3 +9,5 @@ _debug*.py
 
 .cache/
 .claude/
+
+tools/cleanup.toml
