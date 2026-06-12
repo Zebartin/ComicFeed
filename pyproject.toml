@@ -26,6 +26,9 @@ dependencies = [
     "uvicorn[standard]>=0.47.0",
 ]
 
+[dependency-groups]
+tools = ["imagehash"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

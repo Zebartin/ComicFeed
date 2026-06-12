@@ -10,4 +10,5 @@ _debug*.py
 .cache/
 .claude/
 
-tools/cleanup.toml
+tools/*.toml
+tools/dedup_cache.json
