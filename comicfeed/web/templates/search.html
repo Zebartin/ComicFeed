@@ -124,7 +124,16 @@ async function downloadPicked(){
 }
 async function saveAsSub(){
   if(!srcKey||!searchQuery)return
-  await api('/api/subscriptions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:searchQuery,source_key:srcKey,query:searchQuery,mode:'SEARCH',sort:sortBy})})
+  let subName = searchQuery
+  if (results.length) {
+    const re = /\[([^\]]+)\]/
+    for (const g of results) {
+      const m = re.exec(g.title)
+      if (m) { subName = '作者 - ' + m[1]; break }
+    }
+    $('sel-info').textContent = '订阅名: ' + esc(subName)
+  }
+  await api('/api/subscriptions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:subName,source_key:srcKey,query:searchQuery,mode:'SEARCH',sort:sortBy})})
   $('sel-info').textContent='已保存为订阅';setTimeout(()=>{$('sel-info').textContent='点选卡片选择'},2000)
 }
 load()
