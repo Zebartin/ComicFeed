@@ -11,11 +11,11 @@ from comicfeed.sources.base import (
 )
 
 
-async def test_download_gallery_to_cbz(tmp_path, nhentai_credentials):
+async def test_download_gallery_to_cbz(tmp_path):
     """下载完整画廊并打包为 CBZ 文件。"""
     from comicfeed.sources.nhentai import NhentaiSource
 
-    source = NhentaiSource(credentials=nhentai_credentials)
+    source = NhentaiSource()
     # 小画廊 103110: 35 pages, split into 2 volumes
     result = await download_gallery(
         source=source,

@@ -94,8 +94,7 @@ async def test_exhentai_nl_extraction_smoke():
 # --- nhentai ---
 
 async def _nhentai_source():
-    creds = await get_source_credentials("nhentai")
-    return NhentaiSource(credentials=creds)
+    return NhentaiSource()
 
 
 @pytest.mark.live

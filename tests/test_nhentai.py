@@ -96,9 +96,9 @@ def test_parse_gallery_response():
 
 
 @pytest.mark.integration
-async def test_search_returns_results(nhentai_credentials):
+async def test_search_returns_results():
     """搜索返回 GallerySummary 列表。"""
-    source = NhentaiSource(credentials=nhentai_credentials)
+    source = NhentaiSource()
     result = await source.search("full_color", page=1)
     assert len(result.items) > 0
     assert result.current_page == 1
@@ -110,9 +110,9 @@ async def test_search_returns_results(nhentai_credentials):
 
 
 @pytest.mark.integration
-async def test_download_pages(nhentai_credentials):
+async def test_download_pages():
     """下载指定范围的页面图片。"""
-    source = NhentaiSource(credentials=nhentai_credentials)
+    source = NhentaiSource()
     # 使用一个小页数的画廊：325160 (39p)
     gallery_id = "325160"
     pages = await source.download_pages(gallery_id, slice(0, 2))

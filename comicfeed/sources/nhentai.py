@@ -5,7 +5,6 @@ import re
 from curl_cffi.requests import AsyncSession
 
 from comicfeed.sources.base import (
-    AuthSchema,
     BaseSource,
     GalleryDetail,
     GallerySummary,
@@ -19,7 +18,6 @@ class NhentaiSource(BaseSource):
     name = "nHentai"
     version = "0.1.0"
     domains = ["nhentai.net"]
-    auth_schema = AuthSchema.COOKIE  # cf_clearance
 
     _URL_PATTERN = re.compile(r"https?://(?:www\.)?nhentai\.net/g/(\d+)")
     _BASE = "https://nhentai.net"
@@ -35,8 +33,6 @@ class NhentaiSource(BaseSource):
     def get_config_schema(self) -> list[dict]:
         return [
             {"key": "proxy", "label": "代理", "type": "text", "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
-            {"key": "csrftoken", "label": "csrftoken", "type": "text", "credential": True, "placeholder": "从浏览器 Cookie 中获取"},
-            {"key": "cf_clearance", "label": "cf_clearance", "type": "text", "credential": True, "placeholder": "从浏览器 Cookie 中获取"},
         ]
 
     def parse_url(self, url: str) -> str | None:
@@ -45,15 +41,11 @@ class NhentaiSource(BaseSource):
             return f"nhentai:{m.group(1)}"
         return None
 
-    def _cookies(self) -> dict[str, str]:
-        return dict(self.credentials)
-
     def _client(self) -> AsyncSession:
         return AsyncSession(
             proxy=self.proxy,
             impersonate="chrome131",
             timeout=30,
-            cookies=self._cookies(),
         )
 
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
