@@ -16,7 +16,7 @@ class SubCreate(BaseModel):
     query: str
     mode: str = "SEARCH"
     interval_minutes: int = 1440
-    cbz_max_pages: int = 30
+    cbz_max_pages: int = 0
     search_pages: int = 1
     sort: str = "date"
     download_dir: str = ""
