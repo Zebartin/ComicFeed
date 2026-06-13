@@ -202,12 +202,12 @@ async def _download_gallery(
 
     # 打包 CBZ（从缓存逐卷读取）
     result.files = pack_cbz_volumes(
-        cache_dir, detail, total, gallery_id, title, output_dir,
+        cache_dir, detail, downloaded, gallery_id, title, output_dir,
         cbz_max_pages, do_split, append_ctx
     )
 
     # 清理缓存
-    shutil.rmtree(cache_dir, ignore_errors=True)
+    # shutil.rmtree(cache_dir, ignore_errors=True)
 
     if tracker:
         tracker.finished(full_gid)

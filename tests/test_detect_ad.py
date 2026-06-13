@@ -1,8 +1,21 @@
 """广告页检测测试"""
 import io
+import httpx
+import pytest
 from PIL import Image
 
 from comicfeed.io.detect_ad import detect_ads_from_tail, is_ad_image
+
+# 用户补充真实广告图片 URL
+AD_IMAGE_URLS: list[str] = [
+    "https://i3.nhentai.net/galleries/3977862/55.webp",
+    "https://i1.nhentai.net/galleries/3977862/56.jpg",
+    "https://i1.nhentai.net/galleries/3977862/57.webp",
+    "https://i2.nhentai.net/galleries/3977862/58.webp",
+    "https://i3.nhentai.net/galleries/3977862/59.webp",
+    "https://i1.nhentai.net/galleries/3977862/60.webp",
+    "https://i3.nhentai.net/galleries/3977862/61.jpg",
+]
 
 
 def _make_img(width, height, color=True):
@@ -76,3 +89,12 @@ def test_sandwich_ad_detected():
     # 从尾：5(ad), 4(in_ad_zone→ad), 3(ad), 2(ok), 1(ok), 0(ok→stop)
     # 广告=5,4,3 → 3页
     assert detect_ads_from_tail(pages) == 3
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("url", AD_IMAGE_URLS)
+async def test_real_ad_images(url):
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as c:
+        r = await c.get(url)
+        r.raise_for_status()
+    assert is_ad_image(r.content), f"应被识别为广告: {url}"
