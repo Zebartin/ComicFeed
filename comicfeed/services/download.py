@@ -207,7 +207,7 @@ async def _download_gallery(
     )
 
     # 清理缓存
-    # shutil.rmtree(cache_dir, ignore_errors=True)
+    shutil.rmtree(cache_dir, ignore_errors=True)
 
     if tracker:
         tracker.finished(full_gid)
