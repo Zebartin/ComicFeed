@@ -80,30 +80,47 @@ class TagTranslator:
 
     @cache
     def find_namespaces(self, name: str) -> tuple[str, ...]:
-        """反查标签名所属的 namespace（仅搜索非 _SHOW_NS）。"""
-        result = []
-        for ns, tmap in self._tags.items():
-            if ns not in self._SHOW_NS and name in tmap:
-                result.append(ns)
-        return tuple(result)
+        """反查标签名所属的 namespace（仅搜索非 _SHOW_NS）。
+        复合标签以 | 分隔时，依次尝试整体和拆分后的各部分。"""
+        candidates = [name]
+        if "|" in name:
+            candidates.extend(p.strip() for p in name.split("|"))
+        for cand in candidates:
+            result = []
+            for ns, tmap in self._tags.items():
+                if ns not in self._SHOW_NS and cand in tmap:
+                    result.append(ns)
+            if result:
+                return tuple(result)
+        return tuple()
 
     def translate(self, ns: str, name: str, avoid_ns: set[str] | None = _SHOW_NS) -> str:
-        """翻译单个标签。avoid_ns 指定无 namespace 时优先避开的命名空间。"""
+        """翻译单个标签。标签以 | 分隔时依次尝试整体和拆分后的各部分。"""
+        candidates = [name]
+        if "|" in name:
+            candidates.extend(p.strip() for p in name.split("|"))
+        for cand in candidates:
+            result = self._try_translate_one(ns, cand, avoid_ns)
+            if result is not None:
+                return result
+        if ns:
+            return self._format(ns, name)
+        return name
+
+    def _try_translate_one(self, ns: str, name: str, avoid_ns: set[str] | None) -> str | None:
+        """翻译单个标签名，找不到时返回 None。"""
         if ns and ns in self._tags and name in self._tags[ns]:
             return self._format(ns, self._tags[ns][name])
-        # 无 namespace 时，在所有 namespace 中搜索
         found = None
         for tns, tmap in self._tags.items():
             if name in tmap:
                 if avoid_ns and tns in avoid_ns:
-                    found = found or (tns, tmap[name])  # 保留第一个 writer 命中作为回退
+                    found = found or (tns, tmap[name])
                 else:
                     return self._format(tns, tmap[name])
         if found:
             return self._format(found[0], found[1])
-        if ns:
-            return self._format(ns, name)
-        return name
+        return None
 
 
 # 全局实例

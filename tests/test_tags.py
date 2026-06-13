@@ -6,7 +6,7 @@ _SAMPLE_DB = {
     "namespaces": {"artist": "画师", "group": "团队", "tag": "标签"},
     "tags": {
         "artist": {"inu": "犬"},
-        "tag": {"full color": "全彩", "big breasts": "巨乳"},
+        "tag": {"full color": "全彩", "big breasts": "巨乳", "sole female": "独自女性"},
     },
 }
 
@@ -59,3 +59,32 @@ def test_translate_no_namespace_not_found():
     tt = _make_tt()
     result = tt.translate("", "nonexistent tag")
     assert result == "nonexistent tag"
+
+
+def test_translate_composite_tag_first_part():
+    """复合标签：整体不存在时查找第一部分。"""
+    tt = _make_tt()
+    result = tt.translate("tag", "sole female|sole male")
+    assert result == "独自女性"
+
+
+def test_translate_composite_tag_second_part():
+    """复合标签：第一部分不存在时查找第二部分。"""
+    tt = _make_tt()
+    result = tt.translate("tag", "unknown|big breasts")
+    assert result == "巨乳"
+
+
+def test_translate_composite_tag_strips_spaces():
+    """复合标签各部分 strip 空格。"""
+    tt = _make_tt()
+    result = tt.translate("tag", "sole female | big breasts")
+    assert result == "独自女性"
+
+
+def test_find_namespaces_composite():
+    """find_namespaces 也支持拆分查找。"""
+    tt = _make_tt()
+    # "sole female|unknown" → 找到 "sole female" 的 namespace
+    result = tt.find_namespaces("sole female|unknown")
+    assert "tag" in result
