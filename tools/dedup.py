@@ -95,6 +95,16 @@ async def get_all_books(base_url: str, library_ids: list[str], auth: str) -> lis
     return books
 
 
+async def trigger_komga_scan(base_url: str, auth: str, library_id: str):
+    """触发 Komga 库扫描。"""
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{base_url}/api/v1/libraries/{library_id}/scan",
+            headers={"Authorization": auth},
+        )
+        r.raise_for_status()
+
+
 # ── 作者分组 ─────────────────────────────────────────────────
 
 def _get_group_writer(authors: list[dict]) -> str | None:
@@ -632,6 +642,15 @@ async def main():
         return
 
     print(f"\n全部完成: 处理了 {deleted_total}/{dup_count} 个有重复的分组")
+
+    if deleted_total > 0:
+        print("\n触发 Komga 库扫描...")
+        for lid in library_ids:
+            try:
+                await trigger_komga_scan(base, komga_auth, lid)
+                print(f"  已触发: {lid}")
+            except Exception as e:
+                print(f"  扫描失败 ({lid}): {e}")
 
 
 if __name__ == "__main__":
