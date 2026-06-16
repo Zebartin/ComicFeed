@@ -104,9 +104,29 @@ def _build_comicinfo(detail: GalleryDetail, number: str = "") -> bytes:
     return buf.getvalue()
 
 
+_MAGIC_EXT = {
+    b"\xff\xd8\xff": ".jpg",
+    b"\x89PNG\r\n\x1a\n": ".png",
+    b"GIF8": ".gif",
+    b"RIFF": ".webp",       # RIFF....WEBP
+    b"BM": ".bmp",
+}
+
+
+def _guess_ext(data: bytes) -> str:
+    for magic, ext in _MAGIC_EXT.items():
+        if data.startswith(magic):
+            if ext == ".webp" and data[8:12] == b"WEBP":
+                return ".webp"
+            if ext != ".webp":
+                return ext
+    return ".jpg"
+
+
 def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1, number: str = ""):
     """打包 CBZ 文件到 output，页码从 start_page 开始编号。number 为 ComicInfo Number。"""
     with ZipFile(output, "w", ZIP_DEFLATED) as z:
         for i, data in enumerate(pages, start_page):
-            z.writestr(f"{i:04d}.jpg", data)
+            ext = _guess_ext(data) if data else ".jpg"
+            z.writestr(f"{i:04d}{ext}", data)
         z.writestr("ComicInfo.xml", _build_comicinfo(detail, number))
