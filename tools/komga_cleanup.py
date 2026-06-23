@@ -97,10 +97,17 @@ async def get_series_books(base_url: str, series_ids: list[str], auth: str) -> l
             )
             r.raise_for_status()
             data = r.json()
+            # with open('./t.json', 'w', encoding='utf-8') as f:
+            #     import json
+            #     json.dump(data, f, ensure_ascii=False, indent=2)
+            # exit()
             content = data.get("content", [])
             if not content:
                 break
-            books.extend(content)
+            books.extend(
+                b for b in content
+                if b.get("number", 1) != 1
+            )
             if data.get("last"):
                 break
             page += 1
@@ -250,14 +257,17 @@ def extract_bracket_title(book_name: str) -> str:
 class BookDialog:
     """单本书的决策对话框。"""
 
-    def __init__(self, root: tk.Tk, book: dict, real_path: str, target_dir: str):
+    def __init__(self, root: tk.Tk, book: dict, real_path: str, target_dir: str,
+                 artists: list[str] | None = None, groups: list[str] | None = None,
+                 extract_info: str = "", nhentai_error: str = ""):
         self.root = root
         self.book = book
         self.real_path = real_path
         self.target_dir = target_dir
         self.result: str | None = None  # "delete", "transfer", "skip"
-        self._extract_info = ""
+        self._extract_info = extract_info
         self._selected_query: str | None = None
+        self._waiting_for_url = False
 
         root.title("Komga 书架清理")
         root.geometry("500x550")
@@ -269,19 +279,24 @@ class BookDialog:
         tk.Label(root, text=f"路径: {real_path}", wraplength=460,
                  fg="gray").pack(padx=20, anchor="w")
 
-        btn_frame = tk.Frame(root)
-        btn_frame.pack(pady=15)
-        tk.Button(btn_frame, text="删除", command=self._delete,
+        self.btn_frame = tk.Frame(root)
+        self.btn_frame.pack(pady=15)
+        tk.Button(self.btn_frame, text="删除", command=self._delete,
                   bg="#e74c3c", fg="white", width=12, height=2).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="转移", command=self._transfer,
+        tk.Button(self.btn_frame, text="转移", command=self._transfer,
                   bg="#3498db", fg="white", width=12, height=2).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="跳过", command=self._skip,
+        tk.Button(self.btn_frame, text="跳过", command=self._skip,
                   width=12, height=2).pack(side="left", padx=10)
 
         self.info_label = tk.Label(root, text="", wraplength=460)
         self.info_label.pack(pady=10, padx=20)
 
         self.url_frame: tk.Frame | None = None
+
+        if nhentai_error:
+            self.info_label.config(text=nhentai_error)
+        if artists is not None and groups is not None:
+            self.show_nhentai_urls(artists, groups)
 
     def show_nhentai_urls(self, artists: list[str], groups: list[str]):
         """展示 nhentai 搜索 URL 选项（可点击超链接）。"""
@@ -324,9 +339,6 @@ class BookDialog:
             url_label.pack(side="left", padx=8)
             url_label.bind("<Button-1>", lambda e, u=full_url: webbrowser.open(u))
 
-    def show_nhentai_error(self, error: str):
-        self.info_label.config(text=f"获取画廊信息失败: {error}")
-
     def _pick_url(self, query: str):
         q = query.split(' ')
         q = [part for part in q if not part.startswith("language")]
@@ -339,7 +351,9 @@ class BookDialog:
 
     def _transfer(self):
         self.result = "transfer"
-        self.root.quit()
+        self._waiting_for_url = True
+        self.btn_frame.destroy()
+        self.info_label.config(text="请选择搜索链接以创建订阅，或直接关闭窗口仅转移")
 
     def _skip(self):
         self.result = "skip"
@@ -419,27 +433,29 @@ async def main():
         print(f"\n[{i+1}/{len(books)}] {name}")
         open_file(real_path)
 
+        # 提前查询 nhentai 信息
+        nhentai_id = book.get("metadata", {}).get("number", "")
+        title = book.get("metadata", {}).get("title", "")
+        extract_info = extract_bracket_title(title)
+
+        artists = None
+        groups = None
+        nhentai_error = ""
+        if nhentai_id:
+            try:
+                gallery = await get_nhentai_gallery(nhentai_id)
+                artists, groups = extract_artist_group(gallery)
+            except Exception as e:
+                nhentai_error = f"获取画廊信息失败: {e}"
+        else:
+            nhentai_error = "无 nhentai 画廊 ID"
+
         root = tk.Tk()
-        dialog = BookDialog(root, book, real_path, target_dir)
-        root.mainloop()  # 第一轮：选择删除/转移/跳过
-
-        if dialog.result == "transfer":
-            # 获取 nhentai 信息并展示 URL 选项
-            nhentai_id = book.get("metadata", {}).get("number", "")
-            title = book.get("metadata", {}).get("title", "")
-            dialog._extract_info = extract_bracket_title(title)
-
-            if nhentai_id:
-                try:
-                    gallery = await get_nhentai_gallery(nhentai_id)
-                    artists, groups = extract_artist_group(gallery)
-                    dialog.show_nhentai_urls(artists, groups)
-                except Exception as e:
-                    dialog.show_nhentai_error(str(e))
-            else:
-                dialog.info_label.config(text="无 nhentai 画廊 ID")
-
-            root.mainloop()  # 第二轮：选择 URL 或直接关闭
+        dialog = BookDialog(root, book, real_path, target_dir,
+                            artists=artists, groups=groups,
+                            extract_info=extract_info,
+                            nhentai_error=nhentai_error)
+        root.mainloop()
 
         try:
             root.destroy()

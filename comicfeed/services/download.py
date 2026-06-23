@@ -25,6 +25,7 @@ class DownloadResult:
     cover_url: str = ""
     web_url: str = ""
     page_count: int = 0
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -205,6 +206,7 @@ async def _download_gallery(
         cache_dir, detail, downloaded, gallery_id, title, output_dir,
         cbz_max_pages, do_split, append_ctx
     )
+    result.tags = detail.tags
 
     # 清理缓存
     shutil.rmtree(cache_dir, ignore_errors=True)
@@ -302,6 +304,7 @@ async def download_batch(
                 "gallery_id": full_gid,
                 "title": result.title or t.title,
                 "files": result.files,
+                "tags": result.tags,
                 "cover_url": result.cover_url or t.cover_url,
                 "web_url": result.web_url or t.gallery_url,
                 "page_count": result.page_count or t.page_count,
@@ -318,6 +321,8 @@ async def download_batch(
             })
 
     if downloaded or failed:
+        await _run_post_download_script(downloaded, subscription_name)
+
         from comicfeed.services.notification import notify_batch
         await notify_batch({
             "subscription": subscription_name or "手动下载",
@@ -328,3 +333,36 @@ async def download_batch(
         })
 
     return downloaded, failed
+
+
+async def _run_post_download_script(downloaded: list[dict], subscription_name: str):
+    """调用下载后脚本，通过 stdin JSON 传入画廊数据。"""
+    import json as _json
+    from comicfeed.infrastructure.config import get_setting
+    script_path = await get_setting("post_download_script")
+    if not script_path:
+        return
+    script_path = script_path.strip()
+    if not script_path or not os.path.isfile(script_path):
+        _log.warning("下载后脚本不存在: %s", script_path)
+        return
+    payload = _json.dumps({
+        "subscription_name": subscription_name or "",
+        "galleries": downloaded,
+    }, ensure_ascii=False)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "python", script_path,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate(input=payload.encode("utf-8"))
+        if stdout:
+            _log.info("下载后脚本 stdout:\n%s", stdout.decode("utf-8", errors="replace").strip())
+        if stderr:
+            _log.warning("下载后脚本 stderr:\n%s", stderr.decode("utf-8", errors="replace").strip())
+        if proc.returncode != 0:
+            _log.warning("下载后脚本退出码: %d", proc.returncode)
+    except Exception:
+        _log.exception("下载后脚本执行失败")

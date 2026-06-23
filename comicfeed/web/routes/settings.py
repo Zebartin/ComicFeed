@@ -13,6 +13,7 @@ _SETTING_KEYS = [
     "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_to",
     "webhook_url",
     "auth_username", "auth_password",
+    "post_download_script",
 ]
 
 
