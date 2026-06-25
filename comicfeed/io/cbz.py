@@ -57,12 +57,15 @@ def sanitize_filename(name: str) -> str:
 
 def make_cbz_name(native_id: str, normalized_title: str, start_page: int, end_page: int, total_pages: int = 0) -> str:
     """生成 CBZ 文件名: [id] title (0001-0034).cbz"""
-    name = f"[{native_id}] {normalized_title}"
-    if total_pages > 0 and start_page == 1 and end_page >= total_pages:
-        pass  # 不分卷，不加页码范围
-    else:
-        name += f" ({start_page:04d}-{end_page:04d})"
-    name = sanitize_filename(name)
+    prefix = f"[{native_id}] "
+    suffix = ""
+    if not (total_pages > 0 and start_page == 1 and end_page >= total_pages):
+        suffix = f" ({start_page:04d}-{end_page:04d})"
+    # 文件名（不含 .cbz）控制在 200 字符以内，为 .cbz + 路径留有余量
+    max_title_len = 200 - len(prefix) - len(suffix)
+    if max_title_len > 0 and len(normalized_title) > max_title_len:
+        normalized_title = normalized_title[:max_title_len]
+    name = sanitize_filename(f"{prefix}{normalized_title}{suffix}")
     return f"{name}.cbz"
 
 

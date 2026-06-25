@@ -131,7 +131,7 @@ async def poll_and_mark_read(base_url: str, auth: str, library_id: str,
         return
 
     timeout = 30 * 60  # 30 分钟
-    interval = 30      # 30 秒
+    interval = 10      # 30 秒
     start = time.time()
 
     async with httpx.AsyncClient(timeout=30) as client:
