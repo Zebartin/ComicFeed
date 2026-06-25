@@ -61,10 +61,14 @@ def make_cbz_name(native_id: str, normalized_title: str, start_page: int, end_pa
     suffix = ""
     if not (total_pages > 0 and start_page == 1 and end_page >= total_pages):
         suffix = f" ({start_page:04d}-{end_page:04d})"
-    # 文件名（不含 .cbz）控制在 200 字符以内，为 .cbz + 路径留有余量
-    max_title_len = 200 - len(prefix) - len(suffix)
-    if max_title_len > 0 and len(normalized_title) > max_title_len:
-        normalized_title = normalized_title[:max_title_len]
+    # 文件名（含 .cbz）控制在 240 字节以内（Linux 文件名限制 255 字节）
+    max_name_bytes = 240
+    head_bytes = len((prefix + suffix + ".cbz").encode("utf-8"))
+    budget = max_name_bytes - head_bytes
+    if budget > 0 and len(normalized_title.encode("utf-8")) > budget:
+        # 逐字节截断，不切断多字节字符
+        encoded = normalized_title.encode("utf-8")[:budget]
+        normalized_title = encoded.decode("utf-8", errors="ignore")
     name = sanitize_filename(f"{prefix}{normalized_title}{suffix}")
     return f"{name}.cbz"
 
