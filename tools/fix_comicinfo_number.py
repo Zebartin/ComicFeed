@@ -1,4 +1,4 @@
-"""修正已有 CBZ 的 ComicInfo.xml Number 字段为 {native_id}{vol:04d} 格式。
+"""修正已有 CBZ 的 ComicInfo.xml Number 字段为 {native_id}{vol:02d} 格式。
 
 用法: uv run python tools/fix_comicinfo_number.py <目录路径>
 """
@@ -32,7 +32,7 @@ def fix_cbz(path: str) -> bool:
     if cbz_max_pages is None:
         cbz_max_pages = end_page - start_page + 1
     vol = (start_page - 1) // cbz_max_pages + 1
-    new_number = f"{native_id}{vol:04d}"
+    new_number = f"{vol}"
     
     # 读 ZIP
     with open(path, "rb") as f:
