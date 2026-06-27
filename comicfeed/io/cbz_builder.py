@@ -46,24 +46,41 @@ def _read_comicinfo_number(cbz_path: str) -> str:
     return ""
 
 
+def _read_newest_number(output_dir: str) -> int | None:
+    """取目录下最新 CBZ 的 Number 整数值（按 mtime）。"""
+    if not os.path.isdir(output_dir):
+        return None
+    newest: tuple[float, str] | None = None  # (mtime, path)
+    try:
+        for entry in os.scandir(output_dir):
+            if entry.is_file() and entry.name.lower().endswith(".cbz"):
+                mtime = entry.stat().st_mtime
+                if newest is None or mtime > newest[0]:
+                    newest = (mtime, entry.path)
+    except OSError:
+        return None
+    if newest is None:
+        return None
+    num = _read_comicinfo_number(newest[1])
+    try:
+        return int(num)
+    except (ValueError, TypeError):
+        return None
+
+
 def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title: str,
                       output_dir: str, cbz_max_pages: int, do_split: bool,
                       append_ctx: AppendContext | None = None) -> list[str]:
     """从磁盘缓存读取页面，分卷打包 CBZ。"""
 
-    # 增量模式下，从旧 CBZ 读取 Number
+    # 合并卷使用旧 CBZ 的 Number；新建卷扫描目录取最大 Number + 1
     old_vol_number = ""
     next_vol = 1
     if append_ctx and append_ctx.old_cbz_paths and do_split:
-        # 合并卷用第一个旧 CBZ 的 Number
         old_vol_number = _read_comicinfo_number(append_ctx.old_cbz_paths[0])
-        # 后续新建卷从最后一个旧 CBZ 的 Number 递推
-        last_number = _read_comicinfo_number(append_ctx.old_cbz_paths[-1])
-        try:
-            next_vol = int(last_number) + 1
-        except (ValueError, TypeError):
-            _log.warning("无法解析旧 CBZ Number: %r → %s", last_number,
-                         append_ctx.old_cbz_paths[-1])
+    if do_split:
+        max_num = _read_newest_number(output_dir)
+        next_vol = max(max_num, 0) + 1 if max_num else 1
 
     def _pack_vol(vol_pages, start_page, number=None):
         if not vol_pages:
@@ -107,9 +124,9 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
     while idx < total:
         vol_count = min(cbz_max_pages, total - idx)
         vol_pages = read_from_cache(cache_dir, detail, idx, vol_count)
-        # 新建卷：增量模式下用递推号，否则按页位置计算
-        vol_num = str(next_vol) if (append_ctx and do_split) else None
-        if append_ctx and do_split:
+        # 新建卷：取目录扫描的最大值递推；非分卷或无数据则按页位置计算
+        vol_num = str(next_vol) if do_split else None
+        if do_split:
             next_vol += 1
         fp = _pack_vol(vol_pages, page_offset, number=vol_num)
         if fp:
