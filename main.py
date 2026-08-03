@@ -58,7 +58,12 @@ def main():
     asyncio.run(get_translator().load())
 
     from comicfeed.services.download import DownloadPool
-    download_pool = DownloadPool(max_workers=5)
+    from comicfeed.infrastructure.config import get_setting
+    try:
+        _conc = max(1, int(asyncio.run(get_setting("global_concurrency")) or "5"))
+    except ValueError:
+        _conc = 5
+    download_pool = DownloadPool(max_workers=_conc)
 
     # 首次运行时写入认证信息到 DB
     import asyncio as _asyncio

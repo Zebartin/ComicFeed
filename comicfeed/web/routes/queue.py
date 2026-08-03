@@ -46,7 +46,8 @@ async def retry_failed(gallery_id: str):
     from comicfeed.infrastructure.config import get_source_proxy, get_setting
     from comicfeed.infrastructure.config import get_source_credentials
     from comicfeed.web.app import get_source_manager
-    from comicfeed.services.download import download_gallery
+    from comicfeed.services.download import GallerySkipped
+    from comicfeed.web.app import get_download_pool
     import asyncio
 
     source_key = kw["source_key"]
@@ -63,13 +64,16 @@ async def retry_failed(gallery_id: str):
     tracker.remove_failed(gallery_id)
     tracker.enqueue(full_gid, title=gid, total_pages=0, retry_kwargs=kw)
 
+    pool = get_download_pool()
     async def _retry():
         try:
-            await download_gallery(source, gid, out_dir, tracker=tracker,
-                                   gallery_url=kw.get("gallery_url", ""),
-                                   append_pages=kw.get("append_pages", False),
-                                   replaces_native_id=kw.get("replaces_native_id", ""),
-                                   cbz_max_pages=kw.get("cbz_max_pages", 0))
+            await pool.download(source, gid, out_dir, tracker=tracker,
+                                gallery_url=kw.get("gallery_url", ""),
+                                append_pages=kw.get("append_pages", False),
+                                replaces_native_id=kw.get("replaces_native_id", ""),
+                                cbz_max_pages=kw.get("cbz_max_pages", 0))
+        except GallerySkipped as e:
+            tracker.skipped(full_gid, e.reason)
         except Exception as e:
             tracker.failed(full_gid, str(e))
     asyncio.create_task(_retry())

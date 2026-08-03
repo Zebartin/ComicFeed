@@ -83,5 +83,18 @@ def test_parse_gallery_html():
     assert "artist name" in " ".join(d.writers)
     assert "tag1" in " ".join(d.tags)
     assert d.reported_pages == 34
+    assert d.num_favorites == 123
     assert len(d.page_urls) > 0  # 从缩略图链接构造
     # web_url 由 get_gallery 异步方法设置，_parse_gallery_html 返回时为空
+
+
+def test_parse_gallery_html_missing_favcount():
+    """favcount 缺失或为空时不抛异常，收藏数默认为 0。"""
+    s = ExhentaiSource()
+    html = _SAMPLE_GALLERY_HTML.replace('<span id="favcount">123</span>', "")
+    d = s._parse_gallery_html(html, "1234567")
+    assert d.num_favorites == 0
+    # 元素存在但为空
+    html_empty = _SAMPLE_GALLERY_HTML.replace('<span id="favcount">123</span>', '<span id="favcount"></span>')
+    d2 = s._parse_gallery_html(html_empty, "1234567")
+    assert d2.num_favorites == 0

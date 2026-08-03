@@ -1,8 +1,44 @@
+import asyncio
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from comicfeed.infrastructure.database import create_tables, init_db, get_session
+from comicfeed.services.download import DownloadPool
+from comicfeed.sources.base import (
+    AuthSchema,
+    BaseSource,
+    GalleryDetail,
+    SearchResult,
+    UpdateResult,
+)
 from comicfeed.web.app import create_app
+
+
+class _FakeSource(BaseSource):
+    """手动下载集成测试用假源：1 页，返回可识别的 JPEG 头。"""
+    key = "fake"
+    name = "Fake"
+    version = "1.0"
+    domains = ["fake.local"]
+    auth_schema = AuthSchema.NONE
+
+    async def search(self, query, page, sort="date") -> SearchResult:
+        return SearchResult()
+
+    async def get_gallery(self, gallery_id, gallery_url="") -> GalleryDetail:
+        return GalleryDetail(
+            native_id=gallery_id, title="Fake Gallery", cover_url="", web_url="",
+            page_urls=["http://fake.local/1.jpg"],
+            page_native_ids=["p1"],
+            reported_pages=1,
+        )
+
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
+        return [b"\xff\xd8\xffFakeImage"]
+
+    async def check_updates(self, gallery_id, last_known, gallery_url=""):
+        return UpdateResult()
 
 
 @pytest.fixture
@@ -117,3 +153,44 @@ async def test_download_by_id(transport, auth, db_tables):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.post("/api/galleries/download", json={"source_key": "nhentai", "gallery_id": "325160"}, auth=auth)
         assert r.status_code in (200, 202)  # 200=完成 202=后台排队
+
+
+async def test_get_download_pool(app):
+    """create_app 后全局池可获取，手动下载路径依赖它。"""
+    from comicfeed.web.app import get_download_pool
+
+    pool = get_download_pool()
+    assert isinstance(pool, DownloadPool)
+
+
+async def test_manual_download_goes_through_pool(app, auth, db_tables, transport, tmp_path):
+    """手动单画廊下载实际走 pool 并完成任务。"""
+    from comicfeed.infrastructure.config import set_setting
+    from comicfeed.web.app import get_download_pool, get_download_tracker, get_source_manager
+
+    await set_setting("download_path", str(tmp_path))
+    mgr = get_source_manager()
+    mgr._classes[_FakeSource.key] = _FakeSource
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/galleries/download",
+            json={"source_key": "fake", "gallery_id": "123"},
+            auth=auth,
+        )
+        assert resp.status_code in (200, 202)
+
+    # 后台任务在事件循环上异步执行，轮询 tracker 直到完成
+    tracker = get_download_tracker()
+    full_gid = "fake:123"
+    for _ in range(100):
+        snap = tracker.snapshot()
+        all_ids = [t["gallery_id"] for t in snap["completed"]] + [t["gallery_id"] for t in snap["failed"]]
+        if full_gid in all_ids:
+            break
+        await asyncio.sleep(0.05)
+
+    snap = tracker.snapshot()
+    failed = [t for t in snap["failed"] if t["gallery_id"] == full_gid]
+    assert not failed, f"下载经 pool 执行后失败: {failed}"
+    assert full_gid in [t["gallery_id"] for t in snap["completed"]]

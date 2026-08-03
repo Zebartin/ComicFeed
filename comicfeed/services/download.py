@@ -17,6 +17,15 @@ from comicfeed.sources.base import BaseSource, GalleryDetail, GallerySummary
 _log = get(__name__)
 
 
+class GallerySkipped(Exception):
+    """画廊因下载阶段筛选不合格被跳过。不属于下载失败，不应计入 failed。"""
+
+    def __init__(self, gallery_id: str, reason: str):
+        self.gallery_id = gallery_id
+        self.reason = reason
+        super().__init__(reason)
+
+
 @dataclass
 class DownloadResult:
     gallery_id: str
@@ -119,6 +128,7 @@ async def _download_gallery(
 
     title = detail.title
     total = detail.reported_pages
+    full_gid = f"{source.key}:{gallery_id}"
 
     # 下载阶段筛选（exhentai 等源搜到时缺少 num_favorites/upload_date）
     if filter_rules:
@@ -134,14 +144,14 @@ async def _download_gallery(
                                 page_count=total, num_favorites=detail.num_favorites,
                                 upload_date=detail.upload_date)
             if not _matches_filter(gs, rules):
-                _log.info("筛选跳过: %s (不符合条件)", full_gid)
-                return result
+                reason = "不符合订阅筛选条件"
+                _log.info("筛选跳过: %s (%s)", full_gid, reason)
+                raise GallerySkipped(full_gid, reason)
 
     do_split = cbz_max_pages > 0
     if cbz_max_pages <= 0:
         cbz_max_pages = total
 
-    full_gid = f"{source.key}:{gallery_id}"
     _log.debug("参数: full_gid=%s cbz_max_pages=%d do_split=%s total=%d append=%s replaces=%s",
                full_gid, cbz_max_pages, do_split, total, append_pages, replaces_native_id)
     if tracker:
@@ -309,6 +319,11 @@ async def download_batch(
                 "web_url": result.web_url or t.gallery_url,
                 "page_count": result.page_count or t.page_count,
             })
+        except GallerySkipped as e:
+            _log.info("下载跳过: %s - %s", full_gid, e.reason)
+            tracker.skipped(full_gid, e.reason,
+                            title=t.title, total_pages=t.page_count,
+                            cover_url=t.cover_url, web_url=t.gallery_url)
         except Exception as e:
             _log.error("下载失败: %s - %s", full_gid, e)
             tracker.failed(full_gid, str(e),

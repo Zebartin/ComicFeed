@@ -16,11 +16,13 @@
 .q-bar-fill.active { background: var(--accent); }
 .q-bar-fill.done { background: var(--accent-light); }
 .q-bar-fill.failed { background: var(--red); }
+.q-bar-fill.skipped { background: #90a4ae; }
 .q-status { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px; flex-shrink: 0; }
 .q-status.pending { background: #f0ebe0; color: var(--text-muted); }
 .q-status.active { background: var(--accent-light); color: var(--accent); }
 .q-status.done { background: #e8f5e9; color: #388e3c; }
 .q-status.failed { background: #fce4ec; color: var(--red); }
+.q-status.skipped { background: #eceff1; color: #607d8b; }
 </style>
 
 <div class="page-header"><h1>下载队列</h1>
@@ -41,14 +43,15 @@ function renderItem(t, cls) {
       <div class="meta">${cls==='active' ? `${t.downloaded} / ${t.total_pages} &middot; ${pct}%` : `${t.total_pages} 页`}</div>
       <div class="q-bar"><div class="q-bar-fill ${cls}" style="width:${cls==='failed'?'100':pct}%"></div></div>
     </div>
-    <span class="q-status ${cls}">${({pending:'等待中',active:'下载中',done:'已完成',failed:'失败'})[cls]}</span>
+    <span class="q-status ${cls}">${({pending:'等待中',active:'下载中',done:'已完成',failed:'失败',skipped:'已跳过'})[cls]}</span>
     ${cls==='failed' ? `<button class="btn btn-ghost btn-sm" onclick="retry('${esc(t.gallery_id)}')" style="margin-left:8px">重试</button>` : ''}
+    ${cls==='skipped' && t.error ? `<span style="font-size:11px;color:var(--text-muted);margin-left:8px">${esc(t.error)}</span>` : ''}
   </div>`
 }
 
 async function load() {
   const r = await fetch('/api/queue'); const q = await r.json()
-  const total = (q.pending||[]).length + (q.active||[]).length + (q.completed||[]).length + (q.failed||[]).length
+  const total = (q.pending||[]).length + (q.active||[]).length + (q.completed||[]).length + (q.failed||[]).length + (q.skipped||[]).length
   if (!total) {
     document.getElementById('list').innerHTML = '<p style="color:var(--text-muted);padding:32px 0;text-align:center">无进行中的下载</p>'
   } else {
@@ -57,6 +60,7 @@ async function load() {
     if (q.pending.length) html += '<div class="q-section"><h3>等待中</h3>'+q.pending.map(t=>renderItem(t,'pending')).join('')+'</div>'
     if (q.completed.length) html += '<div class="q-section"><h3>已完成</h3>'+q.completed.map(t=>renderItem(t,'done')).join('')+'</div>'
     if (q.failed.length) html += '<div class="q-section"><h3>失败</h3>'+q.failed.map(t=>renderItem(t,'failed')).join('')+'</div>'
+    if (q.skipped.length) html += '<div class="q-section"><h3>已跳过</h3>'+q.skipped.map(t=>renderItem(t,'skipped')).join('')+'</div>'
     document.getElementById('list').innerHTML = html
     document.getElementById('clear-btn').style.display = (q.completed||[]).length ? '' : 'none'
   }

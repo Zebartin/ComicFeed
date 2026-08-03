@@ -266,8 +266,12 @@ class ExhentaiSource(BaseSource):
                 reported_pages = int(re.sub(r"\D", "", text) or "0")
                 break
         
-        # 收藏数
-        num_fav = int(soup.select_one("#favcount").get_text(strip=True).split()[0])
+        # 收藏数（页面可能缺失或为空 favcount，缺省 0）
+        fav_el = soup.select_one("#favcount")
+        num_fav = 0
+        if fav_el:
+            parts = fav_el.get_text(strip=True).split()
+            num_fav = int(parts[0]) if parts else 0
 
         # 页面 URL（从当前 viewer 页的缩略图提取）
         page_urls = []
@@ -314,65 +318,66 @@ class ExhentaiSource(BaseSource):
         results = []
         import httpx
         async with self._client() as client:
-            for i, viewer_url in enumerate(urls):
-                page_no = page_range.start + i + 1
-                nl = ""
-                last_err = None
-                for attempt in range(_retry):
-                    try:
-                        # 访问 viewer 页（有 nl 时带上）
-                        req_url = viewer_url
-                        if nl:
-                            sep = "&" if "?" in viewer_url else "?"
-                            req_url = viewer_url + sep + "nl=" + nl
-                            _log.debug("重试带 nl: %s", nl)
-                        resp = await client.get(req_url)
-
-                        soup = BeautifulSoup(resp.text, "lxml")
-
-                        # 提取 nl（每次访问 viewer 页都可能更新）
-                        new_nl = self._extract_nl(soup)
-                        if new_nl:
-                            nl = new_nl
-                            _log.debug("nl token: %s", nl)
-
-                        # 提取图片 URL
-                        img = soup.select_one("img#img")
-                        if img:
-                            img_url = img.get("src", "")
-                        else:
-                            imgs = soup.select("img")
-                            img_url = imgs[0].get("src", "") if imgs else ""
-
-                        if not img_url:
-                            _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id, page_no, viewer_url)
-                            results.append(b"")
-                            break
-
-                        # 下载图片
+            # 一个图片 client 供本批页面复用，避免每页重建（每页一次 TLS 握手）
+            async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
+                for i, viewer_url in enumerate(urls):
+                    page_no = page_range.start + i + 1
+                    nl = ""
+                    last_err = None
+                    for attempt in range(_retry):
                         try:
-                            async with httpx.AsyncClient(proxy=self.proxy, timeout=30) as img_client:
+                            # 访问 viewer 页（有 nl 时带上）
+                            req_url = viewer_url
+                            if nl:
+                                sep = "&" if "?" in viewer_url else "?"
+                                req_url = viewer_url + sep + "nl=" + nl
+                                _log.debug("重试带 nl: %s", nl)
+                            resp = await client.get(req_url)
+
+                            soup = BeautifulSoup(resp.text, "lxml")
+
+                            # 提取 nl（每次访问 viewer 页都可能更新）
+                            new_nl = self._extract_nl(soup)
+                            if new_nl:
+                                nl = new_nl
+                                _log.debug("nl token: %s", nl)
+
+                            # 提取图片 URL
+                            img = soup.select_one("img#img")
+                            if img:
+                                img_url = img.get("src", "")
+                            else:
+                                imgs = soup.select("img")
+                                img_url = imgs[0].get("src", "") if imgs else ""
+
+                            if not img_url:
+                                _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id, page_no, viewer_url)
+                                results.append(b"")
+                                break
+
+                            # 下载图片
+                            try:
                                 img_resp = await img_client.get(img_url)
                                 img_resp.raise_for_status()
                                 results.append(img_resp.content)
                                 break
+                            except Exception as e:
+                                _log.warning("下载图片失败(尝试%d/%d): %s page=%d nl=%s - %r",
+                                            attempt + 1, _retry, gallery_id, page_no, nl, e)
+                                if attempt < _retry - 1:
+                                    await asyncio.sleep(1)
+                                    # 下一轮带 nl 重访 viewer 页
+                                    continue
+                                raise
+
                         except Exception as e:
-                            _log.warning("下载图片失败(尝试%d/%d): %s page=%d nl=%s - %r",
-                                        attempt + 1, _retry, gallery_id, page_no, nl, e)
+                            last_err = e
                             if attempt < _retry - 1:
                                 await asyncio.sleep(1)
-                                # 下一轮带 nl 重访 viewer 页
-                                continue
-                            raise
-
-                    except Exception as e:
-                        last_err = e
-                        if attempt < _retry - 1:
-                            await asyncio.sleep(1)
-                else:
-                    _log.error("下载图片失败(重试%d次): gallery=%s page=%d viewer=%s - %r",
-                               _retry, gallery_id, page_no, viewer_url, last_err)
-                    raise last_err
+                    else:
+                        _log.error("下载图片失败(重试%d次): gallery=%s page=%d viewer=%s - %r",
+                                   _retry, gallery_id, page_no, viewer_url, last_err)
+                        raise last_err
         return results
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:

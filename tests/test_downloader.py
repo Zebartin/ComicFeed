@@ -1,7 +1,19 @@
 import asyncio
+import json
 import os
 
-from comicfeed.services.download import DownloadPool, DownloadResult, download_gallery
+import pytest
+
+from comicfeed.infrastructure.database import create_tables, init_db
+from comicfeed.services.download import (
+    DownloadPool,
+    DownloadResult,
+    DownloadTask,
+    GallerySkipped,
+    download_batch,
+    download_gallery,
+)
+from comicfeed.services.queue import DownloadTracker
 from comicfeed.sources.base import (
     AuthSchema,
     BaseSource,
@@ -9,6 +21,14 @@ from comicfeed.sources.base import (
     SearchResult,
     UpdateResult,
 )
+
+
+@pytest.fixture(autouse=True)
+async def _db():
+    """test_downloader 需要 DB 读取 download_retry 等设置，自给自足避免依赖其他测试文件先跑 init_db。"""
+    init_db(":memory:")
+    await create_tables()
+    yield
 
 
 async def test_download_gallery_to_cbz(tmp_path):
@@ -98,3 +118,89 @@ async def test_pool_respects_per_source_limit(tmp_path):
 
     # 全局 5 workers，但源限制 2，所以 max_active 不超过 2
     assert s1.max_active <= 2
+
+
+async def test_download_stage_filter_raises_skipped(tmp_path):
+    """下载阶段筛选不合格 → 抛 GallerySkipped（而非 NameError/失败）。"""
+    source = _MockSource(delay=0)
+    rules = json.dumps([{"field": "num_favorites", "op": "gte", "value": 100}])
+    with pytest.raises(GallerySkipped):
+        await download_gallery(
+            source=source, gallery_id="1", output_dir=str(tmp_path),
+            filter_rules=rules,
+        )
+
+
+async def test_download_batch_marks_skipped(tmp_path):
+    """download_batch 将筛选跳过的画廊记为 skipped，不记 failed。"""
+    source = _MockSource(delay=0)
+    tracker = DownloadTracker()
+    rules = json.dumps([{"field": "num_favorites", "op": "gte", "value": 100}])
+    task = DownloadTask(
+        source_key="mock", gallery_id="1", output_dir=str(tmp_path),
+        filter_rules=rules, title="Mock Gallery",
+    )
+    downloaded, failed = await download_batch(source, None, tracker, [task])
+    assert downloaded == []
+    assert failed == []
+    snap = tracker.snapshot()
+    assert len(snap["skipped"]) == 1
+    assert snap["skipped"][0]["status"] == "skipped"
+    assert snap["failed"] == []
+
+
+class _ChunkSource(_MockSource):
+    """记录 download_pages 收到的分片，用于验证分块下载。"""
+
+    def __init__(self, page_count, **kw):
+        super().__init__(**kw)
+        self.page_count = page_count
+        self.calls = []
+
+    async def get_gallery(self, gallery_id, gallery_url="") -> GalleryDetail:
+        return GalleryDetail(
+            native_id=gallery_id, title="Mock", cover_url="", web_url="",
+            page_urls=[f"http://mock.local/{i}.jpg" for i in range(self.page_count)],
+            page_native_ids=[str(i) for i in range(self.page_count)],
+            reported_pages=self.page_count,
+        )
+
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
+        self.calls.append((page_range.start, page_range.stop))
+        n = page_range.stop - page_range.start
+        return [b"\xff\xd8\xffMock"] * n
+
+
+async def test_fetch_pages_chunks_requests(tmp_path):
+    """fetch_pages 分块请求：单次 download_pages 覆盖多页，而非每页一次。"""
+    from comicfeed.io.page_fetcher import fetch_pages
+
+    src = _ChunkSource(25)
+    detail = await src.get_gallery("g")
+    cache_dir = str(tmp_path)
+    n = await fetch_pages(src, "g", "", detail, 25, cache_dir)
+    assert n == 25
+    # 每块 ≤ _CHUNK_SIZE=10，25 页分 3 次请求
+    assert src.calls == [(0, 10), (10, 20), (20, 25)]
+    # 缓存命中：再次抓取不再触发下载
+    src.calls.clear()
+    n2 = await fetch_pages(src, "g", "", detail, 25, cache_dir)
+    assert n2 == 25
+    assert src.calls == []
+
+
+class _FailingSource(_ChunkSource):
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
+        self.calls.append((page_range.start, page_range.stop))
+        raise RuntimeError("boom")
+
+
+async def test_fetch_pages_does_not_retry(tmp_path):
+    """重试折叠：fetch_pages 不重复调用 download_pages，失败直接冒泡（重试由源内部负责）。"""
+    from comicfeed.io.page_fetcher import fetch_pages
+
+    src = _FailingSource(25)
+    detail = await src.get_gallery("g")
+    with pytest.raises(RuntimeError):
+        await fetch_pages(src, "g", "", detail, 25, str(tmp_path))
+    assert len(src.calls) == 1

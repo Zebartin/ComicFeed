@@ -26,6 +26,7 @@ from comicfeed.web.routes.subscriptions import router as sub_router
 
 _source_manager: SourceManager | None = None
 _download_tracker: DownloadTracker | None = None
+_download_pool: DownloadPool | None = None
 _scheduler: AsyncIOScheduler | None = None
 
 
@@ -35,6 +36,10 @@ def get_source_manager() -> SourceManager | None:
 
 def get_download_tracker() -> DownloadTracker | None:
     return _download_tracker
+
+
+def get_download_pool() -> DownloadPool | None:
+    return _download_pool
 
 
 def reschedule_checks(interval_minutes: int):
@@ -86,10 +91,11 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
 
 def create_app(config: dict | None = None, source_manager: SourceManager | None = None,
                download_tracker: DownloadTracker | None = None, download_pool: DownloadPool | None = None) -> FastAPI:
-    global _source_manager, _download_tracker
+    global _source_manager, _download_tracker, _download_pool
     _source_manager = source_manager or SourceManager()
     _download_tracker = download_tracker or DownloadTracker()
-    download_pool = download_pool or DownloadPool()
+    # main.py 按 global_concurrency 设置构造池后传入；此处兜底默认 5
+    _download_pool = download_pool or DownloadPool(max_workers=5)
 
     from fastapi.staticfiles import StaticFiles
     app = FastAPI()
@@ -113,7 +119,7 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
         from comicfeed.infrastructure.scheduler import create_scheduler
         from comicfeed.infrastructure.config import get_setting
         interval = int(await get_setting("check_interval") or "10")
-        _scheduler = create_scheduler(_source_manager, download_pool, interval_minutes=interval)
+        _scheduler = create_scheduler(_source_manager, _download_pool, interval_minutes=interval)
         _scheduler.start()
         yield
         _scheduler.shutdown()

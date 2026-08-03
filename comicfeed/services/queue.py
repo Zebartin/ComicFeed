@@ -7,6 +7,7 @@ class DownloadTracker:
         self._active: dict[str, dict] = {}
         self._completed: list[dict] = []
         self._failed: list[dict] = []
+        self._skipped: list[dict] = []
         self._keep = keep_recent
 
     def enqueue(self, gallery_id: str, title: str = "", total_pages: int = 0,
@@ -41,8 +42,9 @@ class DownloadTracker:
             if len(self._completed) > self._keep:
                 self._completed = self._completed[-self._keep:]
 
-    def failed(self, gallery_id: str, error: str = "", title: str = "",
-               total_pages: int = 0, cover_url: str = "", web_url: str = ""):
+    def _mark(self, gallery_id: str, status: str, target: list[dict], error: str = "",
+              title: str = "", total_pages: int = 0, cover_url: str = "", web_url: str = ""):
+        """从 active 或 pending 中移除任务，置为终态并追加到 target（failed/skipped）。"""
         task = self._active.pop(gallery_id, None)
         if task is None:
             pending_task = None
@@ -53,17 +55,21 @@ class DownloadTracker:
                 else:
                     keep.append(t)
             self._pending = keep
-            task = {"gallery_id": gallery_id, "status": "failed", "error": error,
+            task = {"gallery_id": gallery_id, "status": status, "error": error,
                     "title": title, "total_pages": total_pages,
                     "cover_url": cover_url, "web_url": web_url, "downloaded": 0}
             if pending_task:
                 task["retry_kwargs"] = pending_task.get("retry_kwargs", {})
         else:
             task["error"] = error
-        task["status"] = "failed"
-        self._failed.append(task)
-        if len(self._failed) > self._keep:
-            self._failed = self._failed[-self._keep:]
+            task["status"] = status
+        target.append(task)
+        if len(target) > self._keep:
+            del target[:-self._keep]
+
+    def failed(self, gallery_id: str, error: str = "", title: str = "",
+               total_pages: int = 0, cover_url: str = "", web_url: str = ""):
+        self._mark(gallery_id, "failed", self._failed, error, title, total_pages, cover_url, web_url)
 
     def clear_completed(self):
         self._completed.clear()
@@ -74,10 +80,16 @@ class DownloadTracker:
     def remove_failed(self, gallery_id: str):
         self._failed = [t for t in self._failed if t["gallery_id"] != gallery_id]
 
+    def skipped(self, gallery_id: str, reason: str = "", title: str = "",
+                total_pages: int = 0, cover_url: str = "", web_url: str = ""):
+        """画廊因筛选等条件被跳过，不计入失败。"""
+        self._mark(gallery_id, "skipped", self._skipped, reason, title, total_pages, cover_url, web_url)
+
     def snapshot(self) -> dict:
         return {
             "pending": list(self._pending),
             "active": list(self._active.values()),
             "completed": list(self._completed),
             "failed": list(self._failed),
+            "skipped": list(self._skipped),
         }
