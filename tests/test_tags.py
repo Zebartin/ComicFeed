@@ -1,6 +1,8 @@
 import json
+import os
+import time
 
-from comicfeed.infrastructure.tag_translator import TagTranslator
+from comicfeed.infrastructure.tag_translator import UPDATE_DAYS, TagTranslator
 
 _SAMPLE_DB = {
     "namespaces": {"artist": "画师", "group": "团队", "tag": "标签"},
@@ -88,3 +90,55 @@ def test_find_namespaces_composite():
     # "sole female|unknown" → 找到 "sole female" 的 namespace
     result = tt.find_namespaces("sole female|unknown")
     assert "tag" in result
+
+
+async def test_load_downloads_when_stale(tmp_path, monkeypatch):
+    """本地库超过 UPDATE_DAYS → 触发下载（周期性刷新依赖此行为）。"""
+    db_path = tmp_path / "eh.json"
+    db_path.write_text(json.dumps({"namespaces": {}, "tags": {}}), encoding="utf-8")
+    old = time.time() - (UPDATE_DAYS + 1) * 86400
+    os.utime(db_path, (old, old))
+
+    tt = TagTranslator(str(db_path))
+    calls = []
+
+    async def fake_download():
+        calls.append(1)
+        tt._namespaces = {"artist": "画师"}
+        tt._tags = {"tag": {"full color": "全彩"}}
+
+    monkeypatch.setattr(tt, "_download", fake_download)
+    await tt.load()
+    assert calls == [1]
+    assert tt.translate("tag", "full color") == "全彩"
+
+
+async def test_load_uses_local_when_fresh(tmp_path, monkeypatch):
+    """本地库未过期 → 直接加载，不触发下载。"""
+    db_path = tmp_path / "eh.json"
+    db_path.write_text(json.dumps({"namespaces": {}, "tags": {"tag": {"a": "甲"}}}),
+                       encoding="utf-8")
+
+    tt = TagTranslator(str(db_path))
+    calls = []
+
+    async def fake_download():
+        calls.append(1)
+
+    monkeypatch.setattr(tt, "_download", fake_download)
+    await tt.load()
+    assert calls == []
+    assert tt.translate("tag", "a") == "甲"
+
+
+def test_scheduler_registers_tag_refresh_job():
+    """调度器注册每日标签翻译刷新 job（24h 间隔）。"""
+    from datetime import timedelta
+
+    from comicfeed.infrastructure.scheduler import create_scheduler
+    from comicfeed.infrastructure.source_manager import SourceManager
+
+    sched = create_scheduler(SourceManager(), None, interval_minutes=10)
+    job = sched.get_job("refresh_tag_translator")
+    assert job is not None
+    assert job.trigger.interval == timedelta(hours=24)

@@ -99,7 +99,22 @@ def create_scheduler(source_manager: SourceManager, download_pool, interval_minu
         weeks=1,
         id="cleanup_system_log",
     )
+    scheduler.add_job(
+        _refresh_tag_translator,
+        "interval",
+        hours=24,
+        id="refresh_tag_translator",
+    )
     return scheduler
+
+
+async def _refresh_tag_translator():
+    """按 UPDATE_DAYS 自动刷新标签翻译库（本地未过期则无操作）。"""
+    from comicfeed.infrastructure.tag_translator import get_translator
+    try:
+        await get_translator().load()
+    except Exception:
+        _log.exception("标签翻译库刷新失败")
 
 
 async def run_digest_job():

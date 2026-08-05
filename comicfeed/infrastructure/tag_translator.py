@@ -3,8 +3,10 @@
 从 GitHub Releases 下载 gzip 压缩的翻译数据库，
 缓存到本地，过期后自动更新。
 """
+import asyncio
 import gzip
 import json
+import os
 from datetime import datetime
 from functools import cache
 from logging import getLogger
@@ -24,24 +26,28 @@ class TagTranslator:
         self._db_path = db_path
         self._namespaces: dict[str, str] = {}
         self._tags: dict[str, dict[str, str]] = {}  # namespace → {en: zh}
+        self._lock = asyncio.Lock()  # 防止并发加载/下载（含缓存检查）
 
     async def load(self):
-        """加载本地缓存或从远程下载。"""
-        import os
-        try:
-            mtime = os.path.getmtime(self._db_path)
-            age_days = (datetime.now().timestamp() - mtime) / 86400
-            if age_days < UPDATE_DAYS:
-                with open(self._db_path, encoding="utf-8") as f:
-                    db = json.load(f)
-                self._namespaces = db.get("namespaces", {})
-                self._tags = db.get("tags", {})
-                self.find_namespaces.cache_clear()
-                logger.info("标签翻译数据库已加载 (%d 个命名空间)", len(self._namespaces))
-                return
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
-        await self._download()
+        """加载本地缓存或从远程下载。本地缓存未过期时无网络操作。
+
+        供启动与周期性刷新共用：调度器定期调用，内部按 UPDATE_DAYS 判断是否需更新。
+        """
+        async with self._lock:
+            try:
+                mtime = os.path.getmtime(self._db_path)
+                age_days = (datetime.now().timestamp() - mtime) / 86400
+                if age_days < UPDATE_DAYS:
+                    with open(self._db_path, encoding="utf-8") as f:
+                        db = json.load(f)
+                    self._namespaces = db.get("namespaces", {})
+                    self._tags = db.get("tags", {})
+                    self.find_namespaces.cache_clear()
+                    logger.info("标签翻译数据库已加载 (%d 个命名空间)", len(self._namespaces))
+                    return
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
+            await self._download()
 
     async def _download(self):
         """从 GitHub 下载并解析翻译数据库。"""
@@ -63,6 +69,9 @@ class TagTranslator:
                 self._tags[ns] = {k: v["name"] for k, v in item["data"].items()}
 
         self.find_namespaces.cache_clear()
+        dirname = os.path.dirname(self._db_path)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
         with open(self._db_path, "w", encoding="utf-8") as f:
             json.dump({"namespaces": self._namespaces, "tags": self._tags}, f, ensure_ascii=False)
         logger.info("标签翻译数据库已更新 (%d 命名空间, %d 标签)", len(self._namespaces),
