@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from comicfeed.infrastructure.database import create_tables, get_session, init_db
 from comicfeed.models import DownloadEvent
-from comicfeed.repositories.download_event import pending_since, record_event
+from comicfeed.repositories.download_event import delete_before, pending_since, record_event
 
 
 @pytest.fixture(autouse=True)
@@ -47,3 +47,23 @@ async def test_pending_since_excludes_old():
     async with get_session() as s:
         events = await pending_since(s, since)
     assert events == []
+
+
+async def test_delete_before():
+    """删除 created_at <= cutoff 的事件。"""
+    now = datetime.now()
+    async with get_session() as s:
+        for days, name in [(80, "old"), (20, "new")]:
+            s.add(DownloadEvent(subscription_name=name, source_key="nhentai",
+                                gallery_id=f"g-{days}", created_at=now - timedelta(days=days)))
+        await s.commit()
+
+    cutoff = now - timedelta(days=60)
+    async with get_session() as s:
+        deleted = await delete_before(s, cutoff)
+        await s.commit()
+    assert deleted == 1
+
+    async with get_session() as s:
+        remaining = [e.subscription_name for e in await pending_since(s, now - timedelta(days=90))]
+    assert remaining == ["new"]

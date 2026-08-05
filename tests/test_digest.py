@@ -1,12 +1,12 @@
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from comicfeed.infrastructure.config import get_setting, set_setting
 from comicfeed.infrastructure.database import create_tables, get_session, init_db
 from comicfeed.models import DownloadEvent
 from comicfeed.repositories.download_event import pending_since
 from comicfeed.services import digest as digest_mod
-from comicfeed.services.digest import build_digest, send_digest, webhook_payload
+from comicfeed.services.digest import build_digest, cleanup_download_events, send_digest, webhook_payload
 
 
 @pytest.fixture(autouse=True)
@@ -157,6 +157,50 @@ async def test_send_digest_advances_to_watermark(monkeypatch):
     digest = build_digest(await _all_events())
     await send_digest()
     assert await get_setting("last_digest_at") == digest["until"].isoformat()
+
+
+async def test_cleanup_download_events_consumed_and_retention():
+    """已消费（≤last_digest_at）与超过 60 天保留期的行被删，近期待报告行保留。"""
+    now = datetime.now()
+    await set_setting("last_digest_at", (now - timedelta(days=70)).isoformat())
+    async with get_session() as s:
+        for name, days in [("consumed", 80), ("pending_old", 65), ("recent", 50)]:
+            s.add(DownloadEvent(subscription_name=name, source_key="nhentai",
+                                gallery_id=f"g-{days}", created_at=now - timedelta(days=days)))
+        await s.commit()
+
+    deleted = await cleanup_download_events()
+    assert deleted == 2  # consumed(80d) + pending_old(65d 超保留期)
+
+    async with get_session() as s:
+        remaining = [e.subscription_name for e in await pending_since(s, now - timedelta(days=90))]
+    assert remaining == ["recent"]
+
+
+async def test_cleanup_no_last_digest_uses_retention():
+    """last_digest_at 未设时，仅按 60 天保留期删除。"""
+    now = datetime.now()
+    async with get_session() as s:
+        for name, days in [("old", 80), ("recent", 30)]:
+            s.add(DownloadEvent(subscription_name=name, source_key="nhentai",
+                                gallery_id=f"g-{days}", created_at=now - timedelta(days=days)))
+        await s.commit()
+
+    deleted = await cleanup_download_events()
+    assert deleted == 1
+
+    async with get_session() as s:
+        remaining = [e.subscription_name for e in await pending_since(s, now - timedelta(days=90))]
+    assert remaining == ["recent"]
+
+
+def test_scheduler_registers_event_cleanup_job():
+    """调度器注册每周 download_event 清理 job。"""
+    from comicfeed.infrastructure.scheduler import create_scheduler
+    from comicfeed.infrastructure.source_manager import SourceManager
+
+    sched = create_scheduler(SourceManager(), None, interval_minutes=10)
+    assert sched.get_job("cleanup_download_events") is not None
 
 
 async def test_setup_digest_job_empty_does_not_register():

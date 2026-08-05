@@ -2,13 +2,13 @@
 
 last_digest_at 记录上次成功消费点；无新事件则跳过；至少一个通道成功才推进。
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from comicfeed.infrastructure.config import get_setting, set_setting
 from comicfeed.infrastructure.log import get
 from comicfeed.infrastructure.database import get_session
 from comicfeed.infrastructure.notifications import send_digest_email, send_webhook
-from comicfeed.repositories.download_event import pending_since
+from comicfeed.repositories.download_event import delete_before, pending_since
 
 _log = get(__name__)
 
@@ -131,3 +131,21 @@ async def send_digest() -> bool:
     else:
         _log.warning("摘要发送失败，last_digest_at 保持原值，下次重试")
     return sent
+
+
+async def cleanup_download_events(retention_days: int = 60) -> int:
+    """删除已消费（≤ last_digest_at）或超过保留期的下载事件。每周由调度器调用。"""
+    last_raw = (await get_setting("last_digest_at", "")) or ""
+    last_digest_at = _EPOCH
+    if last_raw:
+        try:
+            last_digest_at = datetime.fromisoformat(last_raw)
+        except ValueError:
+            last_digest_at = _EPOCH
+    cutoff = max(last_digest_at, datetime.now() - timedelta(days=retention_days))
+    async with get_session() as session:
+        deleted = await delete_before(session, cutoff)
+        await session.commit()
+    if deleted:
+        _log.info("清理下载事件: 删除 %d 条", deleted)
+    return deleted

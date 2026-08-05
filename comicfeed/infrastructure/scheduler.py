@@ -99,6 +99,15 @@ def create_scheduler(source_manager: SourceManager, download_pool, interval_minu
         weeks=1,
         id="cleanup_system_log",
     )
+    async def _event_cleanup():
+        from comicfeed.services.digest import cleanup_download_events
+        await cleanup_download_events()
+    scheduler.add_job(
+        _event_cleanup,
+        "interval",
+        weeks=1,
+        id="cleanup_download_events",
+    )
     scheduler.add_job(
         _refresh_tag_translator,
         "interval",

@@ -1,5 +1,5 @@
 """DownloadEvent 数据访问。"""
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from comicfeed.models import DownloadEvent
@@ -33,3 +33,11 @@ async def pending_since(session: AsyncSession, since) -> list[DownloadEvent]:
         .order_by(DownloadEvent.created_at)
     )
     return rows.scalars().all()
+
+
+async def delete_before(session: AsyncSession, cutoff) -> int:
+    """删除 created_at <= cutoff 的事件，返回删除条数。"""
+    result = await session.execute(
+        delete(DownloadEvent).where(DownloadEvent.created_at <= cutoff)
+    )
+    return result.rowcount or 0
