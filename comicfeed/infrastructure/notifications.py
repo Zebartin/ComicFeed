@@ -101,15 +101,19 @@ async def send_email(config: dict, event: dict):
 
 async def send_digest_email(config: dict, digest: dict):
     """发送摘要邮件：按订阅分组的下载/失败列表。digest 由 services/digest.build_digest 生成。"""
+    since = digest["since"]
     until = digest["until"]
     n_sub = len(digest["subscriptions"])
-    label = f"{until.strftime('%Y-%m-%d %H:%M')} · {n_sub} 订阅 · {digest['total_count']} 下载"
+    label = f"{n_sub} 订阅 · {digest['total_count']} 下载"
     if digest["total_failed"]:
         label += f" / {digest['total_failed']} 失败"
+    # until 是摘要窗口内最后一条下载事件的时间，与 since 一起构成统计范围
+    window = f"统计范围：{since:%Y-%m-%d %H:%M} ~ {until:%Y-%m-%d %H:%M}"
 
     parts = [f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui,sans-serif;color:#333;max-width:600px;margin:0 auto">
 <h2 style="color:#b8860b;border-bottom:1px solid #e5ded3;padding-bottom:8px">ComicFeed · 下载摘要</h2>
 <p style="color:#666;font-size:14px">{label}</p>
+<p style="color:#999;font-size:12px">{window}</p>
 """]
     for g in digest["subscriptions"]:
         sub_label = f"{g['name']} · {g['count']} 个下载"

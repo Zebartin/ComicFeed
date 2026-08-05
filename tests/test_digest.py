@@ -236,4 +236,5 @@ async def test_send_digest_email_groups_and_omits(monkeypatch):
     assert "等共 15 个画廊" in html
     assert "订阅B" in html
     assert "Fail" in html  # 失败项标题在组内
+    assert "统计范围：" in html  # until 有明确含义（窗口终点）
     assert "15 下载" in captured["subject"]
