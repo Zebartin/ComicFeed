@@ -71,6 +71,14 @@
     </div>
     <div class="field"><label>收件人</label><input id="smtp_to" placeholder="me@example.com"></div>
     <button class="btn btn-ghost btn-sm" onclick="testEmail()">发送测试邮件</button>
+
+    <h3>定时摘要</h3>
+    <div class="field"><label>发送 cron</label><input id="notification_cron" placeholder="如 0 8 * * *（每天 08:00）">
+      <span class="hint">定时发送下载摘要（邮件 + Webhook）。留空 = 不发送。
+      格式为标准 cron 表达式（分 时 日 月 周），如「30 8 * * *」= 每天 08:30。
+      仅当间隔内有新下载或失败记录时发送，无则自动跳过；发送失败会于下次调度重试。
+      摘要按订阅分组，每订阅最多列 12 条、超出省略，失败项在组内列出；手动下载与自动巡检均包含。</span>
+    </div>
   </div>
 </div>
 

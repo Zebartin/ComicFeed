@@ -149,9 +149,17 @@ async def download_by_id(req: DownloadRequest):
     pool = get_download_pool()
     async def _dl():
         try:
-            await pool.download(source, gid, out_dir, tracker=tracker, gallery_url=req.url or "")
+            await pool.download(source, gid, out_dir, tracker=tracker, gallery_url=req.url or "",
+                                subscription_name="手动下载")
+            from comicfeed.services.komga import trigger_komga_scan
+            await trigger_komga_scan()
         except Exception as e:
             tracker.failed(full_gid, str(e))
+            from comicfeed.services.download import record_download_event
+            await record_download_event("failed", subscription_name="手动下载",
+                                        source_key=req.source_key, gallery_id=full_gid,
+                                        title=req.gallery_id, web_url=req.url or "",
+                                        error=str(e))
     asyncio.create_task(_dl())
     _log.info("提交下载: %s:%s", req.source_key, gid)
     return {"status": "accepted", "gallery_id": f"{req.source_key}:{gid}"}
@@ -195,14 +203,13 @@ async def batch_download(req: BatchDownloadRequest):
                 cbz_max_pages=sub_cbz_max,
                 append_pages=bool(meta.get("new_page_ids") or []),
                 replaces_native_id=meta.get("replaces_native_id", ""),
-                subscription_id=req.subscription_id,
                 title=meta.get("title", gid),
                 cover_url=meta.get("cover_url", ""),
                 page_count=meta.get("page_count", 0),
             ))
 
         _, _ = await download_batch(source, None, tracker, tasks,
-                                     subscription_name=f"手动下载 ({req.source_key})")
+                                     subscription_name="手动下载")
 
         for meta in [req.gallery_metas.get(gid, {}) for gid in req.gallery_ids]:
             rid = meta.get("replaces_native_id", "")

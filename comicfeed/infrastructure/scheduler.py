@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 
 from comicfeed.infrastructure.database import get_session
@@ -62,6 +63,7 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 detail=item.detail, append_pages=bool(item.new_page_ids),
                 replaces_native_id=item.replaces_native_id,
                 filter_rules=sub.filter_rules,
+                subscription_id=sub.id,
                 title=item.title, cover_url=item.cover_url or "",
                 page_count=item.page_count,
             ) for item in new]
@@ -98,4 +100,29 @@ def create_scheduler(source_manager: SourceManager, download_pool, interval_minu
         id="cleanup_system_log",
     )
     return scheduler
+
+
+async def run_digest_job():
+    """cron 触发的摘要发送。"""
+    from comicfeed.services.digest import send_digest
+    await send_digest()
+
+
+async def setup_digest_job(scheduler: AsyncIOScheduler):
+    """按 notification_cron 设置注册/移除 digest cron job。空表达式 = 不注册。"""
+    from comicfeed.infrastructure.config import get_setting
+    expr = (await get_setting("notification_cron", "")) or ""
+    expr = expr.strip()
+    if scheduler.get_job("send_digest"):
+        scheduler.remove_job("send_digest")
+    if not expr:
+        _log.info("摘要 cron 未配置，不注册")
+        return
+    try:
+        trigger = CronTrigger.from_crontab(expr)
+    except ValueError as e:
+        _log.error("摘要 cron 表达式无效: %s - %s", expr, e)
+        return
+    scheduler.add_job(run_digest_job, trigger, id="send_digest", replace_existing=True)
+    _log.info("摘要 cron 已注册: %s", expr)
 

@@ -77,8 +77,18 @@ async def retry_failed(gallery_id: str):
                                 gallery_url=kw.get("gallery_url", ""),
                                 append_pages=kw.get("append_pages", False),
                                 replaces_native_id=kw.get("replaces_native_id", ""),
-                                cbz_max_pages=kw.get("cbz_max_pages", 0))
+                                cbz_max_pages=kw.get("cbz_max_pages", 0),
+                                subscription_id=kw.get("subscription_id"),
+                                subscription_name=kw.get("subscription_name", "手动下载"))
+            from comicfeed.services.komga import trigger_komga_scan
+            await trigger_komga_scan()
         except Exception as e:
             tracker.failed(full_gid, str(e))
+            from comicfeed.services.download import record_download_event
+            await record_download_event("failed",
+                                        subscription_id=kw.get("subscription_id"),
+                                        subscription_name=kw.get("subscription_name", "手动下载"),
+                                        source_key=source_key, gallery_id=full_gid,
+                                        title=gid, error=str(e))
     asyncio.create_task(_retry())
     return {"status": "retrying", "gallery_id": full_gid}

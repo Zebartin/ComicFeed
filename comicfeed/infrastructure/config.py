@@ -23,6 +23,7 @@ _DEFAULTS = {
     "komga_url": "", "komga_user": "", "komga_password": "", "komga_library_id": "",
     "smtp_host": "", "smtp_port": "587", "smtp_user": "", "smtp_password": "", "smtp_to": "",
     "webhook_url": "",
+    "notification_cron": "",  # 摘要 cron 表达式，空 = 不发送
     "auth_username": "admin", "auth_password": "",
     "post_download_script": "",
 }

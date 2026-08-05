@@ -99,12 +99,14 @@ CBZ 内的元数据描述文件，字段包括：Title、Writer、Year/Month/Day
 
 ## 通知通道 (Notification Channel)
 
-下载完成后由 `services/notification.py` 直接发送通知（邮件 + Webhook + Komga 扫描），无需事件总线中转。内置支持：
+下载结果先写入 `download_event` 累积，按全局 cron 定时聚合为**摘要 (digest)** 发送（邮件 + Webhook）。间隔内无任何下载/失败记录则跳过本次。Komga 扫描在下载完成时独立触发，不随通知。
+
+摘要按订阅分组：只列出间隔内有下载/失败的订阅，每订阅列出部分结果（邮件 ≤12 / Webhook ≤5，超出省略），失败项在组内顺带列出。手动单发与批量下载同样进入摘要；源错误通知（源不可用/搜索失败）保持即时 Webhook。
+
+内置支持：
 - **Webhook**：通用 HTTP POST，可对接钉钉/飞书/Discord 等
 - **邮件**：SMTP 发送
-- **Komga**：下载完成后自动触称 library 扫描
-
-通知含封面图、画廊链接、页数。失败时显示失败项及错误日志摘要。
+- **Komga**：下载完成后即时触发 library 扫描
 
 ## Komga 集成
 

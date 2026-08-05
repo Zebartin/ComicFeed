@@ -12,6 +12,7 @@ _SETTING_KEYS = [
     "komga_url", "komga_user", "komga_password", "komga_library_id",
     "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_to",
     "webhook_url",
+    "notification_cron",
     "auth_username", "auth_password",
     "post_download_script",
 ]
@@ -32,6 +33,12 @@ async def update_setting(key: str, value: str = ""):
         try:
             from comicfeed.web.app import reschedule_checks
             reschedule_checks(int(value))
+        except Exception:
+            pass
+    if key == "notification_cron":
+        try:
+            from comicfeed.web.app import reschedule_digest
+            await reschedule_digest()
         except Exception:
             pass
     return {"key": key, "value": value}

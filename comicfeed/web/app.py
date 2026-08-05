@@ -51,6 +51,13 @@ def reschedule_checks(interval_minutes: int):
         _scheduler.reschedule_job("check_all_subscriptions", trigger="interval", minutes=interval_minutes)
 
 
+async def reschedule_digest():
+    """按 notification_cron 设置重排摘要 job（设置变更时调用）。"""
+    if _scheduler:
+        from comicfeed.infrastructure.scheduler import setup_digest_job
+        await setup_digest_job(_scheduler)
+
+
 class BasicAuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, username: str, password: str, exclude_paths: list[str] | None = None):
         super().__init__(app)
@@ -124,6 +131,8 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
         from comicfeed.infrastructure.config import get_setting
         interval = int(await get_setting("check_interval") or "10")
         _scheduler = create_scheduler(_source_manager, _download_pool, interval_minutes=interval)
+        from comicfeed.infrastructure.scheduler import setup_digest_job
+        await setup_digest_job(_scheduler)
         _scheduler.start()
         yield
         _scheduler.shutdown()

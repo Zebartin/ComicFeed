@@ -148,6 +148,15 @@ async def test_check_subscription_now(transport, auth, db_tables):
         assert "new_galleries" in data or "error" in data
 
 
+async def test_update_notification_cron_setting(transport, auth, db_tables):
+    """保存并读取 notification_cron 设置。"""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.put("/api/settings/notification_cron?value=0%208%20*%20*%20*", auth=auth)
+        assert r.status_code == 200
+        r2 = await client.get("/api/settings", auth=auth)
+        assert r2.json().get("notification_cron") == "0 8 * * *"
+
+
 async def test_download_by_id(transport, auth, db_tables):
     """按 Gallery ID 手动下载。"""
     async with AsyncClient(transport=transport, base_url="http://test") as client:

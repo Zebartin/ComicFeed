@@ -75,3 +75,22 @@ class SystemLog(Base):
     level: Mapped[str] = mapped_column(String(16))
     source: Mapped[str] = mapped_column(String(64))
     message: Mapped[str] = mapped_column(Text)
+
+
+class DownloadEvent(Base):
+    """一次画廊下载的结果（成功/失败），供定时摘要聚合。"""
+
+    __tablename__ = "download_event"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subscription_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 手动下载为 None
+    subscription_name: Mapped[str] = mapped_column(String(256), default="")  # 分组键，手动=「手动下载」
+    source_key: Mapped[str] = mapped_column(String(64))
+    gallery_id: Mapped[str] = mapped_column(String(256))
+    title: Mapped[str] = mapped_column(Text, default="")
+    cover_url: Mapped[str] = mapped_column(Text, default="")
+    web_url: Mapped[str] = mapped_column(Text, default="")
+    page_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="success")  # success / failed
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

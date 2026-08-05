@@ -5,6 +5,7 @@ from email.mime.text import MIMEText
 
 import httpx
 
+
 def build_payload(event: dict) -> dict:
     """构建 webhook JSON 负载。event: {"name": str, "data": dict}"""
     payload = {"event": event["name"]}
@@ -28,8 +29,24 @@ async def send_webhook(url: str, event: dict, _client=None):
             await client.post(url, json=payload)
 
 
+def _smtp_send(config: dict, msg: MIMEMultipart):
+    """SMTP 传输（阻塞，跑在 to_thread）。"""
+    port = config["port"]
+    if port == 465:
+        import ssl
+        ctx = ssl.create_default_context()
+        s = smtplib.SMTP_SSL(config["host"], port, context=ctx)
+    else:
+        s = smtplib.SMTP(config["host"], port)
+    with s:
+        if port != 465:
+            s.starttls()
+        s.login(config["user"], config["password"])
+        s.send_message(msg)
+
+
 async def send_email(config: dict, event: dict):
-    """发送邮件通知。event: {"name": str, "data": dict}"""
+    """发送单事件邮件（测试通知等）。event: {"name": str, "data": dict}"""
     subject = f"[ComicFeed] {event['name']}"
     data = event.get("data", {})
     count = data.get("count", 0)
@@ -79,18 +96,50 @@ async def send_email(config: dict, event: dict):
     msg["From"] = config.get("user", "")
     msg["To"] = config.get("to", "")
 
-    def _send():
-        port = config["port"]
-        if port == 465:
-            import ssl
-            ctx = ssl.create_default_context()
-            s = smtplib.SMTP_SSL(config["host"], port, context=ctx)
-        else:
-            s = smtplib.SMTP(config["host"], port)
-        with s:
-            if port != 465:
-                s.starttls()
-            s.login(config["user"], config["password"])
-            s.send_message(msg)
+    await asyncio.to_thread(_smtp_send, config, msg)
 
-    await asyncio.to_thread(_send)
+
+async def send_digest_email(config: dict, digest: dict):
+    """发送摘要邮件：按订阅分组的下载/失败列表。digest 由 services/digest.build_digest 生成。"""
+    until = digest["until"]
+    n_sub = len(digest["subscriptions"])
+    label = f"{until.strftime('%Y-%m-%d %H:%M')} · {n_sub} 订阅 · {digest['total_count']} 下载"
+    if digest["total_failed"]:
+        label += f" / {digest['total_failed']} 失败"
+
+    parts = [f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui,sans-serif;color:#333;max-width:600px;margin:0 auto">
+<h2 style="color:#b8860b;border-bottom:1px solid #e5ded3;padding-bottom:8px">ComicFeed · 下载摘要</h2>
+<p style="color:#666;font-size:14px">{label}</p>
+"""]
+    for g in digest["subscriptions"]:
+        sub_label = f"{g['name']} · {g['count']} 个下载"
+        if g["failed_count"]:
+            sub_label += f" / {g['failed_count']} 个失败"
+        parts.append(f"""<h3 style="font-size:14px;color:#b8860b;margin:20px 0 8px;border-bottom:1px solid #f0e8dc;padding-bottom:4px">{sub_label}</h3>""")
+        for item in g["items"]:
+            cover = item.get("cover_url", "")
+            web = item.get("web_url", "")
+            pages = item.get("page_count", 0)
+            title = (item.get("title", "") or "")[:80]
+            gid = (item.get("gallery_id", "") or "").split(":")[-1]
+            parts.append(f"""<table cellpadding="0" cellspacing="0" style="margin-bottom:10px;border:1px solid #e5ded3;border-radius:8px;overflow:hidden"><tr>
+<td style="width:80px;vertical-align:top">{"<img src='"+cover+"' style='width:80px;height:auto;display:block'>" if cover else "<div style='width:80px;height:110px;background:#f0ebe0'></div>"}</td>
+<td style="padding:8px 12px;vertical-align:top"><div style="font-size:10px;color:#b8860b;font-family:monospace">#{gid}</div>
+<div style="font-size:13px;font-weight:500;line-height:1.3">{title}</div>
+<div style="font-size:11px;color:#999;margin-top:4px">{pages} 页</div>
+{"<a href='"+web+"' style='font-size:11px;color:#b8860b;text-decoration:none'>在源站查看</a>" if web else ""}</td></tr></table>""")
+        if g["count"] > len(g["items"]):
+            parts.append(f"<p style='color:#999;font-size:12px'>... 等共 {g['count']} 个画廊</p>")
+        for f in g["failed"]:
+            parts.append(f"<p style='font-size:11px;color:#c0392b;margin:4px 0'>&#10007; {f['title'][:60]} &mdash; {f['error'][:100]}</p>")
+        if g["failed_count"] > len(g["failed"]):
+            parts.append(f"<p style='font-size:11px;color:#999'>... 等共 {g['failed_count']} 个失败</p>")
+    parts.append("<p style='color:#999;font-size:11px;margin-top:20px;border-top:1px solid #e5ded3;padding-top:10px'>由 ComicFeed 自动发送</p></body></html>")
+
+    msg = MIMEMultipart("alternative")
+    msg.attach(MIMEText("".join(parts), "html", "utf-8"))
+    msg["Subject"] = f"[ComicFeed] 摘要 · {until.strftime('%Y-%m-%d')} · {n_sub} 订阅 · {digest['total_count']} 下载"
+    msg["From"] = config.get("user", "")
+    msg["To"] = config.get("to", "")
+
+    await asyncio.to_thread(_smtp_send, config, msg)

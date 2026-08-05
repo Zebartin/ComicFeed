@@ -1,10 +1,12 @@
 import asyncio
 import json
 import os
+from datetime import datetime, timedelta
 
 import pytest
 
-from comicfeed.infrastructure.database import create_tables, init_db
+from comicfeed.infrastructure.database import create_tables, get_session, init_db
+from comicfeed.repositories.download_event import pending_since
 from comicfeed.services.download import (
     DownloadPool,
     DownloadResult,
@@ -203,6 +205,61 @@ class _FailingSource(_ChunkSource):
     async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
         self.calls.append((page_range.start, page_range.stop))
         raise RuntimeError("boom")
+
+
+class _AlwaysFailSource(_MockSource):
+    async def get_gallery(self, gallery_id, gallery_url="") -> GalleryDetail:
+        raise RuntimeError("boom")
+
+
+async def test_download_batch_records_events(tmp_path):
+    """download_batch 成功后每个画廊记录一条 success 事件。"""
+    source = _MockSource(delay=0)
+    tracker = DownloadTracker()
+    tasks = [DownloadTask(source_key="mock", gallery_id=str(i), output_dir=str(tmp_path),
+                          title=f"G{i}", subscription_id=1, page_count=2) for i in (1, 2)]
+    await download_batch(source, None, tracker, tasks, subscription_name="订阅A")
+
+    since = datetime.now() - timedelta(hours=1)
+    async with get_session() as s:
+        events = await pending_since(s, since)
+    assert len(events) == 2
+    assert all(e.subscription_name == "订阅A" for e in events)
+    assert all(e.subscription_id == 1 for e in events)
+    assert all(e.status == "success" for e in events)
+    assert all(e.source_key == "mock" for e in events)
+
+
+async def test_download_batch_records_failed_event(tmp_path):
+    """download_batch 失败时记录一条 failed 事件（带错误信息）。"""
+    source = _AlwaysFailSource()
+    tracker = DownloadTracker()
+    task = DownloadTask(source_key="mock", gallery_id="1", output_dir=str(tmp_path),
+                        title="G1", subscription_id=1, page_count=2)
+    await download_batch(source, None, tracker, [task], subscription_name="订阅A")
+
+    since = datetime.now() - timedelta(hours=1)
+    async with get_session() as s:
+        events = await pending_since(s, since)
+    assert len(events) == 1
+    assert events[0].status == "failed"
+    assert events[0].subscription_name == "订阅A"
+    assert "boom" in events[0].error
+
+
+async def test_download_batch_triggers_komga_scan(tmp_path, monkeypatch):
+    """下载完成后触发 Komga 扫描（不再走 notify_batch）。"""
+    calls = []
+
+    async def fake_scan():
+        calls.append(1)
+
+    monkeypatch.setattr("comicfeed.services.komga.trigger_komga_scan", fake_scan)
+    source = _MockSource(delay=0)
+    tracker = DownloadTracker()
+    task = DownloadTask(source_key="mock", gallery_id="1", output_dir=str(tmp_path), title="G1")
+    await download_batch(source, None, tracker, [task])
+    assert calls == [1]
 
 
 async def test_fetch_pages_does_not_retry(tmp_path):

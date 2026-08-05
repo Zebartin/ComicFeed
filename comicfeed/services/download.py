@@ -12,6 +12,7 @@ from comicfeed.io.cbz_builder import AppendContext, pack_cbz_volumes, strip_ads
 from comicfeed.io.page_fetcher import cleanup_cache, fetch_pages, read_from_cache
 from comicfeed.repositories.gallery import get_or_create
 from comicfeed.repositories.page import append_new, count_for_gallery, migrate_gallery, replace_all
+from comicfeed.repositories.download_event import record_event as _record_event
 from comicfeed.sources.base import BaseSource, GalleryDetail, GallerySummary
 
 _log = get(__name__)
@@ -24,6 +25,23 @@ class GallerySkipped(Exception):
         self.gallery_id = gallery_id
         self.reason = reason
         super().__init__(reason)
+
+
+async def record_download_event(status: str, *, subscription_id: int | None = None,
+                                 subscription_name: str = "", source_key: str = "",
+                                 gallery_id: str = "", title: str = "", cover_url: str = "",
+                                 web_url: str = "", page_count: int = 0, error: str = ""):
+    """记录下载事件（成功/失败），供定时摘要聚合。best-effort，失败仅记日志。"""
+    try:
+        async with get_session() as session:
+            await _record_event(session, subscription_id=subscription_id,
+                                subscription_name=subscription_name or "手动下载",
+                                source_key=source_key, gallery_id=gallery_id,
+                                title=title, cover_url=cover_url, web_url=web_url,
+                                page_count=page_count, status=status, error=error)
+            await session.commit()
+    except Exception:
+        _log.exception("记录下载事件失败: %s", gallery_id)
 
 
 @dataclass
@@ -87,6 +105,8 @@ class DownloadPool:
         append_pages: bool = False,
         replaces_native_id: str = "",
         filter_rules: str = "",
+        subscription_id: int | None = None,
+        subscription_name: str = "",
     ) -> DownloadResult:
         """获取全局和源级信号量后执行下载。"""
         src_sem = self._source_sem(source)
@@ -95,7 +115,9 @@ class DownloadPool:
                       save_to_db=save_to_db, gallery_url=gallery_url,
                       detail=detail, append_pages=append_pages,
                       replaces_native_id=replaces_native_id,
-                      filter_rules=filter_rules)
+                      filter_rules=filter_rules,
+                      subscription_id=subscription_id,
+                      subscription_name=subscription_name)
         async with self._global_sem:
             if src_sem:
                 async with src_sem:
@@ -116,6 +138,8 @@ async def _download_gallery(
     append_pages: bool = False,
     replaces_native_id: str = "",
     filter_rules: str = "",
+    subscription_id: int | None = None,
+    subscription_name: str = "",
 ) -> DownloadResult:
     """下载完整画廊并打包为 CBZ。"""
     os.makedirs(output_dir, exist_ok=True)
@@ -253,6 +277,13 @@ async def _download_gallery(
         except Exception:
             _log.exception("写入页面记录失败: %s", full_gid)
 
+    # 记录下载事件（供定时摘要聚合）
+    await record_download_event("success", subscription_id=subscription_id,
+                                 subscription_name=subscription_name,
+                                 source_key=source.key, gallery_id=full_gid,
+                                 title=title, cover_url=detail.cover_url,
+                                 web_url=detail.web_url, page_count=result.page_count)
+
     return result
 
 
@@ -280,6 +311,7 @@ async def download_batch(
                             "append_pages": t.append_pages,
                             "replaces_native_id": t.replaces_native_id,
                             "subscription_id": t.subscription_id,
+                            "subscription_name": subscription_name,
                         })
 
     downloaded = []
@@ -298,6 +330,8 @@ async def download_batch(
                     replaces_native_id=t.replaces_native_id,
                     cbz_max_pages=t.cbz_max_pages,
                     filter_rules=t.filter_rules,
+                    subscription_id=t.subscription_id,
+                    subscription_name=subscription_name,
                 )
             else:
                 result = await _download_gallery(
@@ -309,6 +343,8 @@ async def download_batch(
                     replaces_native_id=t.replaces_native_id,
                     cbz_max_pages=t.cbz_max_pages,
                     filter_rules=t.filter_rules,
+                    subscription_id=t.subscription_id,
+                    subscription_name=subscription_name,
                 )
             downloaded.append({
                 "gallery_id": full_gid,
@@ -329,6 +365,12 @@ async def download_batch(
             tracker.failed(full_gid, str(e),
                            title=t.title, total_pages=t.page_count,
                            cover_url=t.cover_url, web_url=t.gallery_url)
+            await record_download_event("failed", subscription_id=t.subscription_id,
+                                         subscription_name=subscription_name,
+                                         source_key=t.source_key, gallery_id=full_gid,
+                                         title=t.title, cover_url=t.cover_url,
+                                         web_url=t.gallery_url, page_count=t.page_count,
+                                         error=str(e))
             failed.append({
                 "gallery_id": full_gid,
                 "title": t.title,
@@ -338,14 +380,9 @@ async def download_batch(
     if downloaded or failed:
         await _run_post_download_script(downloaded, subscription_name)
 
-        from comicfeed.services.notification import notify_batch
-        await notify_batch({
-            "subscription": subscription_name or "手动下载",
-            "galleries": downloaded,
-            "count": len(downloaded),
-            "failed": failed,
-            "failed_count": len(failed),
-        })
+    if downloaded:
+        from comicfeed.services.komga import trigger_komga_scan
+        await trigger_komga_scan()
 
     return downloaded, failed
 
