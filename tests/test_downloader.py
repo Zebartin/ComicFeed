@@ -149,6 +149,16 @@ async def test_download_batch_marks_skipped(tmp_path):
     assert snap["failed"] == []
 
 
+async def test_tracker_clear_skipped():
+    """clear_skipped 清空已跳过列表。"""
+    tracker = DownloadTracker()
+    tracker.skipped("mock:1", "不符合订阅筛选条件")
+    tracker.skipped("mock:2", "不符合订阅筛选条件")
+    assert len(tracker.snapshot()["skipped"]) == 2
+    tracker.clear_skipped()
+    assert tracker.snapshot()["skipped"] == []
+
+
 class _ChunkSource(_MockSource):
     """记录 download_pages 收到的分片，用于验证分块下载。"""
 

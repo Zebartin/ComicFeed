@@ -77,6 +77,9 @@ class DownloadTracker:
     def clear_failed(self):
         self._failed.clear()
 
+    def clear_skipped(self):
+        self._skipped.clear()
+
     def remove_failed(self, gallery_id: str):
         self._failed = [t for t in self._failed if t["gallery_id"] != gallery_id]
 

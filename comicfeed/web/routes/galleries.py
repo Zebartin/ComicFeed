@@ -145,14 +145,11 @@ async def download_by_id(req: DownloadRequest):
     full_gid = f"{req.source_key}:{gid}"
     tracker.enqueue(full_gid, retry_kwargs={"source_key": req.source_key, "gallery_id": gid, "output_dir": out_dir, "gallery_url": req.url or ""})
     import asyncio
-    from comicfeed.services.download import GallerySkipped
     from comicfeed.web.app import get_download_pool
     pool = get_download_pool()
     async def _dl():
         try:
             await pool.download(source, gid, out_dir, tracker=tracker, gallery_url=req.url or "")
-        except GallerySkipped as e:
-            tracker.skipped(full_gid, e.reason)
         except Exception as e:
             tracker.failed(full_gid, str(e))
     asyncio.create_task(_dl())

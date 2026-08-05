@@ -38,7 +38,11 @@ def get_download_tracker() -> DownloadTracker | None:
     return _download_tracker
 
 
-def get_download_pool() -> DownloadPool | None:
+def get_download_pool() -> DownloadPool:
+    """返回全局下载池。create_app 未初始化时惰性创建默认池兜底。"""
+    global _download_pool
+    if _download_pool is None:
+        _download_pool = DownloadPool(max_workers=5)
     return _download_pool
 
 

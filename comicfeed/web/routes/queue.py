@@ -30,6 +30,13 @@ async def clear_failed():
         tracker.clear_failed()
 
 
+@router.delete("/skipped", status_code=204)
+async def clear_skipped():
+    tracker = _get_tracker()
+    if tracker:
+        tracker.clear_skipped()
+
+
 @router.post("/retry/{gallery_id}")
 async def retry_failed(gallery_id: str):
     tracker = _get_tracker()
@@ -46,7 +53,6 @@ async def retry_failed(gallery_id: str):
     from comicfeed.infrastructure.config import get_source_proxy, get_setting
     from comicfeed.infrastructure.config import get_source_credentials
     from comicfeed.web.app import get_source_manager
-    from comicfeed.services.download import GallerySkipped
     from comicfeed.web.app import get_download_pool
     import asyncio
 
@@ -72,8 +78,6 @@ async def retry_failed(gallery_id: str):
                                 append_pages=kw.get("append_pages", False),
                                 replaces_native_id=kw.get("replaces_native_id", ""),
                                 cbz_max_pages=kw.get("cbz_max_pages", 0))
-        except GallerySkipped as e:
-            tracker.skipped(full_gid, e.reason)
         except Exception as e:
             tracker.failed(full_gid, str(e))
     asyncio.create_task(_retry())

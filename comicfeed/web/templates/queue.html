@@ -60,7 +60,7 @@ async function load() {
     if (q.pending.length) html += '<div class="q-section"><h3>等待中</h3>'+q.pending.map(t=>renderItem(t,'pending')).join('')+'</div>'
     if (q.completed.length) html += '<div class="q-section"><h3>已完成</h3>'+q.completed.map(t=>renderItem(t,'done')).join('')+'</div>'
     if (q.failed.length) html += '<div class="q-section"><h3>失败</h3>'+q.failed.map(t=>renderItem(t,'failed')).join('')+'</div>'
-    if (q.skipped.length) html += '<div class="q-section"><h3>已跳过</h3>'+q.skipped.map(t=>renderItem(t,'skipped')).join('')+'</div>'
+    if (q.skipped.length) html += '<div class="q-section"><h3>已跳过 <button class="btn btn-ghost btn-sm" onclick="clearSkipped()" style="margin-left:8px">清空</button></h3>'+q.skipped.map(t=>renderItem(t,'skipped')).join('')+'</div>'
     document.getElementById('list').innerHTML = html
     document.getElementById('clear-btn').style.display = (q.completed||[]).length ? '' : 'none'
   }
@@ -68,6 +68,10 @@ async function load() {
 }
 async function clearDone() {
   await fetch('/api/queue/completed', {method:'DELETE'})
+  load()
+}
+async function clearSkipped() {
+  await fetch('/api/queue/skipped', {method:'DELETE'})
   load()
 }
 async function retry(gid) {
