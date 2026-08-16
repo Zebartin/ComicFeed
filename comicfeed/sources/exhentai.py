@@ -1,5 +1,6 @@
 import asyncio
 import re
+from collections.abc import Callable
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
@@ -307,7 +308,9 @@ class ExhentaiSource(BaseSource):
                     return part
         return ""
 
-    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "",
+                             detail: GalleryDetail | None = None,
+                             on_page: Callable[[], None] | None = None) -> list[bytes]:
         from comicfeed.infrastructure.config import get_setting
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
@@ -353,6 +356,8 @@ class ExhentaiSource(BaseSource):
                             if not img_url:
                                 _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id, page_no, viewer_url)
                                 results.append(b"")
+                                if on_page:
+                                    on_page()
                                 break
 
                             # 下载图片
@@ -360,6 +365,8 @@ class ExhentaiSource(BaseSource):
                                 img_resp = await img_client.get(img_url)
                                 img_resp.raise_for_status()
                                 results.append(img_resp.content)
+                                if on_page:
+                                    on_page()
                                 break
                             except Exception as e:
                                 _log.warning("下载图片失败(尝试%d/%d): %s page=%d nl=%s - %r",

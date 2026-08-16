@@ -77,7 +77,7 @@ class _MockSource(BaseSource):
             reported_pages=2,
         )
 
-    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         await asyncio.sleep(self.delay)
@@ -177,10 +177,14 @@ class _ChunkSource(_MockSource):
             reported_pages=self.page_count,
         )
 
-    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
         self.calls.append((page_range.start, page_range.stop))
         n = page_range.stop - page_range.start
-        return [b"\xff\xd8\xffMock"] * n
+        result = [b"\xff\xd8\xffMock"] * n
+        for _ in range(n):
+            if on_page:
+                on_page()
+        return result
 
 
 async def test_fetch_pages_chunks_requests(tmp_path):
@@ -201,8 +205,34 @@ async def test_fetch_pages_chunks_requests(tmp_path):
     assert src.calls == []
 
 
+async def test_fetch_pages_reports_progress_per_page(tmp_path):
+    """进度逐页上报：源在块内逐页回调 on_page，tracker 收到每个中间值。"""
+    from comicfeed.io.page_fetcher import fetch_pages
+    from comicfeed.services.queue import DownloadTracker
+
+    src = _ChunkSource(25)
+    detail = await src.get_gallery("g")
+    tracker = DownloadTracker()
+    tracker.started("mock:g", "Mock", 25)
+    seen = []
+    orig_progress = tracker.progress
+
+    def spy(gallery_id, downloaded):
+        seen.append(downloaded)
+        orig_progress(gallery_id, downloaded)
+
+    tracker.progress = spy
+    n = await fetch_pages(src, "g", "", detail, 25, str(tmp_path), tracker, "mock:g")
+    assert n == 25
+    # 25 页的每个中间值（1..25）都至少上报过一次 → 逐页刷新而非每 10 页跳变
+    assert set(seen) == set(range(1, 26))
+    # 进度只增不减（回调可能先于写盘上报，不得回跳）
+    assert seen == sorted(seen)
+    assert tracker.snapshot()["active"][0]["downloaded"] == 25
+
+
 class _FailingSource(_ChunkSource):
-    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
         self.calls.append((page_range.start, page_range.stop))
         raise RuntimeError("boom")
 

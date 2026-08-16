@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+from collections.abc import Callable
 
 from curl_cffi.requests import AsyncSession
 
@@ -153,7 +154,9 @@ class NhentaiSource(BaseSource):
             num_favorites=data.get("num_favorites", 0),
         )
 
-    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]:
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "",
+                             detail: GalleryDetail | None = None,
+                             on_page: Callable[[], None] | None = None) -> list[bytes]:
         from comicfeed.infrastructure.config import get_setting
         _retry = int(await get_setting("download_retry"))
         if detail is None:
@@ -171,6 +174,8 @@ class NhentaiSource(BaseSource):
                         resp = await client.get(url)
                         resp.raise_for_status()
                         results.append(resp.content)
+                        if on_page:
+                            on_page()
                         break
                     except Exception as e:
                         last_err = e

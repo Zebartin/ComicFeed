@@ -34,7 +34,7 @@ class _FakeSource(BaseSource):
             reported_pages=1,
         )
 
-    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None):
+    async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
         return [b"\xff\xd8\xffFakeImage"]
 
     async def check_updates(self, gallery_id, last_known, gallery_url=""):

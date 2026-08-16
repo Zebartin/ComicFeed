@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -86,7 +87,10 @@ class BaseSource(ABC):
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail: ...
 
     @abstractmethod
-    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "", detail: GalleryDetail | None = None) -> list[bytes]: ...
+    async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "",
+                             detail: GalleryDetail | None = None,
+                             on_page: Callable[[], None] | None = None) -> list[bytes]:
+        """下载 page_range 覆盖的页面。每成功下载一页应调用一次 on_page（若提供）。"""
 
     @abstractmethod
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult: ...

@@ -10,6 +10,7 @@ _log = get(__name__)
 _CACHE_TTL = 259200  # 72h
 _CACHE_MAX_MB = 500
 _CHUNK_SIZE = 10  # 单次 download_pages 请求的页数上限（限制峰值内存）
+# 源在块内逐页下载时通过 on_page 回调逐页上报进度，避免 UI 进度每 10 页才跳一次
 
 
 def cleanup_cache(root: str):
@@ -70,8 +71,20 @@ async def fetch_pages(source, gallery_id: str, gallery_url: str, detail,
 
     每块（≤ _CHUNK_SIZE 页）调一次 source.download_pages，源内部对整块
     复用同一个 HTTP client 并逐页串行，重试也由源内部完成（页失败即画廊放弃）。
+    源每下载完一页即回调 on_page，队列进度随之逐页刷新。
     """
     downloaded = 0
+    last_reported = 0
+
+    def _report(value: int):
+        # 进度只增不减：回调可能比写盘先报出同一页，避免进度条回跳
+        nonlocal last_reported
+        if value <= last_reported:
+            return
+        last_reported = value
+        if tracker:
+            tracker.progress(full_gid, value)
+
     for chunk_start in range(0, total, _CHUNK_SIZE):
         chunk_end = min(chunk_start + _CHUNK_SIZE, total)
         missing = []
@@ -80,16 +93,24 @@ async def fetch_pages(source, gallery_id: str, gallery_url: str, detail,
             cache_name = (pid + ".dat") if pid else f"{abs_idx:04d}.dat"
             if os.path.exists(os.path.join(cache_dir, cache_name)):
                 downloaded += 1
-                if tracker:
-                    tracker.progress(full_gid, downloaded)
+                _report(downloaded)
             else:
                 missing.append(abs_idx)
         if not missing:
             continue
         # 缺失页通常为整块连续；部分失败重试时拆成连续区间请求，避免重复下载已缓存页
         for start, end in _contiguous_runs(missing):
+            done_in_run = 0
+
+            def on_page():
+                # 源每下载完一页立即上报，进度逐页刷新而非整块完成后跳变
+                nonlocal done_in_run
+                done_in_run += 1
+                _report(downloaded + done_in_run)
+
             chunk = await source.download_pages(
-                gallery_id, slice(start, end + 1), gallery_url=gallery_url, detail=detail
+                gallery_id, slice(start, end + 1), gallery_url=gallery_url, detail=detail,
+                on_page=on_page,
             )
             for i, data in enumerate(chunk, start):
                 pid = detail.page_native_ids[i] if i < len(detail.page_native_ids) else ""
@@ -97,8 +118,7 @@ async def fetch_pages(source, gallery_id: str, gallery_url: str, detail,
                 with open(os.path.join(cache_dir, cache_name), "wb") as f:
                     f.write(data)
                 downloaded += 1
-                if tracker:
-                    tracker.progress(full_gid, downloaded)
+                _report(downloaded)
     return downloaded
 
 
