@@ -1,4 +1,9 @@
-from comicfeed.sources.exhentai import ExhentaiSource
+from types import SimpleNamespace
+
+import pytest
+
+from comicfeed.sources.base import GalleryDetail
+from comicfeed.sources.exhentai import ExHentaiAuthError, ExhentaiSource, _cookie_failure
 
 
 def test_parse_url():
@@ -98,3 +103,132 @@ def test_parse_gallery_html_missing_favcount():
     html_empty = _SAMPLE_GALLERY_HTML.replace('<span id="favcount">123</span>', '<span id="favcount"></span>')
     d2 = s._parse_gallery_html(html_empty, "1234567")
     assert d2.num_favorites == 0
+
+
+# --- Cookie 失效 / IP 限制检测 ---
+
+
+class _FakeResponse(SimpleNamespace):
+    """带 raise_for_status 的假响应（retry_get 依赖它）。"""
+
+    def raise_for_status(self):
+        pass
+
+
+def _resp(url: str = "https://exhentai.org/s/abc/1-1/", status_code: int = 200, text: str = ""):
+    return _FakeResponse(url=url, status_code=status_code, text=text)
+
+
+_SAD_PANDA_HTML = '<html><body><div id="sadpanda"><img src="https://exhentai.org/img/sadpanda.png"></div></body></html>'
+
+
+def test_cookie_failure_detects_sad_panda_redirect_url():
+    """Cookie 失效：请求被重定向到 sadpanda.php。"""
+    assert _cookie_failure(_resp(url="https://exhentai.org/sadpanda.php")) is not None
+
+
+def test_cookie_failure_detects_sad_panda_html():
+    """Cookie 失效：页面内容为 Sad Panda 页。"""
+    assert _cookie_failure(_resp(text=_SAD_PANDA_HTML)) is not None
+
+
+def test_cookie_failure_detects_http_403():
+    """403：Cookie 失效或 IP 被限制。"""
+    assert _cookie_failure(_resp(status_code=403)) is not None
+
+
+def test_cookie_failure_detects_empty_response():
+    """Cookie 失效还可能返回 200 空 body，不能静默当成功。"""
+    assert _cookie_failure(_resp(text="")) is not None
+    assert _cookie_failure(_resp(text="   \n  ")) is not None
+
+
+def test_cookie_failure_detects_forums_redirect():
+    """未登录访问被重定向到 e-hentai 论坛登录页。"""
+    assert _cookie_failure(_resp(url="https://forums.e-hentai.org/index.php")) is not None
+
+
+def test_cookie_failure_detects_ip_banned():
+    """IP 被封禁文案。"""
+    assert _cookie_failure(_resp(text="Your IP address has been banned.")) is not None
+
+
+def test_cookie_failure_ok_on_normal_page():
+    """正常页面不误报。"""
+    assert _cookie_failure(_resp(text=_SAMPLE_GALLERY_HTML)) is None
+
+
+class _FakeClient:
+    """返回固定响应的假 HTTP client（async context manager）。"""
+
+    def __init__(self, resp):
+        self._resp = resp
+        self.calls = 0
+
+    async def get(self, url, **kw):
+        self.calls += 1
+        return self._resp
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        pass
+
+
+@pytest.fixture(autouse=True)
+async def _db():
+    """download_pages 读取 download_retry 设置，需要 DB。"""
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+    yield
+
+
+async def test_get_gallery_raises_on_sad_panda(monkeypatch):
+    """Cookie 失效时获取画廊详情直接报错，而不是解析出空画廊。"""
+    s = ExhentaiSource()
+    fake = _FakeClient(_resp(text=_SAD_PANDA_HTML))
+    monkeypatch.setattr(s, "_client", lambda: fake)
+    with pytest.raises(ExHentaiAuthError, match="Cookie"):
+        await s.get_gallery("1234567")
+    assert fake.calls == 1
+
+
+async def test_download_pages_raises_on_sad_panda_without_retry(monkeypatch):
+    """viewer 页跳 Sad Panda 时报错且不重试（Cookie 问题重试无意义）。"""
+    s = ExhentaiSource()
+    fake = _FakeClient(_resp(url="https://exhentai.org/sadpanda.php"))
+    monkeypatch.setattr(s, "_client", lambda: fake)
+    detail = GalleryDetail(native_id="1", title="T", cover_url="",
+                           page_urls=["https://exhentai.org/s/abc/1-1/"],
+                           page_native_ids=["abc"], reported_pages=1)
+    with pytest.raises(ExHentaiAuthError, match="Cookie"):
+        await s.download_pages("1", slice(0, 1), detail=detail)
+    assert fake.calls == 1  # 即使 download_retry > 1 也只请求一次
+
+
+async def test_download_pages_raises_on_empty_viewer_response(monkeypatch):
+    """viewer 页返回空 body 时报错且不重试，而不是把空页当成功。"""
+    s = ExhentaiSource()
+    fake = _FakeClient(_resp(text=""))
+    monkeypatch.setattr(s, "_client", lambda: fake)
+    detail = GalleryDetail(native_id="1", title="T", cover_url="",
+                           page_urls=["https://exhentai.org/s/abc/1-1/"],
+                           page_native_ids=["abc"], reported_pages=1)
+    with pytest.raises(ExHentaiAuthError, match="响应为空"):
+        await s.download_pages("1", slice(0, 1), detail=detail)
+    assert fake.calls == 1
+
+
+async def test_download_pages_raises_when_image_is_panda(monkeypatch):
+    """viewer 页无标记但图片 URL 指向熊猫图时也报错。"""
+    s = ExhentaiSource()
+    html = '<html><body><img src="https://exhentai.org/img/sadpanda.png"></body></html>'
+    fake = _FakeClient(_resp(text=html))
+    monkeypatch.setattr(s, "_client", lambda: fake)
+    detail = GalleryDetail(native_id="1", title="T", cover_url="",
+                           page_urls=["https://exhentai.org/s/abc/1-1/"],
+                           page_native_ids=["abc"], reported_pages=1)
+    with pytest.raises(ExHentaiAuthError, match="Sad Panda"):
+        await s.download_pages("1", slice(0, 1), detail=detail)

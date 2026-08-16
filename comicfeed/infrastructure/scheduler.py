@@ -46,8 +46,16 @@ async def run_all_checks(source_manager: SourceManager, download_pool):
                 _log.info("[%s] 检查完成: %d 个新画廊", sub.name, len(new))
             except Exception as e:
                 _log.error("[%s] 检查失败: %s", sub.name, e)
+                # 检查阶段失败（Cookie 失效等）记录为 failed 事件，纳入摘要邮件，
+                # 否则只会留下日志与 webhook，用户无从得知
+                from comicfeed.services.download import record_download_event
+                await record_download_event("failed", subscription_id=sub.id,
+                                            subscription_name=sub.name,
+                                            source_key=sub.source_key,
+                                            title=sub.name, error=str(e))
                 from comicfeed.services.notification import notify_source_error
-                await notify_source_error({"source_key": sub.source_key, "reason": "search_failed"})
+                await notify_source_error({"source_key": sub.source_key, "reason": "search_failed",
+                                           "subscription": sub.name, "error": str(e)})
                 continue
 
             from comicfeed.infrastructure.config import get_setting

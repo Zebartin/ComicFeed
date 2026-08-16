@@ -19,6 +19,35 @@ from comicfeed.infrastructure import gallery_cache as _gc
 from comicfeed.infrastructure.http_retry import retry_get
 
 
+class ExHentaiAuthError(Exception):
+    """exhentai 访问被拒：Cookie 失效或 IP 被限制。重试无效，应立即失败。"""
+
+
+def _cookie_failure(resp) -> str | None:
+    """检测 exhentai 返回的 Cookie 失效 / IP 限制响应。返回错误描述或 None。
+
+    Cookie 失效时 exhentai 会把页面重定向到 Sad Panda 页（200），解析器
+    不会报错但结果全是垃圾（空标题/熊猫图），必须显式识别。
+    """
+    url = str(getattr(resp, "url", "")).lower()
+    if "sadpanda" in url:
+        return "Cookie 已失效：被重定向到 Sad Panda 页，请更新源 Cookie"
+    if "forums.e-hentai.org" in url:
+        return "Cookie 已失效：被重定向到论坛登录页，请更新源 Cookie"
+    if resp.status_code in (401, 403):
+        return f"HTTP {resp.status_code}：Cookie 失效或 IP 被限制"
+    text = str(getattr(resp, "text", "") or "")
+    # Cookie 失效时还可能返回 200 空 body：解析器拿到空页会把空结果当成功
+    if not text.strip():
+        return "Cookie 已失效或会话异常：响应为空"
+    low = text.lower()
+    if "sadpanda" in low or 'id="sadpanda"' in low:
+        return "Cookie 已失效：返回 Sad Panda 页，请更新源 Cookie"
+    if "ip address has been banned" in low:
+        return "IP 已被 exhentai 禁止访问"
+    return None
+
+
 class ExhentaiSource(BaseSource):
     key = "exhentai"
     name = "ExHentai"
@@ -75,12 +104,14 @@ class ExhentaiSource(BaseSource):
             if page <= 1 and not self._next_url:
                 self._next_url = ""
                 url = self._ensure_inline_set(f"{self._base}/?f_search={query}")
-                resp = await retry_get(client, url)
             elif self._next_url:
-                resp = await retry_get(client, self._ensure_inline_set(self._next_url))
+                url = self._ensure_inline_set(self._next_url)
             else:
                 url = self._ensure_inline_set(f"{self._base}/?f_search={query}&page={page}")
-                resp = await retry_get(client, url)
+            resp = await retry_get(client, url)
+            issue = _cookie_failure(resp)
+            if issue:
+                raise ExHentaiAuthError(f"搜索失败: {issue}")
 
             result = self._parse_search_html(resp.text, page)
             self._next_url = result.next_url
@@ -181,6 +212,9 @@ class ExhentaiSource(BaseSource):
             return cached
         async with self._client() as client:
             resp = await retry_get(client, gurl)
+            issue = _cookie_failure(resp)
+            if issue:
+                raise ExHentaiAuthError(f"获取画廊 {gallery_id} 失败: {issue}")
 
             detail = self._parse_gallery_html(resp.text, gallery_id)
             detail.web_url = gurl
@@ -193,6 +227,9 @@ class ExhentaiSource(BaseSource):
                 while len(all_urls) < detail.reported_pages:
                     paged_url = gurl.rstrip("/") + f"?p={page_idx}"
                     r = await retry_get(client, paged_url)
+                    issue = _cookie_failure(r)
+                    if issue:
+                        raise ExHentaiAuthError(f"获取画廊分页失败: {issue}")
 
                     soup = BeautifulSoup(r.text, "lxml")
                     more = [a.get("href", "") for a in soup.select("div#gdt a") if a.get("href")]
@@ -336,6 +373,10 @@ class ExhentaiSource(BaseSource):
                                 req_url = viewer_url + sep + "nl=" + nl
                                 _log.debug("重试带 nl: %s", nl)
                             resp = await client.get(req_url)
+                            issue = _cookie_failure(resp)
+                            if issue:
+                                raise ExHentaiAuthError(
+                                    f"gallery={gallery_id} page={page_no}: {issue}")
 
                             soup = BeautifulSoup(resp.text, "lxml")
 
@@ -352,6 +393,12 @@ class ExhentaiSource(BaseSource):
                             else:
                                 imgs = soup.select("img")
                                 img_url = imgs[0].get("src", "") if imgs else ""
+
+                            # 兜底：viewer 页本身没带标记但图片指向熊猫图（Cookie 失效）
+                            if "sadpanda" in img_url.lower():
+                                raise ExHentaiAuthError(
+                                    f"gallery={gallery_id} page={page_no}: "
+                                    "Cookie 已失效（图片指向 Sad Panda）")
 
                             if not img_url:
                                 _log.warning("未找到图片: %s page=%d viewer=%s", gallery_id, page_no, viewer_url)
@@ -377,6 +424,8 @@ class ExhentaiSource(BaseSource):
                                     continue
                                 raise
 
+                        except ExHentaiAuthError:
+                            raise  # Cookie 失效/IP 限制：重试无意义，立即失败
                         except Exception as e:
                             last_err = e
                             if attempt < _retry - 1:
@@ -395,6 +444,10 @@ class ExhentaiSource(BaseSource):
 
         async with self._client() as client:
             resp = await retry_get(client, gurl)
+            print(resp.text)
+            issue = _cookie_failure(resp)
+            if issue:
+                raise ExHentaiAuthError(f"检查更新失败: {issue}")
 
             soup = BeautifulSoup(resp.text, "lxml")
 
