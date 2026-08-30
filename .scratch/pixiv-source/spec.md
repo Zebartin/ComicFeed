@@ -43,12 +43,12 @@ Status: ready-for-agent
 - **页面 ID 与增量**：插画/漫画页的 page_native_id 为 `{illust_id}_p{n}`，动图页为 `{illust_id}_webp`；`check_updates` 按作品 ID 差集返回 `new_page_ids`，复用现有「新页追加到最后 CBZ 卷」的增量机制。
 - **页序**：画师 Gallery 按作品 ID 升序（旧→新，新作自然追加到末尾）；榜单 Gallery 按首次收录顺序。
 - **榜单检查边界**：榜单订阅每次检查只取第一页；按作品 ID 在画廊内去重（该榜单 Gallery 中已收录的作品永不再收录于其中；不同榜单 Gallery 之间不做跨画廊去重，物理上各存各卷）。
-- **画师检查深度**：首次检查翻全部作品页（受订阅 `max_search_pages` 上限保护：0=只翻第 1 页；1（订阅默认）=翻到底；≥2=上限 N 页）；后续巡检只翻第 1 页做差集。检查阶段**先按作品 ID 去重再转换**：已收录作品的动图不做帧转换，只有新增动图才拉取帧（转换仍留在检查阶段，保证转换失败可跳过该作品而不中断画廊下载）。
+- **画师检查深度**：首次检查翻全部作品页（受订阅 `max_search_pages` 上限保护：0=只翻第 1 页；1（订阅默认）=翻到底；≥2=上限 N 页）；后续巡检只翻第 1 页做差集。检查阶段**先按作品 ID 去重**，且**动图转换整体推迟到下载阶段**：检查零动图请求（只登记作品信息 + 页标记 `pixiv-webp:{wid}`），下载时按需转换（三级帧源）。转换失败 → 该画廊下载失败、队列可重试（不再走跳过说明通道）；转换产物短时缓存供重试复用；作品信息缓存过期（1 小时）需重新检查。
 - **筛选语义**：订阅的筛选条件（收藏数/页数/上传日期）对 pixiv 按**作品**逐个应用，不达标的作品不收录；收藏数使用 app-api 的公开收藏数（`total_bookmarks`），页数使用作品页数。
 - **认证**：refresh_token OAuth 2.0（X-Client-Time/X-Client-Hash 签名头），access_token 进程内缓存、过期自动用 refresh_token 换新；不做密码登录（reCAPTCHA 风控）、不做 PHPSESSID 通道。
 - **API 端点**：`/v1/illust/ranking`（榜单）、`/v1/user/illusts`（画师作品）、`/v1/illust/detail`（详情与页 URL）、`/v1/ugoira/metadata`（动图帧与 delay）、`/v1/search/illust`（搜索页最小透传）。
 - **动图转换**：下载 ugoira 帧 zip（带 Referer）→ 按 metadata 的 frames 顺序与 delay（毫秒）用 Pillow 合成动画 WebP（save_all + duration），作为单页 bytes 交给打包流程；不做 GIF/APNG 输出。帧源三级策略：**large zip → img-original 原始帧（`{id}_ugoira{n}` 命名规律逐帧下载，large 包缺失时的最高画质）→ medium zip**。
-- **图片大小上限**：源配置「图片大小上限（MB）」，默认 0 = 不压缩。下载原图后单图字节数超限 → 程序内压缩：先降质重编码（JPEG q85/75/65，RGB PNG 转 JPEG 同阶梯），仍超限则**按比例降像素**（长边 ×0.9→×0.5 逐档，LANCZOS，长边不低于 600）；RGBA/透明 PNG 不转 JPEG，只按比例降像素（保留 alpha 仍存 PNG）；每一步只保留更小的结果，若压缩不降反升则回退原图；无法解码原样保留。尽力压缩不保证严格达标；动图（ugoira）不参与。转换失败的作品跳过、不阻塞同画廊其余作品，但**记录为失败下载事件（作品标题 + 原因）**，进入摘要通知的失败汇总（沿用现有每订阅 ≤5 条的展示上限）。跳过清单带画廊归属、由源回传给下载服务、由下载服务按当前画廊匹配后写事件（源不直接写持久化；通过向后兼容的可选钩子，现有源零改动）。
+- **图片大小上限**：源配置「图片大小上限（MB）」，默认 0 = 不压缩。下载原图后单图字节数超限 → 程序内压缩：先降质重编码（JPEG q85/75/65，RGB PNG 转 JPEG 同阶梯），仍超限则**按比例降像素**（长边 ×0.9→×0.5 逐档，LANCZOS，长边不低于 600）；RGBA/透明 PNG 不转 JPEG，只按比例降像素（保留 alpha 仍存 PNG）；每一步只保留更小的结果，若压缩不降反升则回退原图；无法解码原样保留。尽力压缩不保证严格达标；动图（ugoira）不参与。（已变更）动图转换改在下载阶段执行：失败即画廊下载失败（队列可重试），以失败下载事件进入摘要；「跳过清单」钩子保留为通用机制但 pixiv 不再产生跳过说明。
 - **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-hans`（实测 `zh-cn` 被服务端忽略、返回英文默认翻译）。选译规则：`translated_name` **含汉字**才采用（官方中文）；否则回退 `name`（日文原文）——官方翻译表对角色名/作品名常给罗马音或英文（如 `九条裟羅→Kujou Sara`、`原神→Genshin Impact`），对中文用户不如原文；原文无汉字的标签直接丢弃（`_pick_tag` 返回 None）。里程碑标签（`\d+users入り` 及其翻译形态 `\d+收藏`）直接丢弃。v1 不接 EhTagTranslation。
 - **元数据**：画师 Gallery 标题 `画师名`（不带 id 后缀）、writer=画师名、封面不特殊处理；榜单 Gallery 标题 `Pixiv {内容}{周期}榜`、writer 为空；作品标题经 `normalize_title` 归一化（无官方翻译字段）。**展示 ID**（`GalleryDetail.display_id`）：画师用纯数字 uid 进入 CBZ 文件名与 ComicInfo Number；榜单为非数字 ID，文件名省略 `[id]` 前缀、ComicInfo Number 留空（增量追加拿标题匹配旧卷）。
 - **URL 解析**：`parse_url` 识别画师主页与榜单 URL（含 R-18 模式），web 榜单 mode 参数映射到 app-api mode（如 `daily_r18` → `day_r18`）；app-api 无等价物的模式（如 `daily_r18g`，app 端仅有周 R-18G）明确报错而非静默错榜；订阅走现有「特定画廊」贴 URL 流程。

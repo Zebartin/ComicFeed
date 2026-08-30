@@ -25,6 +25,17 @@ def _auth_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(404)
 
 
+@pytest.fixture(autouse=True)
+def _clear_pixiv_module_state():
+    """测试隔离：清理模块级转换缓存与跳过说明。"""
+    from comicfeed.sources import pixiv as px
+    px._webp_cache.clear()
+    px._ugoira_items.clear()
+    px._skip_notes.clear()
+    px._cooldown_until = 0.0
+    yield
+
+
 def _make_source(handler, **kwargs):
     from comicfeed.sources.pixiv import PixivSource
     defaults = dict(
@@ -462,8 +473,12 @@ async def test_ugoira_download_returns_animated_webp():
     assert int.from_bytes(data[idx + 20:idx + 23], "little") == 100
 
 
-async def test_ugoira_conversion_failure_skipped_with_note():
-    """元数据失败：动图作品跳过、静态作品照常收录、跳过说明可弹出。"""
+async def test_ugoira_conversion_failure_fails_download():
+    """转换移到下载阶段：检查不再转换；下载时转换失败 → 画廊下载失败（可重试），无跳过说明。"""
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/auth/token":
             return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
@@ -473,15 +488,14 @@ async def test_ugoira_conversion_failure_skipped_with_note():
             return httpx.Response(500, json={})
         return httpx.Response(404)
 
+    import pytest as _pytest
     source = _make_source(handler)
     result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
-    assert result.has_updates is True
-    assert result.gallery.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]
-    notes = source.pop_download_notes()
-    assert len(notes) == 1
-    assert notes[0]["title"] == "Ugoira Work"
-    assert "动图转换失败" in notes[0]["error"]
-    assert source.pop_download_notes() == []  # 一次性消费
+    assert result.gallery.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]
+    with _pytest.raises(RuntimeError) as exc:
+        await source.download_pages("ranking_daily_illust", slice(4, 5), detail=result.gallery.detail)
+    assert "动图转换失败" in str(exc.value)
+    assert source.pop_download_notes() == []
 
 
 async def test_download_service_records_skip_notes_as_failed_events():
@@ -1274,7 +1288,11 @@ async def test_ugoira_prefers_large_zip():
 
 
 async def test_ugoira_falls_back_to_medium_zip():
-    """large 帧包 404 → 回退 medium，转换仍成功。"""
+    """large 帧包 404 → 回退 medium，下载转换仍成功。"""
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/auth/token":
             return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
@@ -1289,8 +1307,9 @@ async def test_ugoira_falls_back_to_medium_zip():
         return httpx.Response(404)
 
     source = _make_source(handler)
-    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
-    assert "100003_webp" in result.gallery.new_page_ids
+    detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking_daily_illust", slice(4, 5), detail=detail)
+    assert pages[0].startswith(b"RIFF") and pages[0][8:12] == b"WEBP"
     assert source.pop_download_notes() == []
 
 
@@ -1352,9 +1371,15 @@ async def test_ugoira_original_frames_when_large_zip_missing():
             return httpx.Response(200, content=frame_bytes)
         return httpx.Response(404)
 
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
     source = _make_source(handler)
     result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
     assert "100003_webp" in result.gallery.new_page_ids
+    assert zip_hits == [] and frame_hits == []  # 检查阶段零转换
+    pages = await source.download_pages("ranking_daily_illust", slice(4, 5), detail=result.gallery.detail)
+    assert pages[0].startswith(b"RIFF") and pages[0][8:12] == b"WEBP"
     assert zip_hits == []  # 未回退到 medium 包
     assert any("_ugoira0.jpg" in u for u in frame_hits) and any("_ugoira1.jpg" in u for u in frame_hits)
     assert source.pop_download_notes() == []
@@ -1387,8 +1412,8 @@ async def test_check_skips_conversion_for_known_ugoira():
     assert hits == []  # 无新增 → 不做任何动图转换请求
 
 
-async def test_check_converts_only_new_ugoira():
-    """混合场景：只对新增的动图作品做转换。"""
+async def test_check_does_not_convert_ugoira():
+    """检查阶段零动图请求：新动图只进页列表，转换推迟到下载。"""
     meta_hits = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -1400,15 +1425,15 @@ async def test_check_converts_only_new_ugoira():
             meta_hits.append(request.url.path)
             return httpx.Response(200, json=_UGOIRA_META)
         if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            meta_hits.append(request.url.path)
             return httpx.Response(200, content=_ugoira_zip())
         return httpx.Response(404)
 
     source = _make_source(handler)
-    # 静态作品已收录、动图未收录 → 只转换动图（1 次 metadata）
     known = {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]}
     result = await source.check_updates("ranking_daily_illust", known)
     assert result.gallery.new_page_ids == ["100003_webp"]
-    assert len(meta_hits) == 1
+    assert meta_hits == []  # 检查阶段不拉 metadata、不拉帧
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

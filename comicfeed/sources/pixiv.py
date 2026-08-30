@@ -28,9 +28,11 @@ class PixivAuthError(Exception):
     """refresh_token 无效、过期或未配置。"""
 
 
-# 动图转换产物与跳过说明（跨源实例共享：check 时转换、download 时消费）
+# 动图转换（下载阶段执行）：check 时登记作品信息、download 时转换并缓存产物
 _webp_cache: dict[str, tuple[float, bytes]] = {}
 _webp_ttl = 3000.0
+_ugoira_items: dict[str, tuple[float, dict]] = {}
+_ugoira_ttl = 3600.0
 _skip_notes: list[dict] = []
 
 # 429 全局冷却：收到限流后所有 API 请求先等待再发
@@ -332,8 +334,8 @@ class PixivSource(BaseSource):
                 pages.append((f"{wid}_p0", url))
         return pages
 
-    async def _convert_ugoira(self, client: httpx.AsyncClient, item: dict, gallery_id: str = "") -> bytes | None:
-        """动图 → 动画 WebP。失败时记录跳过说明并返回 None。"""
+    async def _convert_ugoira(self, client: httpx.AsyncClient, item: dict) -> bytes:
+        """动图 → 动画 WebP（下载阶段调用）。失败抛 RuntimeError，画廊下载失败可重试。"""
         import io
         import zipfile
         from PIL import Image
@@ -376,9 +378,7 @@ class PixivSource(BaseSource):
             return data
         except Exception as e:
             _log.warning("pixiv 动图转换失败: %s %s - %r", wid, title, e)
-            _skip_notes.append({"gallery_id": gallery_id, "title": title,
-                                 "error": f"动图转换失败: {e}"})
-            return None
+            raise RuntimeError(f"动图转换失败({title}): {e}") from e
 
     async def _fetch_ugoira_zip(self, client: httpx.AsyncClient, wid: str,
                                 frames: list[dict], zip_url: str):
@@ -451,7 +451,7 @@ class PixivSource(BaseSource):
         m = cls._RANK_MODE_LABELS.get(mode, mode)
         return f"Pixiv {c}{m}榜"
 
-    async def _build_collection_detail(self, client: httpx.AsyncClient, gallery_id: str,
+    async def _build_collection_detail(self, gallery_id: str,
                                        items: list[dict], content: str) -> GalleryDetail:
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
@@ -472,10 +472,9 @@ class PixivSource(BaseSource):
                 if tag:
                     tags.add(tag)
             if item.get("type") == "ugoira":
-                data = await self._convert_ugoira(client, item, gallery_id)
-                if data is None:
-                    continue
+                # 转换推迟到下载阶段：此处只登记作品信息 + 页标记
                 wid = str(item.get("id", ""))
+                _ugoira_items[wid] = (time.time(), item)
                 page_ids.append(f"{wid}_webp")
                 page_urls.append(f"pixiv-webp:{wid}")
                 continue
@@ -580,11 +579,11 @@ class PixivSource(BaseSource):
             if gallery_id.startswith("ranking_"):
                 _, content = self._split_ranking_id(gallery_id)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
-                detail = await self._build_collection_detail(client, gallery_id, items, content)
+                detail = await self._build_collection_detail(gallery_id, items, content)
             elif gallery_id.isdigit():
                 items = await self._fetch_all_user_items(client, gallery_id, 1)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
-                detail = await self._build_collection_detail(client, gallery_id, items, "illust")
+                detail = await self._build_collection_detail(gallery_id, items, "illust")
             else:
                 raise NotImplementedError("pixiv 作品详情由后续工单实现")
         detail.web_url = gallery_url or (self._ranking_url(gallery_id)
@@ -632,14 +631,14 @@ class PixivSource(BaseSource):
                          if any(pid not in old for pid in self._work_page_ids(it))]
                 items = self._apply_work_filters(items, filters)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
-                detail = await self._build_collection_detail(client, gallery_id, items, "illust")
+                detail = await self._build_collection_detail(gallery_id, items, "illust")
             elif gallery_id.startswith("ranking_"):
                 _, content = self._split_ranking_id(gallery_id)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
                 items = [it for it in items
                          if any(pid not in old for pid in self._work_page_ids(it))]
                 items = self._apply_work_filters(items, filters)
-                detail = await self._build_collection_detail(client, gallery_id, items, content)
+                detail = await self._build_collection_detail(gallery_id, items, content)
             else:
                 raise NotImplementedError(f"不支持的 pixiv 画廊 ID: {gallery_id}")
         return self._updates_from(detail, old_ids, gallery_url)
@@ -666,9 +665,16 @@ class PixivSource(BaseSource):
                 if url.startswith("pixiv-webp:"):
                     wid = url.split(":", 1)[1]
                     entry = _webp_cache.get(wid)
-                    if not entry or time.time() - entry[0] >= _webp_ttl:
-                        raise RuntimeError(f"动图转换数据已过期，请重新检查订阅: {wid}")
-                    results.append(entry[1])
+                    if entry and time.time() - entry[0] < _webp_ttl:
+                        data = entry[1]
+                    else:
+                        it = _ugoira_items.get(wid)
+                        if not it or time.time() - it[0] >= _ugoira_ttl:
+                            raise RuntimeError(f"动图信息已过期，请重新检查订阅: {wid}")
+                        await self._ensure_token(client)
+                        data = await self._convert_ugoira(client, it[1])
+                        _webp_cache[wid] = (time.time(), data)
+                    results.append(data)
                     if on_page:
                         on_page()
                 else:
