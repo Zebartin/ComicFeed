@@ -242,10 +242,16 @@ class PixivSource(BaseSource):
 
     async def _build_collection_detail(self, client: httpx.AsyncClient, gallery_id: str,
                                        items: list[dict], content: str) -> GalleryDetail:
+        from comicfeed.infrastructure.log import get
+        _log = get(__name__)
         page_ids, page_urls, tags, writers = [], [], set(), set()
         cover_url = ""
         is_user = gallery_id.startswith("user_")
         for item in items:
+            # 诊断：输出原始标签对，供人工核对官方翻译策略（name=translated_name）
+            _log.info("pixiv 标签明细 gallery=%s work=%s: %s", gallery_id, item.get("id"),
+                      " | ".join(f"{t.get('name')}={t.get('translated_name')}"
+                                 for t in (item.get("tags") or [])) or "(无标签)")
             if not cover_url:
                 cover_url = (item.get("image_urls") or {}).get("medium", "")
             if is_user:

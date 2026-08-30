@@ -772,6 +772,22 @@ async def test_cover_proxy(app, monkeypatch):
         assert r2.status_code == 400
 
 
+
+# --- 诊断：标签明细日志 ---
+
+async def test_tag_dump_logged_per_work(caplog):
+    """每个作品的原始标签对（name=translated_name）记录到日志，供人工核对翻译策略。"""
+    with caplog.at_level("INFO"):
+        source = _make_source(_ranking_handler)
+        await source.check_updates("ranking:daily:illust", {"page_ids": []})
+    lines = [r.message for r in caplog.records]
+    dump1 = next((m for m in lines if m.startswith("pixiv 标签明细") and "work=100001" in m), "")
+    dump2 = next((m for m in lines if m.startswith("pixiv 标签明细") and "work=100002" in m), "")
+    assert dump1
+    assert "オリジナル=原创" in dump1
+    assert "女の子=None" in dump2
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()
