@@ -1112,6 +1112,63 @@ async def test_check_uses_configured_quality(monkeypatch):
     assert any("1200x1200_90" in u for u in urls)
 
 
+
+# --- 分卷页名回归 ---
+
+async def test_split_volumes_use_correct_page_names():
+    """分卷下载：第 2 卷条目名对应正确的作品页 id，不复读第 1 卷。"""
+    import tempfile
+    import zipfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    detail = GalleryDetail(
+        native_id="2350706", title="画师名", cover_url="", web_url="",
+        page_urls=[f"http://fake.local/{i}.jpg" for i in range(30)],
+        page_native_ids=[f"149035907_p{i}" for i in range(30)],
+        reported_pages=30, keep_page_names=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                        output_dir=tmp, detail=detail, save_to_db=True,
+                                        cbz_max_pages=20)
+        assert len(result.files) == 2
+        with zipfile.ZipFile(result.files[1]) as z:
+            names = [n for n in z.namelist() if not n.endswith(".xml")]
+    # 第 2 卷 = 绝对页 21..30 = p020..p029；修复前会复读 p000..p009
+    assert names[0] == "149035907_p020.jpg"
+    assert names[-1] == "149035907_p029.jpg"
+
+
+async def test_incremental_append_names_only_new_pages():
+    """增量追加：旧页保持无名（序号），新页用其作品页 id。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.io.cbz import read_cbz_pages
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    base = dict(native_id="2350706", title="画师名", cover_url="", web_url="", keep_page_names=True)
+    first = GalleryDetail(page_urls=["http://fake.local/a.jpg", "http://fake.local/b.jpg"],
+                          page_native_ids=["149035907_p0", "149035907_p1"],
+                          reported_pages=2, **base)
+    second = GalleryDetail(page_urls=["http://fake.local/c.jpg"],
+                           page_native_ids=["149035907_p2"],
+                           reported_pages=1, **base)
+    with tempfile.TemporaryDirectory() as tmp:
+        await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                               output_dir=tmp, detail=first, save_to_db=True)
+        r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                    output_dir=tmp, detail=second, save_to_db=True, append_pages=True)
+        import zipfile as _zipfile
+        with _zipfile.ZipFile(r2.files[0]) as z:
+            names = [n for n in z.namelist() if not n.endswith(".xml")]
+        assert len(read_cbz_pages(r2.files[0])) == 3
+    assert names == ["0001.jpg", "0002.jpg", "149035907_p002.jpg"]
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

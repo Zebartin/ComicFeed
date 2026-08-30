@@ -90,13 +90,24 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
             return None
         if number is None:
             number = str((start_page // cbz_max_pages) + 1) if do_split else display_gid
+        # 保留页名：按绝对页序逐页取 id；旧页（追加合并）无 id → 回退序号
+        page_ids = None
+        if getattr(detail, "keep_page_names", False):
+            pids = detail.page_native_ids
+            old_n = (append_ctx.start_page + len(append_ctx.old_pages)) if (
+                append_ctx and append_ctx.old_pages) else 0
+            page_ids = []
+            for j in range(len(vol_pages)):
+                rel = start_page + j - old_n
+                page_ids.append(pids[rel] if 0 <= rel < len(pids) else "")
         fname = make_cbz_name(display_gid, title, start_page + 1,
                               start_page + len(vol_pages),
                               total_pages=0 if do_split else len(vol_pages))
         fpath = os.path.join(output_dir, fname)
         _log.debug("打包 CBZ: %s (%d 页)", os.path.basename(fpath), len(vol_pages))
         with open(fpath, "wb") as f:
-            pack_cbz(f, fname, detail, vol_pages, start_page=start_page + 1, number=number)
+            pack_cbz(f, fname, detail, vol_pages, start_page=start_page + 1, number=number,
+                     page_ids=page_ids)
         return fpath
 
     files = []

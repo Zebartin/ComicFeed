@@ -132,20 +132,32 @@ def _guess_ext(data: bytes) -> str:
     return ".jpg"
 
 
-def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1, number: str = ""):
-    """打包 CBZ 文件到 output，页码从 start_page 开始编号。number 为 ComicInfo Number。"""
+def _pad_page_id(pid: str) -> str:
+    """页码三位补零：保留 artwork id 且字典序=数字序（p002 < p010）。"""
+    m = re.match(r"^(.*)_p(\d+)$", pid)
+    return f"{m.group(1)}_p{int(m.group(2)):03d}" if m else pid
+
+
+def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1, number: str = "", page_ids: list[str] | None = None):
+    """打包 CBZ 文件到 output，页码从 start_page 开始编号。number 为 ComicInfo Number。
+
+    page_ids 与 pages 逐页对齐（绝对页序，由打包器计算）：为空串的页回退序号命名。
+    """
     with ZipFile(output, "w", ZIP_DEFLATED) as z:
-        for i, data in enumerate(pages, start_page):
+        for j, data in enumerate(pages):
+            i = start_page + j
             ext = _guess_ext(data) if data else ".jpg"
             base = f"{i:04d}"
-            if getattr(detail, "keep_page_names", False):
-                idx = i - start_page
-                if idx < len(detail.page_native_ids):
-                    pid = sanitize_filename(detail.page_native_ids[idx])
-                    # 页码三位补零：保留 artwork id 且字典序=数字序（p002 < p010）
-                    m = re.match(r"^(.*)_p(\d+)$", pid)
-                    pid = f"{m.group(1)}_p{int(m.group(2)):03d}" if m else pid
+            if page_ids is not None:
+                if j < len(page_ids):
+                    pid = sanitize_filename(page_ids[j])
                     if pid:
-                        base = pid
+                        base = _pad_page_id(pid)
+            elif getattr(detail, "keep_page_names", False):
+                idx = i - 1  # 绝对页序（无追加上下文时与 page_native_ids 对齐）
+                if 0 <= idx < len(detail.page_native_ids):
+                    pid = sanitize_filename(detail.page_native_ids[idx])
+                    if pid:
+                        base = _pad_page_id(pid)
             z.writestr(f"{base}{ext}", data)
         z.writestr("ComicInfo.xml", _build_comicinfo(detail, number))
