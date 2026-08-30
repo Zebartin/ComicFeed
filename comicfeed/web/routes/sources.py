@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from comicfeed.infrastructure.source_manager import SourceManager
 
@@ -20,3 +20,17 @@ async def list_sources():
          "sort_options": s.get_sort_options()}
         for s in mgr.list_sources()
     ]
+
+
+@router.post("/{key}/test")
+async def test_source(key: str):
+    """用已存凭证对源执行连接测试。"""
+    from comicfeed.infrastructure.config import get_source_credentials, get_source_proxy
+    mgr = _get_manager()
+    if mgr.get_source_cls(key) is None:
+        raise HTTPException(status_code=404, detail="源不存在")
+    creds = await get_source_credentials(key)
+    proxy = await get_source_proxy(key)
+    source = mgr.get_source(key, credentials=creds, proxy=proxy)
+    ok, message = await source.test_connection()
+    return {"ok": ok, "message": message}

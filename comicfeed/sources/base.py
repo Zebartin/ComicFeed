@@ -100,3 +100,18 @@ class BaseSource(ABC):
 
     async def resolve_domain(self) -> list[str]:
         return self.domains
+
+    async def test_connection(self) -> tuple[bool, str]:
+        """通用连接测试：GET 第一个域名。源可覆盖为更精确的探活。"""
+        if not self.domains:
+            return True, "该源未提供连接测试"
+        import httpx
+        try:
+            async with httpx.AsyncClient(proxy=self.proxy, timeout=15,
+                                         follow_redirects=True) as client:
+                resp = await client.get(f"https://{self.domains[0]}/")
+            if resp.status_code < 400:
+                return True, "连接成功"
+            return False, f"HTTP {resp.status_code}"
+        except Exception as e:
+            return False, str(e)
