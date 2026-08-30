@@ -170,7 +170,7 @@ class PixivSource(BaseSource):
 
     @staticmethod
     def _compress_image(data: bytes, limit: int) -> bytes:
-        """超限图片程序内压缩：JPEG 降质重编码（85/75/65），仍超限则长边降到 2400 再压。
+        """超限图片程序内压缩：JPEG 降质重编码（85/75/65），仍超限则按比例降像素（0.9→0.6，长边≥1200）。
 
         RGBA PNG（含透明）不动；RGB PNG 转 JPEG；无法解码原样返回。尽力压缩，不保证严格达标。
         """
@@ -184,28 +184,37 @@ class PixivSource(BaseSource):
         except Exception:
             return data
         fmt = im.format
-        if fmt == "JPEG":
-            for quality in (85, 75, 65):
-                buf = io.BytesIO()
-                im.save(buf, "JPEG", quality=quality, optimize=True)
-                out = buf.getvalue()
-                if len(out) <= limit or quality == 65:
-                    return out
-        elif fmt == "PNG":
+        best = data
+        if fmt == "PNG":
             if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
                 return data  # 透明 PNG 不转换
             im = im.convert("RGB")
-        else:
+        elif fmt != "JPEG":
             return data
-        # 分辨率兜底：长边降到 2400，quality 85
+        # 质量阶梯（全分辨率，PNG 转 JPEG 同样适用）
+        for quality in (85, 75, 65):
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=quality, optimize=True)
+            out = buf.getvalue()
+            if len(out) <= limit:
+                return out
+            best = out
+        # 像素阶梯：等比缩小 0.9 → 0.5，长边不低于 600
         w, h = im.size
         long_side = max(w, h)
-        if long_side > 2400:
-            scale = 2400 / long_side
-            im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
-        buf = io.BytesIO()
-        im.save(buf, "JPEG", quality=85, optimize=True)
-        return buf.getvalue()
+        for scale in (0.9, 0.8, 0.7, 0.6, 0.5):
+            target = int(long_side * scale)
+            if target < 600:
+                break
+            ratio = target / long_side
+            scaled = im.resize((max(1, int(w * ratio)), max(1, int(h * ratio))), Image.LANCZOS)
+            buf = io.BytesIO()
+            scaled.save(buf, "JPEG", quality=85, optimize=True)
+            out = buf.getvalue()
+            if len(out) <= limit:
+                return out
+            best = out
+        return best
 
     @staticmethod
     def _throttle_from_cfg(cfg: dict) -> float:

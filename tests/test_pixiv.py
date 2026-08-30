@@ -643,10 +643,10 @@ async def test_r18_ranking_mode_mapping():
 async def test_unsupported_ranking_mode_raises():
     """web 有但 app-api 无等价物的榜单模式（如 daily_r18g）明确报错。"""
     import pytest as _pytest
-    from comicfeed.sources.pixiv import PixivAuthError, PixivSource
-    source = PixivSource(credentials={"refresh_token": "rt"})
+    from comicfeed.sources.pixiv import PixivAuthError
+    source = _make_source(_ranking_handler)
     with _pytest.raises(PixivAuthError):
-        await source.check_updates("ranking:daily_r18g:illust", {"page_ids": []})
+        await source.check_updates("ranking_daily_r18g_illust", {"page_ids": []})
 
 
 async def test_accept_language_header_on_api_calls():
@@ -1147,12 +1147,34 @@ def test_compress_image_small_and_invalid_untouched():
 
 
 def test_compress_image_jpeg_shrinks():
-    """超限 JPEG：重编码后显著变小且仍为合法 JPEG（尽力压缩，不保证严格达标）。"""
+    """超限 JPEG：重编码后显著变小且仍为合法 JPEG；像素按比例缩小（长边≥1200）。"""
+    import io
+    from PIL import Image
     from comicfeed.sources.pixiv import PixivSource
     big = _noise_jpeg(2400, 95)
     out = PixivSource._compress_image(big, 200_000)
     assert len(out) < len(big) * 0.5
     assert out.startswith(b"\xff\xd8\xff")
+    with Image.open(io.BytesIO(out)) as im:
+        w, h = im.size
+    assert max(w, h) < 2400 and max(w, h) >= 1200
+
+
+def test_compress_image_proportional_aspect():
+    """非方图等比缩小：宽高比保持不变。"""
+    import io
+    from PIL import Image
+    from comicfeed.sources.pixiv import PixivSource
+    big = _noise_jpeg(1600, 95)
+    # 裁成 1600x800（2:1）
+    im = Image.open(io.BytesIO(big)).crop((0, 0, 1600, 800))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=95)
+    out = PixivSource._compress_image(buf.getvalue(), 50_000)
+    with Image.open(io.BytesIO(out)) as res:
+        w, h = res.size
+    assert w == h * 2
+    assert w < 1600
 
 
 def test_compress_image_rgba_png_untouched_rgb_png_to_jpeg():
