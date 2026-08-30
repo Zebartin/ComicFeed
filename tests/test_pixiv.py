@@ -1044,6 +1044,74 @@ async def test_pixiv_detail_carries_keep_page_names():
     assert result.gallery.detail.keep_page_names is True
 
 
+
+# --- 画质选项 ---
+
+def test_quality_url_transform():
+    """原图 URL → master1200/large 变换；原图与已变换 URL 直通。"""
+    from comicfeed.sources.pixiv import PixivSource
+    orig = "https://i.pximg.net/img-original/img/2021/05/01/00/03/33/89501057_p0.jpg"
+    assert PixivSource._quality_url(orig, "original") == orig
+    assert PixivSource._quality_url(orig, "master1200") == \
+        "https://i.pximg.net/c/1200x1200_90/img-master/img/2021/05/01/00/03/33/89501057_p0_master1200.jpg"
+    assert PixivSource._quality_url(orig, "large") == \
+        "https://i.pximg.net/c/600x1200_90/img-master/img/2021/05/01/00/03/33/89501057_p0_master1200.jpg"
+    # 非原图 URL（如已变换/封面）直通；_master1200 不重复追加
+    master = "https://i.pximg.net/c/1200x1200_90/img-master/img/2021/05/01/00/03/33/89501057_p0_master1200.jpg"
+    assert PixivSource._quality_url(master, "master1200") == master
+    assert PixivSource._quality_url("https://i.pximg.net/c/540x540_70/img-master/x.jpg", "large") == \
+        "https://i.pximg.net/c/540x540_70/img-master/x.jpg"
+
+
+def test_work_pages_quality_selection():
+    """多页作品 large 用原生字段；master1200 变换；单页作品变换。"""
+    from comicfeed.sources.pixiv import PixivSource
+    item = {
+        "id": 100002, "page_count": 2, "type": "illust",
+        "meta_pages": [
+            {"image_urls": {"large": "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p0_master1200.jpg",
+                            "original": "https://i.pximg.net/img-original/img/x/100002_p0.jpg"}},
+            {"image_urls": {"large": "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p1_master1200.jpg",
+                            "original": "https://i.pximg.net/img-original/img/x/100002_p1.jpg"}},
+        ],
+        "meta_single_page": {},
+    }
+    s = PixivSource()
+    assert [u for _, u in s._work_pages(item, "large")] == [
+        "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p0_master1200.jpg",
+        "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p1_master1200.jpg"]
+    assert [u for _, u in s._work_pages(item, "master1200")] == [
+        "https://i.pximg.net/c/1200x1200_90/img-master/img/x/100002_p0_master1200.jpg",
+        "https://i.pximg.net/c/1200x1200_90/img-master/img/x/100002_p1_master1200.jpg"]
+    single = {"id": 100001, "page_count": 1, "type": "illust",
+              "meta_single_page": {"original_image_url": "https://i.pximg.net/img-original/img/y/100001_p0.png"},
+              "meta_pages": []}
+    assert [u for _, u in s._work_pages(single, "master1200")] == [
+        "https://i.pximg.net/c/1200x1200_90/img-master/img/y/100001_p0_master1200.png"]
+
+
+def test_config_schema_has_quality_select():
+    """源配置暴露「画质」下拉：original/master1200/large，默认 original。"""
+    from comicfeed.sources.pixiv import PixivSource
+    schema = PixivSource().get_config_schema()
+    q = next((f for f in schema if f["key"] == "quality"), None)
+    assert q is not None
+    assert q["type"] == "select"
+    assert [o["value"] for o in q["options"]] == ["original", "master1200", "large"]
+
+
+async def test_check_uses_configured_quality(monkeypatch):
+    """配置 quality=master1200 时，检查结果的页 URL 为变换后地址。"""
+    async def fake_cfg(key):
+        return {"quality": "master1200"}
+    monkeypatch.setattr("comicfeed.infrastructure.config.get_source_config", fake_cfg)
+    source = _make_source(_ranking_handler)
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
+    urls = result.gallery.detail.page_urls
+    assert all("img-original" not in u for u in urls)
+    assert any("1200x1200_90" in u for u in urls)
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

@@ -53,6 +53,8 @@ async function openCfg(key) {
     html += `<div style="margin-bottom:12px"><label style="font-size:12px;color:var(--text-muted)">${f.label}</label>`
     if (f.type==='textarea') {
       html += `<textarea id="cfg-${f.key}" placeholder="${f.placeholder||''}">${vals[f.key]||''}</textarea>`
+    } else if (f.type==='select') {
+      html += `<select id="cfg-${f.key}" style="width:100%;margin-top:4px">${(f.options||[]).map(o=>`<option value="${o.value}" ${vals[f.key]===o.value?'selected':''}>${o.label}</option>`).join('')}</select>`
     } else {
       html += `<input id="cfg-${f.key}" type="${f.type||'text'}" placeholder="${f.placeholder||''}" value="${vals[f.key]||''}" style="width:100%;margin-top:4px">`
     }
