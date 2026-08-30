@@ -46,8 +46,27 @@ class PixivSource(BaseSource):
     _CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
     _HASH_SECRET = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c"
     _UA = "PixivIOSApp/7.19.1 (iOS 16.6; iPhone14,5)"
-    _RANK_MODES = {"daily": "day", "weekly": "week", "monthly": "month",
-                   "male": "male", "female": "female", "rookie": "rookie"}
+    _RANK_MODES = {
+        "daily": "day", "weekly": "week", "monthly": "month",
+        "male": "day_male", "female": "day_female", "rookie": "week_rookie",
+        "daily_r18": "day_r18", "weekly_r18": "week_r18",
+        "male_r18": "day_male_r18", "female_r18": "day_female_r18",
+        "daily_r18g": "week_r18g", "weekly_r18g": "week_r18g",
+        "daily_ai": "day_ai", "weekly_ai": "week_ai", "monthly_ai": "month_ai",
+        "daily_r18_ai": "day_r18_ai", "weekly_r18_ai": "week_r18_ai",
+        "monthly_r18_ai": "month_r18_ai",
+    }
+    _RANK_MODE_LABELS = {
+        "daily": "日", "weekly": "周", "monthly": "月", "rookie": "新人",
+        "male": "男性", "female": "女性",
+        "daily_r18": "日R-18", "weekly_r18": "周R-18",
+        "male_r18": "男性R-18", "female_r18": "女性R-18",
+        "daily_r18g": "日R-18G", "weekly_r18g": "周R-18G",
+        "daily_ai": "日AI", "weekly_ai": "周AI", "monthly_ai": "月AI",
+        "daily_r18_ai": "日R-18AI", "weekly_r18_ai": "周R-18AI",
+        "monthly_r18_ai": "月R-18AI",
+    }
+    _CONTENT_LABELS = {"illust": "插画", "manga": "漫画", "ugoira": "动图"}
 
     def __init__(self, proxy=None, credentials=None,
                  transport: httpx.AsyncBaseTransport | None = None, time_fn=None):
@@ -84,7 +103,7 @@ class PixivSource(BaseSource):
         return httpx.AsyncClient(
             proxy=self.proxy,
             timeout=30,
-            headers={"User-Agent": self._UA},
+            headers={"User-Agent": self._UA, "Accept-Language": "zh-cn"},
             transport=self._transport,
         )
 
@@ -211,14 +230,23 @@ class PixivSource(BaseSource):
         notes, _skip_notes[:] = list(_skip_notes), []
         return notes
 
+    @classmethod
+    def _collection_title(cls, gallery_id: str) -> str:
+        _, mode, content = gallery_id.split(":", 2)
+        c = cls._CONTENT_LABELS.get(content, content)
+        m = cls._RANK_MODE_LABELS.get(mode, mode)
+        return f"Pixiv {c}{m}榜"
+
     async def _build_collection_detail(self, client: httpx.AsyncClient, gallery_id: str,
                                        items: list[dict], content: str, title: str = "") -> GalleryDetail:
         page_ids, page_urls, tags, writers = [], [], set(), set()
         cover_url = ""
+        is_user = gallery_id.startswith("user:")
         for item in items:
             if not cover_url:
                 cover_url = (item.get("image_urls") or {}).get("medium", "")
-            writers.add((item.get("user") or {}).get("name", ""))
+            if is_user:
+                writers.add((item.get("user") or {}).get("name", ""))
             for t in item.get("tags", []):
                 tag = t.get("translated_name") or t.get("name")
                 if tag:
@@ -235,8 +263,15 @@ class PixivSource(BaseSource):
                 page_ids.append(pid)
                 page_urls.append(purl)
         if not title:
-            _, mode, _content = gallery_id.split(":", 2)
-            title = f"pixiv {mode} {content}"
+            if is_user:
+                uid = gallery_id.split(":", 1)[1]
+                name = next(((it.get("user") or {}).get("name", "") for it in items), "")
+                title = f"{name}({uid})" if name else f"user:{uid}"
+            elif gallery_id.startswith("ranking:"):
+                title = self._collection_title(gallery_id)
+            else:
+                _, mode, _content = gallery_id.split(":", 2)
+                title = f"pixiv {mode} {content}"
         return GalleryDetail(
             native_id=gallery_id,
             title=title,
@@ -325,8 +360,7 @@ class PixivSource(BaseSource):
                         break
                     offset += 30
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
-                detail = await self._build_collection_detail(client, gallery_id, items, "illust",
-                                                             title=f"user:{uid}")
+                detail = await self._build_collection_detail(client, gallery_id, items, "illust")
             else:
                 raise NotImplementedError("pixiv 作品详情由后续工单实现")
         detail.web_url = gallery_url or (self._ranking_url(gallery_id)
@@ -383,8 +417,7 @@ class PixivSource(BaseSource):
                         offset += 30
                 items = self._apply_work_filters(items, filters)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
-                detail = await self._build_collection_detail(client, gallery_id, items, "illust",
-                                                             title=f"user:{uid}")
+                detail = await self._build_collection_detail(client, gallery_id, items, "illust")
             elif gallery_id.startswith("ranking:"):
                 _, _, content = gallery_id.split(":", 2)
                 items = await self._fetch_ranking_items(client, gallery_id, content)

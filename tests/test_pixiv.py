@@ -594,6 +594,89 @@ async def test_track_gallery_passes_filters():
     assert captured == {"page_ids": [], "max_pages": 7, "filters": rules}
 
 
+
+# --- 06: R-18 映射 + 官方中文标签 + 标题元数据 ---
+
+def _mode_handler(expected_mode: str):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            assert request.url.params["mode"] == expected_mode
+            assert request.headers["Accept-Language"] == "zh-cn"
+            return httpx.Response(200, json={"illusts": []})
+        return httpx.Response(404)
+    return handler
+
+
+async def test_r18_ranking_mode_mapping():
+    """web 榜单 mode → app mode 映射（含 R-18 系列）。"""
+    from comicfeed.sources.pixiv import PixivSource
+    s = PixivSource()
+    cases = {
+        "daily_r18": "day_r18",
+        "weekly_r18": "week_r18",
+        "male_r18": "day_male_r18",
+        "female_r18": "day_female_r18",
+        "weekly_r18g": "week_r18g",
+        "daily_r18_ai": "day_r18_ai",
+        "male": "day_male",
+        "rookie": "week_rookie",
+    }
+    for web_mode, app_mode in cases.items():
+        source = _make_source(_mode_handler(app_mode))
+        result = await source.check_updates(f"ranking:{web_mode}:illust", {"page_ids": []})
+        assert result.has_updates is False  # 空榜单 → 无更新，但请求已按映射发出
+
+
+async def test_accept_language_header_on_api_calls():
+    """app-api 请求携带 Accept-Language: zh-cn。"""
+    seen = []
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/user/illusts":
+            seen.append(request.headers.get("Accept-Language"))
+            return httpx.Response(200, json={"illusts": [], "next_url": None})
+        return httpx.Response(404)
+    source = _make_source(handler)
+    await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1})
+    assert seen == ["zh-cn"]
+
+
+async def test_tag_translation_fallback():
+    """标签：官方中文优先，缺失回退日文原文。"""
+    source = _make_source(_ranking_handler)
+    result = await source.check_updates("ranking:daily:illust", {"page_ids": []})
+    assert set(result.gallery.detail.tags) == {"原创", "女の子"}
+
+
+async def test_artist_gallery_title_and_writer():
+    """画师 Gallery：title=画师名(画师id)，writer=画师名。"""
+    handler, _ = _make_user_handler({
+        0: {"illusts": [_user_item(100012, "ArtistName")], "next": False},
+    })
+    source = _make_source(handler)
+    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1})
+    assert result.gallery.title == "ArtistName(20000)"
+    assert result.gallery.detail.writers == ["ArtistName"]
+
+
+async def test_ranking_gallery_title_no_writer():
+    """榜单 Gallery：title=Pixiv {内容}{周期}榜，writer 为空。"""
+    source = _make_source(_ranking_handler)
+    result = await source.check_updates("ranking:daily:illust", {"page_ids": []})
+    assert result.gallery.title == "Pixiv 插画日榜"
+    assert result.gallery.detail.writers == []
+
+
+async def test_ranking_ugoira_title():
+    """动图周榜标题。"""
+    source = _make_source(_mode_handler("week"))
+    result = await source.check_updates("ranking:weekly:ugoira", {"page_ids": []})
+    assert result.has_updates is False
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()
