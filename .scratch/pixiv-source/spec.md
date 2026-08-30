@@ -48,7 +48,7 @@ Status: ready-for-agent
 - **认证**：refresh_token OAuth 2.0（X-Client-Time/X-Client-Hash 签名头），access_token 进程内缓存、过期自动用 refresh_token 换新；不做密码登录（reCAPTCHA 风控）、不做 PHPSESSID 通道。
 - **API 端点**：`/v1/illust/ranking`（榜单）、`/v1/user/illusts`（画师作品）、`/v1/illust/detail`（详情与页 URL）、`/v1/ugoira/metadata`（动图帧与 delay）、`/v1/search/illust`（搜索页最小透传）。
 - **动图转换**：下载 ugoira 帧 zip（带 Referer）→ 按 metadata 的 frames 顺序与 delay（毫秒）用 Pillow 合成动画 WebP（save_all + duration），作为单页 bytes 交给打包流程；不做 GIF/APNG 输出。转换失败的作品跳过、不阻塞同画廊其余作品，但**记录为失败下载事件（作品标题 + 原因）**，进入摘要通知的失败汇总（沿用现有每订阅 ≤5 条的展示上限）。跳过清单带画廊归属、由源回传给下载服务、由下载服务按当前画廊匹配后写事件（源不直接写持久化；通过向后兼容的可选钩子，现有源零改动）。
-- **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-hans`（实测 `zh-cn` 被服务端忽略、返回英文默认翻译），`translated_name` 有值用官方中文、否则回退 `name`（日文）；v1 不接 EhTagTranslation。
+- **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-hans`（实测 `zh-cn` 被服务端忽略、返回英文默认翻译）。选译规则：`translated_name` **含汉字**才采用（官方中文）；否则回退 `name`（日文原文）——官方翻译表对角色名/作品名常给罗马音或英文（如 `九条裟羅→Kujou Sara`、`原神→Genshin Impact`），对中文用户不如原文；双方都无汉字（ASCII 标签）用官方翻译。v1 不接 EhTagTranslation。
 - **元数据**：画师 Gallery 标题 `画师名(画师id)`、writer=画师名、封面不特殊处理；榜单 Gallery 标题 `Pixiv {内容}{周期}榜`、writer 为空；作品标题经 `normalize_title` 归一化（无官方翻译字段）。
 - **URL 解析**：`parse_url` 识别画师主页与榜单 URL（含 R-18 模式），web 榜单 mode 参数映射到 app-api mode（如 `daily_r18` → `day_r18`）；app-api 无等价物的模式（如 `daily_r18g`，app 端仅有周 R-18G）明确报错而非静默错榜；订阅走现有「特定画廊」贴 URL 流程。
 - **R-18 策略**：R-18 作品/榜单直接通过 app-api 获取，取决于账号的「显示 R-18/R-18G」设置；源配置 hint 文案说明该依赖；未开启时 R-18 被 pixiv 静默过滤，源不做额外标记或告警。

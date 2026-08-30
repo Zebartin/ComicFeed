@@ -154,6 +154,25 @@ class PixivSource(BaseSource):
     # --- 作品/集合构建 ---
 
     @staticmethod
+    def _has_cjk(s: str) -> bool:
+        return any("\u4e00" <= ch <= "\u9fff" for ch in s)
+
+    @classmethod
+    def _pick_tag(cls, t: dict) -> str | None:
+        """官方中文优先；官方翻译是罗马音/英文（无汉字）时回退日文原文。"""
+        name = t.get("name") or ""
+        translated = t.get("translated_name") or ""
+        if not name:
+            return translated or None
+        if not translated:
+            return name
+        if cls._has_cjk(translated):
+            return translated
+        if cls._has_cjk(name):
+            return name  # 罗马音/英文翻译不如原文可读
+        return translated  # 两边都无汉字（如 ASCII 标签），用官方翻译
+
+    @staticmethod
     def _match_content(item: dict, content: str) -> bool:
         itype = item.get("type", "")
         if content == "ugoira":
@@ -257,7 +276,7 @@ class PixivSource(BaseSource):
             if is_user:
                 writers.add((item.get("user") or {}).get("name", ""))
             for t in item.get("tags", []):
-                tag = t.get("translated_name") or t.get("name")
+                tag = self._pick_tag(t)
                 if tag:
                     tags.add(tag)
             if item.get("type") == "ugoira":
@@ -505,7 +524,7 @@ class PixivSource(BaseSource):
         from comicfeed.io.cbz import normalize_title
         items = []
         for it in data.get("illusts") or []:
-            tags = [t.get("translated_name") or t.get("name") for t in (it.get("tags") or [])]
+            tags = [self._pick_tag(t) for t in (it.get("tags") or [])]
             items.append(GallerySummary(
                 native_id=str(it.get("id", "")),
                 title=normalize_title(it.get("title", "")),

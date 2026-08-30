@@ -788,6 +788,28 @@ async def test_tag_dump_logged_per_work(caplog):
     assert "女の子=None" in dump2
 
 
+
+# --- 标签选译：官方中文含汉字才采用（真实样本来自用户日志） ---
+
+async def test_tag_selection_prefers_cjk_translation():
+    """翻译含汉字才采用；罗马音/英文翻译回退日文原文；无翻译回退原文。"""
+    from comicfeed.sources.pixiv import PixivSource
+    pairs = [
+        ({"name": "原神", "translated_name": "Genshin Impact"}, "原神"),
+        ({"name": "GenshinImpact", "translated_name": None}, "GenshinImpact"),
+        ({"name": "尻神様", "translated_name": "尻神样"}, "尻神样"),
+        ({"name": "九条裟羅", "translated_name": "Kujou Sara"}, "九条裟羅"),
+        ({"name": "夜蘭", "translated_name": "Yelan"}, "夜蘭"),
+        ({"name": "おっぱい", "translated_name": "欧派"}, "欧派"),
+        ({"name": "ふともも", "translated_name": "大腿"}, "大腿"),
+        ({"name": "甘雨(原神)", "translated_name": "Ganyu (Genshin Impact)"}, "甘雨(原神)"),
+        ({"name": "原神10000users入り", "translated_name": "原神10000收藏"}, "原神10000收藏"),
+        ({"name": "R-18", "translated_name": "R-18"}, "R-18"),
+    ]
+    for tag, expected in pairs:
+        assert PixivSource._pick_tag(tag) == expected
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()
