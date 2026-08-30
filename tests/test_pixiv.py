@@ -1317,6 +1317,49 @@ async def test_pixiv_subscription_forces_specific_gallery_mode(app):
         assert r2.json()["mode"] == "SPECIFIC_GALLERY"
 
 
+
+# --- ugoira 帧源三级策略：large zip → 原始帧 → medium zip ---
+
+async def test_ugoira_original_frames_when_large_zip_missing():
+    """large 包缺失（真实样本：小分辨率动图）→ 逐帧下载 img-original 原始帧，不用 medium 包。"""
+    import copy
+    import io as _io
+    from PIL import Image as _Image
+    _frame = _io.BytesIO()
+    _Image.new("RGB", (8, 8), (255, 0, 0)).save(_frame, "JPEG")
+    frame_bytes = _frame.getvalue()
+    zip_hits, frame_hits = [], []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            sample = copy.deepcopy(_SAMPLE_RANKING)
+            sample["illusts"][2]["meta_single_page"]["original_image_url"] = \
+                "https://i.pximg.net/img-original/img/2024/01/03/00/00/00/100003_ugoira0.jpg"
+            return httpx.Response(200, json=sample)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(200, json={
+                "ugoira_metadata": {
+                    "zip_urls": {"medium": "https://i.pximg.net/img-zip-ugoira/img/x/100003_ugoira600x600.zip"},
+                    "frames": [{"file": "000000.jpg", "delay": 100}, {"file": "000001.jpg", "delay": 150}],
+                }})
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            zip_hits.append(request.url.path)
+            return httpx.Response(200, content=_ugoira_zip())
+        if request.url.host == "i.pximg.net" and "img-original" in request.url.path:
+            frame_hits.append(request.url.path)
+            return httpx.Response(200, content=frame_bytes)
+        return httpx.Response(404)
+
+    source = _make_source(handler)
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
+    assert "100003_webp" in result.gallery.new_page_ids
+    assert zip_hits == []  # 未回退到 medium 包
+    assert any("_ugoira0.jpg" in u for u in frame_hits) and any("_ugoira1.jpg" in u for u in frame_hits)
+    assert source.pop_download_notes() == []
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

@@ -340,36 +340,22 @@ class PixivSource(BaseSource):
             if resp.status_code != 200:
                 raise PixivAuthError(f"元数据 HTTP {resp.status_code}")
             meta = resp.json().get("ugoira_metadata") or {}
-            zurls = meta.get("zip_urls") or {}
-            candidates = [u for u in (zurls.get("large"), zurls.get("medium")) if u]
-            if not candidates:
-                raise PixivAuthError("元数据缺少 zip_urls")
-            zresp = None
-            last_err = None
-            for zip_url in candidates:
-                try:
-                    zresp = await client.get(zip_url, headers={"Referer": "https://app-api.pixiv.net"})
-                    zresp.raise_for_status()
-                    _log.info("pixiv 动图帧包: work=%s %s", wid, zip_url.rsplit("/", 1)[-1])
-                    break
-                except Exception as e:
-                    last_err = e
-                    _log.warning("pixiv 动图帧包拉取失败(回退下一档): work=%s %s - %r",
-                                 wid, zip_url.rsplit("/", 1)[-1], e)
-            if zresp is None:
-                raise last_err
             frames = meta.get("frames") or []
-            images, durations = [], []
-            with zipfile.ZipFile(io.BytesIO(zresp.content)) as zf:
-                for fmeta in frames:
-                    fname = fmeta.get("file", "")
-                    if not fname:
-                        continue
-                    im = Image.open(io.BytesIO(zf.read(fname))).convert("RGB")
-                    images.append(im)
-                    durations.append(int(fmeta.get("delay") or 0))
-            if not images:
-                raise PixivAuthError("帧列表为空")
+            durations = [int(f.get("delay") or 0) for f in frames]
+            zurls = meta.get("zip_urls") or {}
+            # 三级帧源：large zip → img-original 原始帧 → medium zip
+            images, source_desc = None, ""
+            if zurls.get("large"):
+                images, source_desc = await self._fetch_ugoira_zip(client, wid, frames, zurls["large"])
+            if images is None:
+                images, source_desc = await self._fetch_ugoira_originals(client, item, frames)
+            if images is None and zurls.get("medium"):
+                images, source_desc = await self._fetch_ugoira_zip(client, wid, frames, zurls["medium"])
+            if images is None:
+                raise PixivAuthError("动图帧获取失败（zip 与原始帧均不可用）")
+            _log.info("pixiv 动图帧包: work=%s %s", wid, source_desc)
+            if len(images) != len(durations):
+                durations = durations[:len(images)]
             buf = io.BytesIO()
             if len(images) == 1:
                 images[0].save(buf, "WEBP")
@@ -386,6 +372,55 @@ class PixivSource(BaseSource):
             _skip_notes.append({"gallery_id": gallery_id, "title": title,
                                  "error": f"动图转换失败: {e}"})
             return None
+
+    async def _fetch_ugoira_zip(self, client: httpx.AsyncClient, wid: str,
+                                frames: list[dict], zip_url: str):
+        """下载 ugoira 帧 zip 并按 metadata 顺序解帧。失败返回 (None, "")。"""
+        import io
+        import zipfile
+        from PIL import Image
+        from comicfeed.infrastructure.log import get
+        _log = get(__name__)
+        try:
+            zresp = await client.get(zip_url, headers={"Referer": "https://app-api.pixiv.net"})
+            zresp.raise_for_status()
+            with zipfile.ZipFile(io.BytesIO(zresp.content)) as zf:
+                images = []
+                for fmeta in frames:
+                    fname = fmeta.get("file", "")
+                    if not fname:
+                        continue
+                    images.append(Image.open(io.BytesIO(zf.read(fname))).convert("RGB"))
+            return images, zip_url.rsplit("/", 1)[-1]
+        except Exception as e:
+            _log.warning("pixiv 动图帧包拉取失败(尝试下一方案): work=%s %s - %r",
+                         wid, zip_url.rsplit("/", 1)[-1], e)
+            return None, ""
+
+    async def _fetch_ugoira_originals(self, client: httpx.AsyncClient, item: dict,
+                                      frames: list[dict]):
+        """large 包缺失时逐帧下载 img-original 原始帧（{id}_ugoira{n} 命名规律）。失败返回 (None, "")。"""
+        import io
+        from PIL import Image
+        from comicfeed.infrastructure.log import get
+        _log = get(__name__)
+        first = (item.get("meta_single_page") or {}).get("original_image_url") or ""
+        m = re.search(r"_ugoira\d+(\.\w+)$", first)
+        if not m or not frames:
+            return None, ""
+        base, ext = first[:m.start()], m.group(1)
+        wid = str(item.get("id", ""))
+        images = []
+        for i in range(len(frames)):
+            url = f"{base}_ugoira{i}{ext}"
+            try:
+                r = await client.get(url, headers={"Referer": "https://app-api.pixiv.net"})
+                r.raise_for_status()
+                images.append(Image.open(io.BytesIO(r.content)).convert("RGB"))
+            except Exception as e:
+                _log.warning("pixiv 动图原始帧拉取失败(尝试下一方案): work=%s frame=%d - %r", wid, i, e)
+                return None, ""
+        return images, f"原始帧×{len(images)}"
 
     def pop_download_notes(self) -> list[dict]:
         """下载服务调用：取走并清空本源积累的跳过说明（一次性消费）。"""
