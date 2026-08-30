@@ -308,6 +308,13 @@ class PixivSource(BaseSource):
         # content=illust：插画（含多页）+ 动图混排（动图转 WebP 进同一卷）
         return itype in ("illust", "ugoira")
 
+    def _work_page_ids(self, item: dict) -> list[str]:
+        """作品的页 ID 列表（动图为单页 webp id）。用于检查阶段的按作品去重。"""
+        wid = str(item.get("id", ""))
+        if item.get("type") == "ugoira":
+            return [f"{wid}_webp"]
+        return [pid for pid, _ in self._work_pages(item)]
+
     def _work_pages(self, item: dict) -> list[tuple[str, str]]:
         """作品的全部原图页：[(page_native_id, url)]。"""
         wid = str(item.get("id", ""))
@@ -611,6 +618,7 @@ class PixivSource(BaseSource):
 
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
         old_ids = last_known.get("page_ids") or []
+        old = set(old_ids)
         max_pages = int(last_known.get("max_pages") or 0)
         filters = last_known.get("filters") or ""
         async with self._client() as client:
@@ -620,12 +628,16 @@ class PixivSource(BaseSource):
                     items, _ = await self._fetch_user_items(client, gallery_id)
                 else:
                     items = await self._fetch_all_user_items(client, gallery_id, max_pages)
+                items = [it for it in items
+                         if any(pid not in old for pid in self._work_page_ids(it))]
                 items = self._apply_work_filters(items, filters)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
                 detail = await self._build_collection_detail(client, gallery_id, items, "illust")
             elif gallery_id.startswith("ranking_"):
                 _, content = self._split_ranking_id(gallery_id)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
+                items = [it for it in items
+                         if any(pid not in old for pid in self._work_page_ids(it))]
                 items = self._apply_work_filters(items, filters)
                 detail = await self._build_collection_detail(client, gallery_id, items, content)
             else:

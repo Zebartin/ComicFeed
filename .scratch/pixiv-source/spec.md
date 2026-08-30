@@ -43,7 +43,7 @@ Status: ready-for-agent
 - **页面 ID 与增量**：插画/漫画页的 page_native_id 为 `{illust_id}_p{n}`，动图页为 `{illust_id}_webp`；`check_updates` 按作品 ID 差集返回 `new_page_ids`，复用现有「新页追加到最后 CBZ 卷」的增量机制。
 - **页序**：画师 Gallery 按作品 ID 升序（旧→新，新作自然追加到末尾）；榜单 Gallery 按首次收录顺序。
 - **榜单检查边界**：榜单订阅每次检查只取第一页；按作品 ID 在画廊内去重（该榜单 Gallery 中已收录的作品永不再收录于其中；不同榜单 Gallery 之间不做跨画廊去重，物理上各存各卷）。
-- **画师检查深度**：首次检查翻全部作品页（受订阅 `max_search_pages` 上限保护：0=只翻第 1 页；1（订阅默认）=翻到底；≥2=上限 N 页）；后续巡检只翻第 1 页做差集。
+- **画师检查深度**：首次检查翻全部作品页（受订阅 `max_search_pages` 上限保护：0=只翻第 1 页；1（订阅默认）=翻到底；≥2=上限 N 页）；后续巡检只翻第 1 页做差集。检查阶段**先按作品 ID 去重再转换**：已收录作品的动图不做帧转换，只有新增动图才拉取帧（转换仍留在检查阶段，保证转换失败可跳过该作品而不中断画廊下载）。
 - **筛选语义**：订阅的筛选条件（收藏数/页数/上传日期）对 pixiv 按**作品**逐个应用，不达标的作品不收录；收藏数使用 app-api 的公开收藏数（`total_bookmarks`），页数使用作品页数。
 - **认证**：refresh_token OAuth 2.0（X-Client-Time/X-Client-Hash 签名头），access_token 进程内缓存、过期自动用 refresh_token 换新；不做密码登录（reCAPTCHA 风控）、不做 PHPSESSID 通道。
 - **API 端点**：`/v1/illust/ranking`（榜单）、`/v1/user/illusts`（画师作品）、`/v1/illust/detail`（详情与页 URL）、`/v1/ugoira/metadata`（动图帧与 delay）、`/v1/search/illust`（搜索页最小透传）。

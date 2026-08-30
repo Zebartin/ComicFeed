@@ -1360,6 +1360,57 @@ async def test_ugoira_original_frames_when_large_zip_missing():
     assert source.pop_download_notes() == []
 
 
+
+# --- 检查阶段动图转换：先按作品去重 ---
+
+async def test_check_skips_conversion_for_known_ugoira():
+    """已收录的动图作品不再重复转换（无 metadata/帧请求）。"""
+    hits = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            hits.append(request.url.path)
+            return httpx.Response(200, json=_UGOIRA_META)
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            hits.append(request.url.path)
+            return httpx.Response(200, content=_ugoira_zip())
+        return httpx.Response(404)
+
+    source = _make_source(handler)
+    known = {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]}
+    result = await source.check_updates("ranking_daily_illust", known)
+    assert result.has_updates is False
+    assert hits == []  # 无新增 → 不做任何动图转换请求
+
+
+async def test_check_converts_only_new_ugoira():
+    """混合场景：只对新增的动图作品做转换。"""
+    meta_hits = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            meta_hits.append(request.url.path)
+            return httpx.Response(200, json=_UGOIRA_META)
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            return httpx.Response(200, content=_ugoira_zip())
+        return httpx.Response(404)
+
+    source = _make_source(handler)
+    # 静态作品已收录、动图未收录 → 只转换动图（1 次 metadata）
+    known = {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]}
+    result = await source.check_updates("ranking_daily_illust", known)
+    assert result.gallery.new_page_ids == ["100003_webp"]
+    assert len(meta_hits) == 1
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()
