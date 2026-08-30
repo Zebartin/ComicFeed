@@ -187,7 +187,26 @@ class PixivSource(BaseSource):
         best = data
         if fmt == "PNG":
             if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
-                return data  # 透明 PNG 不转换
+                # 透明 PNG：不转 JPEG（保 alpha），只按比例降像素，仍存 PNG
+                if im.mode != "RGBA":
+                    im = im.convert("RGBA")
+                w, h = im.size
+                long_side = max(w, h)
+                for scale in (0.9, 0.8, 0.7, 0.6, 0.5):
+                    target = int(long_side * scale)
+                    if target < 600:
+                        break
+                    ratio = target / long_side
+                    scaled = im.resize((max(1, int(w * ratio)), max(1, int(h * ratio))),
+                                       Image.LANCZOS)
+                    buf = io.BytesIO()
+                    scaled.save(buf, "PNG", optimize=True)
+                    out = buf.getvalue()
+                    if len(out) <= limit:
+                        return out
+                    if len(out) < len(best):
+                        best = out
+                return best
             im = im.convert("RGB")
         elif fmt != "JPEG":
             return data
@@ -198,7 +217,8 @@ class PixivSource(BaseSource):
             out = buf.getvalue()
             if len(out) <= limit:
                 return out
-            best = out
+            if len(out) < len(best):
+                best = out
         # 像素阶梯：等比缩小 0.9 → 0.5，长边不低于 600
         w, h = im.size
         long_side = max(w, h)
@@ -213,7 +233,8 @@ class PixivSource(BaseSource):
             out = buf.getvalue()
             if len(out) <= limit:
                 return out
-            best = out
+            if len(out) < len(best):
+                best = out
         return best
 
     @staticmethod

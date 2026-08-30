@@ -1177,18 +1177,30 @@ def test_compress_image_proportional_aspect():
     assert w < 1600
 
 
-def test_compress_image_rgba_png_untouched_rgb_png_to_jpeg():
-    """RGBA PNG（透明）不动；RGB PNG 转 JPEG 变小。"""
+def test_compress_image_transparent_png_scaled_rgb_png_to_jpeg():
+    """透明 PNG 超限：等比缩小但保持 PNG+alpha；RGB PNG 转 JPEG。"""
     import io
+    import random
     from PIL import Image
     from comicfeed.sources.pixiv import PixivSource
-    rgba = io.BytesIO()
-    Image.new("RGBA", (800, 800), (255, 0, 0, 128)).save(rgba, "PNG")
-    assert PixivSource._compress_image(rgba.getvalue(), 1000) == rgba.getvalue()
+    random.seed(7)
+    rgba = Image.new("RGBA", (800, 800))
+    rpx = rgba.load()
+    for y in range(800):
+        for x in range(800):
+            rpx[x, y] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), 255)
+    buf = io.BytesIO()
+    rgba.save(buf, "PNG")
+    out = PixivSource._compress_image(buf.getvalue(), 2000)
+    assert out.startswith(b"\x89PNG")
+    assert len(out) < len(buf.getvalue())
+    with Image.open(io.BytesIO(out)) as im:
+        assert im.mode == "RGBA"
+        assert max(im.size) < 800
     rgb = io.BytesIO()
     Image.new("RGB", (800, 800), (0, 128, 255)).save(rgb, "PNG")
-    out = PixivSource._compress_image(rgb.getvalue(), 1000)
-    assert out.startswith(b"\xff\xd8\xff")
+    out2 = PixivSource._compress_image(rgb.getvalue(), 1000)
+    assert out2.startswith(b"\xff\xd8\xff")
 
 
 async def test_download_pages_compresses_oversize_pages(monkeypatch):
