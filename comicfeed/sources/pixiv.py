@@ -33,6 +33,9 @@ _webp_cache: dict[str, tuple[float, bytes]] = {}
 _webp_ttl = 3000.0
 _skip_notes: list[dict] = []
 
+# 429 全局冷却：收到限流后所有 API 请求先等待再发
+_cooldown_until: float = 0.0
+
 
 class PixivSource(BaseSource):
     key = "pixiv"
@@ -82,6 +85,8 @@ class PixivSource(BaseSource):
         return [
             {"key": "proxy", "label": "代理", "type": "text",
              "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
+            {"key": "throttle", "label": "请求间隔（秒）", "type": "text",
+             "placeholder": "0.3", "hint": "每页下载后的等待间隔，防限流；0 或 - 表示不等待"},
             {"key": "refresh_token", "label": "refresh_token", "type": "password",
              "credential": True, "placeholder": "pixiv 的 refresh_token（OAuth）",
              "hint": "长期凭证，加密存储。R-18 内容显示取决于账号设置：pixiv 设置 → 浏览与显示 → 显示敏感内容（未开启时 R-18 作品/榜单会被静默过滤）。"},
@@ -152,6 +157,39 @@ class PixivSource(BaseSource):
                 return False, f"连接失败: {e}"
 
     # --- 作品/集合构建 ---
+
+    @staticmethod
+    def _throttle_from_cfg(cfg: dict) -> float:
+        try:
+            v = str(cfg.get("throttle") or "").strip()
+        except (ValueError, TypeError):
+            return 0.3
+        if v in ("-", "0"):
+            return 0.0
+        if not v:
+            return 0.3
+        try:
+            return float(v)
+        except ValueError:
+            return 0.3
+
+    async def _respect_cooldown(self) -> None:
+        wait = _cooldown_until - time.time()
+        if wait > 0:
+            await asyncio.sleep(wait)
+
+    async def _api_get(self, client: httpx.AsyncClient, url: str, **kw):
+        """API GET：尊重全局冷却，429 指数退避重试，触发限流后设置冷却。"""
+        from comicfeed.infrastructure.http_retry import retry_get
+        await self._respect_cooldown()
+        try:
+            return await retry_get(client, url, **kw)
+        except Exception as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 429:
+                global _cooldown_until
+                _cooldown_until = time.time() + 30
+            raise
 
     @staticmethod
     def _has_cjk(s: str) -> bool:
@@ -313,10 +351,9 @@ class PixivSource(BaseSource):
         app_mode = self._RANK_MODES.get(mode)
         if not app_mode:
             raise PixivAuthError(f"不支持的榜单模式: {mode}")
-        resp = await client.get(f"{self._BASE}/v1/illust/ranking", params={"mode": app_mode},
-                                headers={"Authorization": f"Bearer {self._access_token}"})
-        if resp.status_code != 200:
-            raise PixivAuthError(f"榜单请求失败: HTTP {resp.status_code}")
+        resp = await self._api_get(client, f"{self._BASE}/v1/illust/ranking",
+                                    params={"mode": app_mode},
+                                    headers={"Authorization": f"Bearer {self._access_token}"})
         return [it for it in (resp.json().get("illusts") or []) if self._match_content(it, content)]
 
     async def _fetch_all_user_items(self, client: httpx.AsyncClient, uid: str, max_pages: int) -> list[dict]:
@@ -333,15 +370,14 @@ class PixivSource(BaseSource):
                 break
             if max_pages >= 2 and fetched >= max_pages:
                 break
+            await asyncio.sleep(0.5)  # 翻页节流
             offset += 30
         return items
 
     async def _fetch_user_items(self, client: httpx.AsyncClient, uid: str, offset: int = 0):
-        resp = await client.get(f"{self._BASE}/v1/user/illusts",
-                                params={"user_id": uid, "offset": offset},
-                                headers={"Authorization": f"Bearer {self._access_token}"})
-        if resp.status_code != 200:
-            raise PixivAuthError(f"画师作品请求失败: HTTP {resp.status_code}")
+        resp = await self._api_get(client, f"{self._BASE}/v1/user/illusts",
+                                    params={"user_id": uid, "offset": offset},
+                                    headers={"Authorization": f"Bearer {self._access_token}"})
         j = resp.json()
         return j.get("illusts") or [], bool(j.get("next_url"))
 
@@ -452,10 +488,12 @@ class PixivSource(BaseSource):
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "",
                              detail: GalleryDetail | None = None,
                              on_page: Callable[[], None] | None = None) -> list[bytes]:
-        from comicfeed.infrastructure.config import get_setting
+        from comicfeed.infrastructure.config import get_setting, get_source_config
+        from comicfeed.infrastructure.http_retry import retry_get
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
         _retry = int(await get_setting("download_retry") or 3)
+        _throttle = self._throttle_from_cfg(await get_source_config(self.key))
         if detail is None:
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
@@ -472,24 +510,18 @@ class PixivSource(BaseSource):
                     results.append(entry[1])
                     if on_page:
                         on_page()
-                    continue
-                last_err = None
-                for attempt in range(_retry):
-                    try:
-                        resp = await client.get(url)
-                        resp.raise_for_status()
-                        results.append(resp.content)
-                        if on_page:
-                            on_page()
-                        break
-                    except Exception as e:
-                        last_err = e
-                        if attempt < _retry - 1:
-                            await asyncio.sleep(1)
                 else:
-                    _log.error("下载图片失败(重试%d次): gallery=%s page=%d - %r",
-                               _retry, gallery_id, page_range.start + i + 1, last_err)
-                    raise last_err
+                    try:
+                        resp = await retry_get(client, url, max_retries=_retry)
+                    except Exception as e:
+                        _log.error("下载图片失败(重试%d次): gallery=%s page=%d - %r",
+                                   _retry, gallery_id, page_range.start + i + 1, e)
+                        raise
+                    results.append(resp.content)
+                    if on_page:
+                        on_page()
+                if _throttle > 0:
+                    await asyncio.sleep(_throttle)
         return results
 
     # --- 搜索页透传（07） ---
