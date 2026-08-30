@@ -131,6 +131,7 @@ _SAMPLE_RANKING = {
     "illusts": [
         {
             "id": 100001, "title": "Sample Art", "type": "illust", "page_count": 1,
+            "width": 6000, "height": 4000,
             "user": {"id": 20001, "name": "ArtistA"},
             "image_urls": {
                 "medium": "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/01/00/00/00/100001_p0_master1200.jpg",
@@ -143,6 +144,7 @@ _SAMPLE_RANKING = {
         },
         {
             "id": 100002, "title": "Multi Page", "type": "illust", "page_count": 3,
+            "width": 1500, "height": 1200,
             "user": {"id": 20002, "name": "ArtistB"},
             "image_urls": {"medium": "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/02/00/00/00/100002_p0_master1200.jpg"},
             "meta_single_page": {},
@@ -1051,65 +1053,62 @@ async def test_pixiv_detail_carries_keep_page_names():
 
 # --- 画质选项 ---
 
-def test_unknown_quality_falls_back_to_original():
-    """未知画质（如旧配置 master1200）安全回退原图。"""
+def test_work_pages_max_pixels():
+    """max_pixels=0 全原图；超限降级大图（多页/单页原生字段）；缺失字段回退原图。"""
     from comicfeed.sources.pixiv import PixivSource
-    item = {"id": 100001, "page_count": 1, "type": "illust",
-            "meta_single_page": {"original_image_url": "https://i.pximg.net/img-original/img/x/100001_p0.jpg"},
-            "meta_pages": []}
-    assert [u for _, u in PixivSource()._work_pages(item, "master1200")] == [
-        "https://i.pximg.net/img-original/img/x/100001_p0.jpg"]
-
-
-def test_work_pages_quality_selection():
-    """画质只用 API 原生字段：多页 large/medium；单页用顶层 image_urls；缺失回退原图。"""
-    from comicfeed.sources.pixiv import PixivSource
+    s = PixivSource()
     item = {
-        "id": 100002, "page_count": 2, "type": "illust",
+        "id": 100002, "page_count": 2, "type": "illust", "width": 6000, "height": 4000,
         "meta_pages": [
             {"image_urls": {"large": "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p0_master1200.jpg",
-                            "medium": "https://i.pximg.net/c/540x540_70/img-master/img/x/100002_p0_master1200.jpg",
                             "original": "https://i.pximg.net/img-original/img/x/100002_p0.jpg"}},
             {"image_urls": {"original": "https://i.pximg.net/img-original/img/x/100002_p1.jpg"}},
         ],
         "meta_single_page": {},
         "image_urls": {},
     }
-    s = PixivSource()
-    assert [u for _, u in s._work_pages(item, "large")] == [
-        "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p0_master1200.jpg",
-        "https://i.pximg.net/img-original/img/x/100002_p1.jpg"]  # 第 2 页无 large → 回退原图
-    assert [u for _, u in s._work_pages(item, "medium")] == [
-        "https://i.pximg.net/c/540x540_70/img-master/img/x/100002_p0_master1200.jpg",
+    # 0 = 不降级
+    assert [u for _, u in s._work_pages(item, 0)] == [
+        "https://i.pximg.net/img-original/img/x/100002_p0.jpg",
         "https://i.pximg.net/img-original/img/x/100002_p1.jpg"]
-    single = {"id": 100001, "page_count": 1, "type": "illust",
+    # 超限 → large；第 2 页无 large → 回退原图
+    assert [u for _, u in s._work_pages(item, 3000)] == [
+        "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p0_master1200.jpg",
+        "https://i.pximg.net/img-original/img/x/100002_p1.jpg"]
+    # 未超限 → 原图
+    item["width"], item["height"] = 1500, 1200
+    assert [u for _, u in s._work_pages(item, 3000)] == [
+        "https://i.pximg.net/img-original/img/x/100002_p0.jpg",
+        "https://i.pximg.net/img-original/img/x/100002_p1.jpg"]
+    # 单页作品超限：用顶层 image_urls.large
+    single = {"id": 100001, "page_count": 1, "type": "illust", "width": 6000, "height": 4000,
               "meta_single_page": {"original_image_url": "https://i.pximg.net/img-original/img/y/100001_p0.png"},
               "meta_pages": [],
               "image_urls": {"large": "https://i.pximg.net/c/600x1200_90/img-master/img/y/100001_p0_master1200.png"}}
-    assert [u for _, u in s._work_pages(single, "large")] == [
+    assert [u for _, u in s._work_pages(single, 3000)] == [
         "https://i.pximg.net/c/600x1200_90/img-master/img/y/100001_p0_master1200.png"]
 
 
-def test_config_schema_has_quality_select():
-    """源配置暴露「画质」下拉：original/master1200/large，默认 original。"""
+def test_config_schema_max_pixels_only():
+    """源配置只有「原图长边上限」，不再有画质下拉。"""
     from comicfeed.sources.pixiv import PixivSource
     schema = PixivSource().get_config_schema()
-    q = next((f for f in schema if f["key"] == "quality"), None)
-    assert q is not None
-    assert q["type"] == "select"
-    assert [o["value"] for o in q["options"]] == ["original", "large", "medium"]
+    keys = [f["key"] for f in schema]
+    assert "max_pixels" in keys
+    assert "quality" not in keys
 
 
-async def test_check_uses_configured_quality(monkeypatch):
-    """配置 quality=large 时，检查结果的页 URL 为 API 原生 large 地址。"""
+async def test_max_pixels_mixed_by_work(monkeypatch):
+    """max_pixels=3000：超限作品降级、小图保持原图（按作品分别决策）。"""
     async def fake_cfg(key):
-        return {"quality": "large"}
+        return {"max_pixels": "3000"}
     monkeypatch.setattr("comicfeed.infrastructure.config.get_source_config", fake_cfg)
     source = _make_source(_ranking_handler)
     result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
     urls = result.gallery.detail.page_urls
-    assert all("img-original" not in u for u in urls)
+    # work1 6000px → large；work2 1500px → 原图
     assert any("600x1200_90" in u for u in urls)
+    assert any("img-original" in u for u in urls)
 
 
 
@@ -1167,6 +1166,7 @@ async def test_incremental_append_names_only_new_pages():
             names = [n for n in z.namelist() if not n.endswith(".xml")]
         assert len(read_cbz_pages(r2.files[0])) == 3
     assert names == ["0001.jpg", "0002.jpg", "149035907_p002.jpg"]
+
 
 
 async def test_test_connection_endpoint(app, monkeypatch):
