@@ -340,11 +340,20 @@ class PixivSource(BaseSource):
                 raise PixivAuthError(f"元数据 HTTP {resp.status_code}")
             meta = resp.json().get("ugoira_metadata") or {}
             zurls = meta.get("zip_urls") or {}
-            zip_url = zurls.get("medium") or zurls.get("large", "")
-            if not zip_url:
+            candidates = [u for u in (zurls.get("large"), zurls.get("medium")) if u]
+            if not candidates:
                 raise PixivAuthError("元数据缺少 zip_urls")
-            zresp = await client.get(zip_url, headers={"Referer": "https://app-api.pixiv.net"})
-            zresp.raise_for_status()
+            zresp = None
+            last_err = None
+            for zip_url in candidates:
+                try:
+                    zresp = await client.get(zip_url, headers={"Referer": "https://app-api.pixiv.net"})
+                    zresp.raise_for_status()
+                    break
+                except Exception as e:
+                    last_err = e
+            if zresp is None:
+                raise last_err
             frames = meta.get("frames") or []
             images, durations = [], []
             with zipfile.ZipFile(io.BytesIO(zresp.content)) as zf:

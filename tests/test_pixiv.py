@@ -190,7 +190,9 @@ def _ugoira_zip() -> bytes:
 
 _UGOIRA_META = {
     "ugoira_metadata": {
-        "zip_urls": {"medium": "https://i.pximg.net/img-zip-ugoira/img/2024/01/03/00/00/00/100003_ugoira600x600.zip"},
+        "zip_urls": {
+            "medium": "https://i.pximg.net/img-zip-ugoira/img/2024/01/03/00/00/00/100003_ugoira600x600.zip",
+            "large": "https://i.pximg.net/img-zip-ugoira/img/2024/01/03/00/00/00/100003_ugoira1920x1080.zip"},
         "frames": [
             {"file": "000000.jpg", "delay": 100},
             {"file": "000001.jpg", "delay": 150},
@@ -1237,6 +1239,56 @@ async def test_download_pages_compresses_oversize_pages(monkeypatch):
     assert pages[1] == b"\xff\xd8\xffsmall"
     assert pages[3] == b"\xff\xd8\xffsmall"
     assert pages[4].startswith(b"RIFF") and pages[4][8:12] == b"WEBP"
+
+
+
+# --- ugoira 帧包画质：优先 large ---
+
+async def test_ugoira_prefers_large_zip():
+    """动图帧包优先取 large（高分辨率），而非 medium。"""
+    requested = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(200, json=_UGOIRA_META)
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            requested.append(request.url.path)
+            return httpx.Response(200, content=_ugoira_zip())
+        return httpx.Response(404)
+
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+    source = _make_source(handler)
+    detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking_daily_illust", slice(4, 5), detail=detail)
+    assert pages[0].startswith(b"RIFF") and pages[0][8:12] == b"WEBP"
+    assert "ugoira1920x1080" in requested[0]
+
+
+async def test_ugoira_falls_back_to_medium_zip():
+    """large 帧包 404 → 回退 medium，转换仍成功。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(200, json=_UGOIRA_META)
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            if "ugoira1920x1080" in request.url.path:
+                return httpx.Response(404)
+            return httpx.Response(200, content=_ugoira_zip())
+        return httpx.Response(404)
+
+    source = _make_source(handler)
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
+    assert "100003_webp" in result.gallery.new_page_ids
+    assert source.pop_download_notes() == []
 
 
 async def test_test_connection_endpoint(app, monkeypatch):
