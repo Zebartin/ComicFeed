@@ -87,8 +87,6 @@ class PixivSource(BaseSource):
              "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
             {"key": "throttle", "label": "请求间隔（秒）", "type": "text",
              "placeholder": "0.1", "hint": "每页下载后的等待间隔，防限流；0 或 - 表示不等待"},
-            {"key": "max_pixels", "label": "原图长边上限（px）", "type": "text",
-             "placeholder": "0", "hint": "原图长边超过此值时降级为大图（600×1200）；0 或留空 = 始终原图。按作品级尺寸判定（API 不提供逐页尺寸）；动图（ugoira）不受影响"},
             {"key": "refresh_token", "label": "refresh_token", "type": "password",
              "credential": True, "placeholder": "pixiv 的 refresh_token（OAuth）",
              "hint": "长期凭证，加密存储。R-18 内容显示取决于账号设置：pixiv 设置 → 浏览与显示 → 显示敏感内容（未开启时 R-18 作品/榜单会被静默过滤）。"},
@@ -230,34 +228,19 @@ class PixivSource(BaseSource):
         # content=illust：插画（含多页）+ 动图混排（动图转 WebP 进同一卷）
         return itype in ("illust", "ugoira")
 
-    def _work_pages(self, item: dict, max_pixels: int = 0) -> list[tuple[str, str]]:
-        """作品的全部页：[(page_native_id, url)]。
-
-        max_pixels>0 且原图长边超过阈值 → 降级为大图（API 原生 large 字段）；
-        其余一律原图。单页作品的大图用顶层 image_urls（p0）；字段缺失回退原图。
-        """
+    def _work_pages(self, item: dict) -> list[tuple[str, str]]:
+        """作品的全部原图页：[(page_native_id, url)]。"""
         wid = str(item.get("id", ""))
         pages = []
         metas = item.get("meta_pages") or []
-        top = item.get("image_urls") or {}
-        use_large = False
-        if max_pixels > 0:
-            try:
-                long_side = max(int(item.get("width") or 0), int(item.get("height") or 0))
-            except (ValueError, TypeError):
-                long_side = 0
-            use_large = long_side > max_pixels
         if metas:
             for i, meta in enumerate(metas):
-                urls = meta.get("image_urls") or {}
-                url = urls.get("large", "") if use_large else ""
-                url = url or urls.get("original", "")
+                url = (meta.get("image_urls") or {}).get("original", "")
                 if url:
                     pages.append((f"{wid}_p{i}", url))
         else:
             single = item.get("meta_single_page") or {}
-            url = top.get("large", "") if use_large else ""
-            url = url or single.get("original_image_url", "")
+            url = single.get("original_image_url", "")
             if url:
                 pages.append((f"{wid}_p0", url))
         return pages
@@ -334,17 +317,8 @@ class PixivSource(BaseSource):
 
     async def _build_collection_detail(self, client: httpx.AsyncClient, gallery_id: str,
                                        items: list[dict], content: str) -> GalleryDetail:
-        from comicfeed.infrastructure.config import get_source_config
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
-        try:
-            _cfg = await get_source_config(self.key)
-            try:
-                _max_pixels = int(_cfg.get("max_pixels") or 0)
-            except (ValueError, TypeError):
-                _max_pixels = 0
-        except Exception:
-            _max_pixels = 0
         page_ids, page_urls, tags, writers = [], [], set(), set()
         cover_url = ""
         is_user = gallery_id.isdigit()
@@ -369,7 +343,7 @@ class PixivSource(BaseSource):
                 page_ids.append(f"{wid}_webp")
                 page_urls.append(f"pixiv-webp:{wid}")
                 continue
-            for pid, purl in self._work_pages(item, _max_pixels):
+            for pid, purl in self._work_pages(item):
                 page_ids.append(pid)
                 page_urls.append(purl)
         if is_user:

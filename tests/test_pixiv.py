@@ -1051,67 +1051,6 @@ async def test_pixiv_detail_carries_keep_page_names():
 
 
 
-# --- 画质选项 ---
-
-def test_work_pages_max_pixels():
-    """max_pixels=0 全原图；超限降级大图（多页/单页原生字段）；缺失字段回退原图。"""
-    from comicfeed.sources.pixiv import PixivSource
-    s = PixivSource()
-    item = {
-        "id": 100002, "page_count": 2, "type": "illust", "width": 6000, "height": 4000,
-        "meta_pages": [
-            {"image_urls": {"large": "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p0_master1200.jpg",
-                            "original": "https://i.pximg.net/img-original/img/x/100002_p0.jpg"}},
-            {"image_urls": {"original": "https://i.pximg.net/img-original/img/x/100002_p1.jpg"}},
-        ],
-        "meta_single_page": {},
-        "image_urls": {},
-    }
-    # 0 = 不降级
-    assert [u for _, u in s._work_pages(item, 0)] == [
-        "https://i.pximg.net/img-original/img/x/100002_p0.jpg",
-        "https://i.pximg.net/img-original/img/x/100002_p1.jpg"]
-    # 超限 → large；第 2 页无 large → 回退原图
-    assert [u for _, u in s._work_pages(item, 3000)] == [
-        "https://i.pximg.net/c/600x1200_90/img-master/img/x/100002_p0_master1200.jpg",
-        "https://i.pximg.net/img-original/img/x/100002_p1.jpg"]
-    # 未超限 → 原图
-    item["width"], item["height"] = 1500, 1200
-    assert [u for _, u in s._work_pages(item, 3000)] == [
-        "https://i.pximg.net/img-original/img/x/100002_p0.jpg",
-        "https://i.pximg.net/img-original/img/x/100002_p1.jpg"]
-    # 单页作品超限：用顶层 image_urls.large
-    single = {"id": 100001, "page_count": 1, "type": "illust", "width": 6000, "height": 4000,
-              "meta_single_page": {"original_image_url": "https://i.pximg.net/img-original/img/y/100001_p0.png"},
-              "meta_pages": [],
-              "image_urls": {"large": "https://i.pximg.net/c/600x1200_90/img-master/img/y/100001_p0_master1200.png"}}
-    assert [u for _, u in s._work_pages(single, 3000)] == [
-        "https://i.pximg.net/c/600x1200_90/img-master/img/y/100001_p0_master1200.png"]
-
-
-def test_config_schema_max_pixels_only():
-    """源配置只有「原图长边上限」，不再有画质下拉。"""
-    from comicfeed.sources.pixiv import PixivSource
-    schema = PixivSource().get_config_schema()
-    keys = [f["key"] for f in schema]
-    assert "max_pixels" in keys
-    assert "quality" not in keys
-
-
-async def test_max_pixels_mixed_by_work(monkeypatch):
-    """max_pixels=3000：超限作品降级、小图保持原图（按作品分别决策）。"""
-    async def fake_cfg(key):
-        return {"max_pixels": "3000"}
-    monkeypatch.setattr("comicfeed.infrastructure.config.get_source_config", fake_cfg)
-    source = _make_source(_ranking_handler)
-    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
-    urls = result.gallery.detail.page_urls
-    # work1 6000px → large；work2 1500px → 原图
-    assert any("600x1200_90" in u for u in urls)
-    assert any("img-original" in u for u in urls)
-
-
-
 # --- 分卷页名回归 ---
 
 async def test_split_volumes_use_correct_page_names():
