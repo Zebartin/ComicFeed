@@ -90,6 +90,8 @@ class PixivSource(BaseSource):
             {"key": "refresh_token", "label": "refresh_token", "type": "password",
              "credential": True, "placeholder": "pixiv 的 refresh_token（OAuth）",
              "hint": "长期凭证，加密存储。R-18 内容显示取决于账号设置：pixiv 设置 → 浏览与显示 → 显示敏感内容（未开启时 R-18 作品/榜单会被静默过滤）。"},
+            {"key": "max_mb", "label": "图片大小上限（MB）", "type": "text",
+             "placeholder": "0", "hint": "单图超过此大小时程序内压缩（降质重编码/降分辨率，尽力压缩不保证达标）；0 或留空 = 不压缩；动图（ugoira）不受影响"},
         ]
 
     def parse_url(self, url: str) -> str | None:
@@ -157,6 +159,53 @@ class PixivSource(BaseSource):
                 return False, f"连接失败: {e}"
 
     # --- 作品/集合构建 ---
+
+    @staticmethod
+    def _max_bytes_from_cfg(cfg: dict) -> int:
+        try:
+            mb = float(cfg.get("max_mb") or 0)
+        except (ValueError, TypeError):
+            return 0
+        return int(mb * 1024 * 1024) if mb > 0 else 0
+
+    @staticmethod
+    def _compress_image(data: bytes, limit: int) -> bytes:
+        """超限图片程序内压缩：JPEG 降质重编码（85/75/65），仍超限则长边降到 2400 再压。
+
+        RGBA PNG（含透明）不动；RGB PNG 转 JPEG；无法解码原样返回。尽力压缩，不保证严格达标。
+        """
+        import io
+        from PIL import Image
+        if len(data) <= limit:
+            return data
+        try:
+            im = Image.open(io.BytesIO(data))
+            im.load()
+        except Exception:
+            return data
+        fmt = im.format
+        if fmt == "JPEG":
+            for quality in (85, 75, 65):
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=quality, optimize=True)
+                out = buf.getvalue()
+                if len(out) <= limit or quality == 65:
+                    return out
+        elif fmt == "PNG":
+            if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+                return data  # 透明 PNG 不转换
+            im = im.convert("RGB")
+        else:
+            return data
+        # 分辨率兜底：长边降到 2400，quality 85
+        w, h = im.size
+        long_side = max(w, h)
+        if long_side > 2400:
+            scale = 2400 / long_side
+            im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=85, optimize=True)
+        return buf.getvalue()
 
     @staticmethod
     def _throttle_from_cfg(cfg: dict) -> float:
@@ -511,7 +560,9 @@ class PixivSource(BaseSource):
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
         _retry = int(await get_setting("download_retry") or 3)
-        _throttle = self._throttle_from_cfg(await get_source_config(self.key))
+        _cfg = await get_source_config(self.key)
+        _throttle = self._throttle_from_cfg(_cfg)
+        _max_bytes = self._max_bytes_from_cfg(_cfg)
         if detail is None:
             detail = await self.get_gallery(gallery_id, gallery_url=gallery_url)
         urls = detail.page_urls[page_range]
@@ -535,7 +586,14 @@ class PixivSource(BaseSource):
                         _log.error("下载图片失败(重试%d次): gallery=%s page=%d - %r",
                                    _retry, gallery_id, page_range.start + i + 1, e)
                         raise
-                    results.append(resp.content)
+                    data = resp.content
+                    if _max_bytes > 0 and len(data) > _max_bytes:
+                        compressed = self._compress_image(data, _max_bytes)
+                        if len(compressed) < len(data):
+                            _log.info("pixiv 图片压缩: %s %dKB → %dKB", url,
+                                      len(data) // 1024, len(compressed) // 1024)
+                        data = compressed
+                    results.append(data)
                     if on_page:
                         on_page()
                 if _throttle > 0:

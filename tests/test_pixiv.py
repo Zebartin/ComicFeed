@@ -1108,6 +1108,103 @@ async def test_incremental_append_names_only_new_pages():
 
 
 
+
+# --- 图片大小上限：程序内压缩 ---
+
+def _noise_jpeg(size: int = 1200, quality: int = 95) -> bytes:
+    import io
+    import random
+    from PIL import Image
+    random.seed(42)
+    im = Image.new("RGB", (size, size))
+    px = im.load()
+    for y in range(0, size, 4):
+        for x in range(0, size, 4):
+            c = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            for dy in range(4):
+                for dx in range(4):
+                    px[x + dx, y + dy] = c
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=quality)
+    return buf.getvalue()
+
+
+def test_max_bytes_config_parsing():
+    """"图片大小上限"配置：0/留空/非法 = 不压缩；否则换算为字节。"""
+    from comicfeed.sources.pixiv import PixivSource
+    assert PixivSource._max_bytes_from_cfg({}) == 0
+    assert PixivSource._max_bytes_from_cfg({"max_mb": "0"}) == 0
+    assert PixivSource._max_bytes_from_cfg({"max_mb": "abc"}) == 0
+    assert PixivSource._max_bytes_from_cfg({"max_mb": "1"}) == 1048576
+
+
+def test_compress_image_small_and_invalid_untouched():
+    """未超限/无法解码的字节原样返回。"""
+    from comicfeed.sources.pixiv import PixivSource
+    small = _noise_jpeg(200, 80)
+    assert PixivSource._compress_image(small, 10_000_000) == small
+    assert PixivSource._compress_image(b"\x00\x01not-an-image", 100) == b"\x00\x01not-an-image"
+
+
+def test_compress_image_jpeg_shrinks():
+    """超限 JPEG：重编码后显著变小且仍为合法 JPEG（尽力压缩，不保证严格达标）。"""
+    from comicfeed.sources.pixiv import PixivSource
+    big = _noise_jpeg(2400, 95)
+    out = PixivSource._compress_image(big, 200_000)
+    assert len(out) < len(big) * 0.5
+    assert out.startswith(b"\xff\xd8\xff")
+
+
+def test_compress_image_rgba_png_untouched_rgb_png_to_jpeg():
+    """RGBA PNG（透明）不动；RGB PNG 转 JPEG 变小。"""
+    import io
+    from PIL import Image
+    from comicfeed.sources.pixiv import PixivSource
+    rgba = io.BytesIO()
+    Image.new("RGBA", (800, 800), (255, 0, 0, 128)).save(rgba, "PNG")
+    assert PixivSource._compress_image(rgba.getvalue(), 1000) == rgba.getvalue()
+    rgb = io.BytesIO()
+    Image.new("RGB", (800, 800), (0, 128, 255)).save(rgb, "PNG")
+    out = PixivSource._compress_image(rgb.getvalue(), 1000)
+    assert out.startswith(b"\xff\xd8\xff")
+
+
+async def test_download_pages_compresses_oversize_pages(monkeypatch):
+    """下载时超限页压缩、小页与动图页原样。"""
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+    big = _noise_jpeg(1200, 95)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(200, json=_UGOIRA_META)
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            return httpx.Response(200, content=_ugoira_zip())
+        if request.url.host == "i.pximg.net":
+            if "100001" in request.url.path:
+                return httpx.Response(200, content=big)
+            return httpx.Response(200, content=b"\xff\xd8\xffsmall")
+
+    async def fake_cfg(key):
+        return {"max_mb": "0.2"}
+
+    monkeypatch.setattr("comicfeed.infrastructure.config.get_source_config", fake_cfg)
+    source = _make_source(handler)
+    detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking_daily_illust", slice(0, 5), detail=detail)
+    # 第 1 页（大图）被压缩变小且合法；小图原样；webp 页（索引 4）不受影响
+    assert len(pages[0]) < len(big)
+    assert pages[0].startswith(b"\xff\xd8\xff")
+    assert pages[1] == b"\xff\xd8\xffsmall"
+    assert pages[3] == b"\xff\xd8\xffsmall"
+    assert pages[4].startswith(b"RIFF") and pages[4][8:12] == b"WEBP"
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()
