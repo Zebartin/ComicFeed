@@ -350,9 +350,12 @@ class PixivSource(BaseSource):
                 try:
                     zresp = await client.get(zip_url, headers={"Referer": "https://app-api.pixiv.net"})
                     zresp.raise_for_status()
+                    _log.info("pixiv 动图帧包: work=%s %s", wid, zip_url.rsplit("/", 1)[-1])
                     break
                 except Exception as e:
                     last_err = e
+                    _log.warning("pixiv 动图帧包拉取失败(回退下一档): work=%s %s - %r",
+                                 wid, zip_url.rsplit("/", 1)[-1], e)
             if zresp is None:
                 raise last_err
             frames = meta.get("frames") or []
@@ -375,6 +378,8 @@ class PixivSource(BaseSource):
                                duration=durations, loop=0)
             data = buf.getvalue()
             _webp_cache[wid] = (time.time(), data)
+            _log.info("pixiv 动图转换完成: work=%s 帧=%d 首帧=%dx%d webp=%dKB",
+                      wid, len(images), images[0].width, images[0].height, len(data) // 1024)
             return data
         except Exception as e:
             _log.warning("pixiv 动图转换失败: %s %s - %r", wid, title, e)
