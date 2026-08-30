@@ -1010,6 +1010,40 @@ async def test_ranking_incremental_appends_by_title():
         assert len(pages) == 3
 
 
+
+# --- 保留原始页面文件名 ---
+
+def test_pack_cbz_keeps_original_page_names():
+    """keep_page_names=True：条目名含 artwork id，页码三位补零保证字典序=数字序。"""
+    import io
+    import zipfile
+    from comicfeed.io.cbz import pack_cbz
+    from comicfeed.sources.base import GalleryDetail
+    # 12 页作品：不补零时 p10 会排在 p2 前
+    ids = [f"149035907_p{i}" for i in range(1, 13)]
+    detail = GalleryDetail(
+        native_id="2350706", title="T", cover_url="", web_url="",
+        page_urls=["http://x/x.jpg"] * 12,
+        page_native_ids=ids,
+        reported_pages=12, keep_page_names=True)
+    buf = io.BytesIO()
+    pack_cbz(buf, "t.cbz", detail, [b"\xff\xd8\xffa"] * 12)
+    buf.seek(0)
+    with zipfile.ZipFile(buf) as z:
+        names = [n for n in z.namelist() if not n.endswith(".xml")]
+    assert names[0] == "149035907_p001.jpg"
+    assert names[-1] == "149035907_p012.jpg"
+    # 阅读器按名字典序：补零后排序即页码顺序
+    assert sorted(names) == names
+
+
+async def test_pixiv_detail_carries_keep_page_names():
+    """pixiv 的 detail 声明保留原始页面文件名。"""
+    source = _make_source(_ranking_handler)
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
+    assert result.gallery.detail.keep_page_names is True
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

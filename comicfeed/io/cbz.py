@@ -137,5 +137,15 @@ def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[byte
     with ZipFile(output, "w", ZIP_DEFLATED) as z:
         for i, data in enumerate(pages, start_page):
             ext = _guess_ext(data) if data else ".jpg"
-            z.writestr(f"{i:04d}{ext}", data)
+            base = f"{i:04d}"
+            if getattr(detail, "keep_page_names", False):
+                idx = i - start_page
+                if idx < len(detail.page_native_ids):
+                    pid = sanitize_filename(detail.page_native_ids[idx])
+                    # 页码三位补零：保留 artwork id 且字典序=数字序（p002 < p010）
+                    m = re.match(r"^(.*)_p(\d+)$", pid)
+                    pid = f"{m.group(1)}_p{int(m.group(2)):03d}" if m else pid
+                    if pid:
+                        base = pid
+            z.writestr(f"{base}{ext}", data)
         z.writestr("ComicInfo.xml", _build_comicinfo(detail, number))
