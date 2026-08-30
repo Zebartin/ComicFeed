@@ -777,7 +777,7 @@ async def test_cover_proxy(app, monkeypatch):
 
 async def test_tag_dump_logged_per_work(caplog):
     """每个作品的原始标签对（name=translated_name）记录到日志，供人工核对翻译策略。"""
-    with caplog.at_level("INFO"):
+    with caplog.at_level("DEBUG"):
         source = _make_source(_ranking_handler)
         await source.check_updates("ranking:daily:illust", {"page_ids": []})
     lines = [r.message for r in caplog.records]
@@ -796,7 +796,7 @@ async def test_tag_selection_prefers_cjk_translation():
     from comicfeed.sources.pixiv import PixivSource
     pairs = [
         ({"name": "原神", "translated_name": "Genshin Impact"}, "原神"),
-        ({"name": "GenshinImpact", "translated_name": None}, "GenshinImpact"),
+        ({"name": "GenshinImpact", "translated_name": None}, None),  # 无翻译且原文无汉字 → 丢弃
         ({"name": "尻神様", "translated_name": "尻神样"}, "尻神样"),
         ({"name": "九条裟羅", "translated_name": "Kujou Sara"}, "九条裟羅"),
         ({"name": "夜蘭", "translated_name": "Yelan"}, "夜蘭"),
@@ -805,6 +805,7 @@ async def test_tag_selection_prefers_cjk_translation():
         ({"name": "甘雨(原神)", "translated_name": "Ganyu (Genshin Impact)"}, "甘雨(原神)"),
         ({"name": "原神10000users入り", "translated_name": "原神10000收藏"}, "原神10000收藏"),
         ({"name": "R-18", "translated_name": "R-18"}, "R-18"),
+        ({"name": "Pixiv", "translated_name": "PIXIV"}, "Pixiv"),  # 双方无汉字 → 用原文
     ]
     for tag, expected in pairs:
         assert PixivSource._pick_tag(tag) == expected

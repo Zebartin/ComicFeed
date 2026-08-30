@@ -165,12 +165,12 @@ class PixivSource(BaseSource):
         if not name:
             return translated or None
         if not translated:
-            return name
+            return name if cls._has_cjk(name) else None
         if cls._has_cjk(translated):
             return translated
         if cls._has_cjk(name):
             return name  # 罗马音/英文翻译不如原文可读
-        return translated  # 两边都无汉字（如 ASCII 标签），用官方翻译
+        return name  # 两边都无汉字（如 ASCII 标签），用原文
 
     @staticmethod
     def _match_content(item: dict, content: str) -> bool:
@@ -268,7 +268,7 @@ class PixivSource(BaseSource):
         is_user = gallery_id.startswith("user_")
         for item in items:
             # 诊断：输出原始标签对，供人工核对官方翻译策略（name=translated_name）
-            _log.info("pixiv 标签明细 gallery=%s work=%s: %s", gallery_id, item.get("id"),
+            _log.debug("pixiv 标签明细 gallery=%s work=%s: %s", gallery_id, item.get("id"),
                       " | ".join(f"{t.get('name')}={t.get('translated_name')}"
                                  for t in (item.get("tags") or [])) or "(无标签)")
             if not cover_url:
