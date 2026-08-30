@@ -1436,6 +1436,85 @@ async def test_check_does_not_convert_ugoira():
     assert meta_hits == []  # 检查阶段不拉 metadata、不拉帧
 
 
+
+# --- 分卷 ComicInfo 标签：只含该卷作品 ---
+
+def _read_cbz_tags(path: str) -> list[str]:
+    import zipfile
+    import xml.etree.ElementTree as ET
+    with zipfile.ZipFile(path) as z:
+        root = ET.fromstring(z.read("ComicInfo.xml"))
+        el = root.find("Tags")
+        return [t.strip() for t in (el.text or "").split(",") if t.strip()] if el is not None else []
+
+
+async def test_split_volumes_tags_scoped_per_volume():
+    """分卷：每卷 ComicInfo 标签只含该卷作品的标签。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    detail = GalleryDetail(
+        native_id="2350706", title="画师名", cover_url="", web_url="",
+        page_urls=[f"http://fake.local/{i}.jpg" for i in range(4)],
+        page_native_ids=["100001_p0", "100001_p1", "100002_p0", "100002_p1"],
+        page_tags=[["原创"], ["原创"], ["大腿"], ["大腿"]],
+        tags=["原创", "大腿"],
+        reported_pages=4, keep_page_names=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                        output_dir=tmp, detail=detail, save_to_db=True,
+                                        cbz_max_pages=2)
+        assert len(result.files) == 2
+        t1, t2 = _read_cbz_tags(result.files[0]), _read_cbz_tags(result.files[1])
+    assert t1 == ["原创"]
+    assert t2 == ["大腿"]
+
+
+async def test_incremental_volume_tags_merge_old_and_new():
+    """增量追加：合并卷标签 = 旧卷标签 ∪ 新作品标签。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    base = dict(native_id="2350706", title="画师名", cover_url="", web_url="", keep_page_names=True)
+    first = GalleryDetail(page_urls=["http://fake.local/a.jpg", "http://fake.local/b.jpg"],
+                          page_native_ids=["100001_p0", "100001_p1"],
+                          page_tags=[["原创"], ["原创"]], tags=["原创"], reported_pages=2, **base)
+    second = GalleryDetail(page_urls=["http://fake.local/c.jpg"],
+                           page_native_ids=["100002_p0"],
+                           page_tags=[["大腿"]], tags=["大腿"], reported_pages=1, **base)
+    with tempfile.TemporaryDirectory() as tmp:
+        await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                               output_dir=tmp, detail=first, save_to_db=True)
+        r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                    output_dir=tmp, detail=second, save_to_db=True, append_pages=True)
+        tags = _read_cbz_tags(r2.files[0])
+    assert sorted(tags) == ["原创", "大腿"]
+
+
+async def test_pixiv_detail_carries_page_tags():
+    """pixiv detail 携带页级标签（与页 ID 对齐），增量过滤后同步裁剪。"""
+    source = _make_source(_ranking_handler)
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
+    d = result.gallery.detail
+    assert len(d.page_tags) == len(d.page_native_ids) == 5
+    assert d.page_tags[0] == ["原创"]
+    assert d.page_tags[1] == ["女の子"]
+    assert d.page_tags[4] == []  # ugoira 无标签
+    # 增量：只保留新页的页级标签
+    result2 = await source.check_updates(
+        "ranking_daily_illust",
+        {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]})
+    d2 = result2.gallery.detail
+    assert d2.page_native_ids == ["100003_webp"]
+    assert d2.page_tags == [[]]
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

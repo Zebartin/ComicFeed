@@ -32,6 +32,20 @@ def strip_ads(cache_dir: str, detail, total: int, tags: list[str]) -> tuple[int,
     return min(ad_count, total), tags
 
 
+def _read_comicinfo_tags(cbz_path: str) -> list[str]:
+    """读取 CBZ 内 ComicInfo.xml 的 Tags 字段。"""
+    try:
+        with _ZipFile(cbz_path, "r") as z:
+            if "ComicInfo.xml" in z.namelist():
+                root = ET.fromstring(z.read("ComicInfo.xml"))
+                el = root.find("Tags")
+                if el is not None and el.text:
+                    return [t.strip() for t in el.text.split(",") if t.strip()]
+    except Exception:
+        pass
+    return []
+
+
 def _read_comicinfo_number(cbz_path: str) -> str:
     """读取 CBZ 内 ComicInfo.xml 的 Number 字段。"""
     try:
@@ -76,8 +90,11 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
     # 展示用 ID：detail.display_id 显式设置时用它（"" = 文件名/ComicInfo 省略 ID）
     display_gid = gallery_id if getattr(detail, "display_id", None) is None else detail.display_id
 
-    # 合并卷使用旧 CBZ 的 Number；新建卷扫描目录取最大 Number + 1
+    # 合并卷使用旧 CBZ 的 Number 与旧标签；新建卷扫描目录取最大 Number + 1
     old_vol_number = ""
+    old_tags: list[str] = []
+    if append_ctx and append_ctx.old_cbz_paths:
+        old_tags = _read_comicinfo_tags(append_ctx.old_cbz_paths[0])
     next_vol = 1
     if append_ctx and append_ctx.old_cbz_paths and do_split:
         old_vol_number = _read_comicinfo_number(append_ctx.old_cbz_paths[0])
@@ -85,21 +102,30 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
         max_num = _read_newest_number(output_dir)
         next_vol = max(max_num, 0) + 1 if max_num else 1
 
-    def _pack_vol(vol_pages, start_page, number=None):
+    def _pack_vol(vol_pages, start_page, number=None, base_tags=None):
         if not vol_pages:
             return None
         if number is None:
             number = str((start_page // cbz_max_pages) + 1) if do_split else display_gid
+        old_n = (append_ctx.start_page + len(append_ctx.old_pages)) if (
+            append_ctx and append_ctx.old_pages) else 0
         # 保留页名：按绝对页序逐页取 id；旧页（追加合并）无 id → 回退序号
         page_ids = None
         if getattr(detail, "keep_page_names", False):
             pids = detail.page_native_ids
-            old_n = (append_ctx.start_page + len(append_ctx.old_pages)) if (
-                append_ctx and append_ctx.old_pages) else 0
             page_ids = []
             for j in range(len(vol_pages)):
                 rel = start_page + j - old_n
                 page_ids.append(pids[rel] if 0 <= rel < len(pids) else "")
+        # 卷级标签：该卷页的标签并集；合并卷并入旧卷标签
+        vol_tags = None
+        if getattr(detail, "page_tags", None):
+            tagset = set(base_tags or [])
+            for j in range(len(vol_pages)):
+                rel = start_page + j - old_n
+                if 0 <= rel < len(detail.page_tags):
+                    tagset.update(detail.page_tags[rel])
+            vol_tags = sorted(t for t in tagset if t)
         fname = make_cbz_name(display_gid, title, start_page + 1,
                               start_page + len(vol_pages),
                               total_pages=0 if do_split else len(vol_pages))
@@ -107,7 +133,7 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
         _log.debug("打包 CBZ: %s (%d 页)", os.path.basename(fpath), len(vol_pages))
         with open(fpath, "wb") as f:
             pack_cbz(f, fname, detail, vol_pages, start_page=start_page + 1, number=number,
-                     page_ids=page_ids)
+                     page_ids=page_ids, tags=vol_tags)
         return fpath
 
     files = []
@@ -118,7 +144,8 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
         if do_split and append_ctx.vacancy > 0:
             fill = min(append_ctx.vacancy, total)
             pages = append_ctx.old_pages + read_from_cache(cache_dir, detail, 0, fill)
-            fp = _pack_vol(pages, append_ctx.start_page, number=old_vol_number or None)
+            fp = _pack_vol(pages, append_ctx.start_page, number=old_vol_number or None,
+                           base_tags=old_tags)
             if fp:
                 files.append(fp)
             _log.debug("合并第一卷: old=%d fill=%d start=%d",
@@ -127,7 +154,7 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
             page_offset = append_ctx.start_page + len(append_ctx.old_pages) + fill
         else:
             pages = append_ctx.old_pages + read_from_cache(cache_dir, detail, 0, total)
-            fp = _pack_vol(pages, 0, number=old_vol_number or None)
+            fp = _pack_vol(pages, 0, number=old_vol_number or None, base_tags=old_tags)
             if fp:
                 files.append(fp)
             _log.debug("不分卷合并: old=%d new=%d", len(append_ctx.old_pages), total)

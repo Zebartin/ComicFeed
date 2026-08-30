@@ -26,6 +26,7 @@ class GalleryDetail:
     num_favorites: int = 0
     display_id: str | None = None  # 文件名/ComicInfo 展示用 ID；None=用 native_id，""=省略
     keep_page_names: bool = False  # CBZ 条目名保留 page_native_ids（如 pixiv 的 149035907_p2）
+    page_tags: list[list[str]] = field(default_factory=list)  # 与 page_native_ids 对齐的页级标签
 
 
 @dataclass

@@ -41,6 +41,7 @@ Status: ready-for-agent
 - **新源插件**：pixiv 实现为独立 Source 插件（ADR 0001 模型），`key="pixiv"`、`AuthSchema.TOKEN`，无沙箱、随启动扫描加载。
 - **Gallery 映射语义**：画师 = 一个 Gallery（native_id 为**纯数字 uid**），榜单 = 一个 Gallery（native_id 为 `ranking_{mode}_{content}`，mode 可含下划线、content ∈ all/illust/manga/ugoira；all=综合榜全类型混排）；Gallery 的页面 = 作品的全部页。这是 pixiv 源与现有两个源的语义差异，仅存在于源插件内部，不改动系统 Gallery 模型。
 - **页面 ID 与增量**：插画/漫画页的 page_native_id 为 `{illust_id}_p{n}`，动图页为 `{illust_id}_webp`；`check_updates` 按作品 ID 差集返回 `new_page_ids`，复用现有「新页追加到最后 CBZ 卷」的增量机制。
+- **卷级标签**：`GalleryDetail.page_tags` 携带与 `page_native_ids` 对齐的页级标签（每页 = 其作品的标签），打包器按卷内页取并集写入 ComicInfo（合并卷并入旧卷标签）；无页级标签的源回退 `detail.tags` 全量标签。
 - **页序**：画师 Gallery 按作品 ID 升序（旧→新，新作自然追加到末尾）；榜单 Gallery 按首次收录顺序。
 - **榜单检查边界**：榜单订阅每次检查只取第一页；按作品 ID 在画廊内去重（该榜单 Gallery 中已收录的作品永不再收录于其中；不同榜单 Gallery 之间不做跨画廊去重，物理上各存各卷）。
 - **画师检查深度**：首次检查翻全部作品页（受订阅 `max_search_pages` 上限保护：0=只翻第 1 页；1（订阅默认）=翻到底；≥2=上限 N 页）；后续巡检只翻第 1 页做差集。检查阶段**先按作品 ID 去重**，且**动图转换整体推迟到下载阶段**：检查零动图请求（只登记作品信息 + 页标记 `pixiv-webp:{wid}`），下载时按需转换（三级帧源）。转换失败 → 该画廊下载失败、队列可重试（不再走跳过说明通道）；转换产物短时缓存供重试复用；作品信息缓存过期（1 小时）需重新检查。

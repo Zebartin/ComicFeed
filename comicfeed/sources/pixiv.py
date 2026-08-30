@@ -456,6 +456,7 @@ class PixivSource(BaseSource):
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
         page_ids, page_urls, tags, writers = [], [], set(), set()
+        page_tags = []
         cover_url = ""
         is_user = gallery_id.isdigit()
         for item in items:
@@ -463,24 +464,24 @@ class PixivSource(BaseSource):
             _log.debug("pixiv 标签明细 gallery=%s work=%s: %s", gallery_id, item.get("id"),
                       " | ".join(f"{t.get('name')}={t.get('translated_name')}"
                                  for t in (item.get("tags") or [])) or "(无标签)")
+            work_tags = sorted(t for t in (self._pick_tag(t) for t in item.get("tags", [])) if t)
+            tags.update(work_tags)
             if not cover_url:
                 cover_url = (item.get("image_urls") or {}).get("medium", "")
             if is_user:
                 writers.add((item.get("user") or {}).get("name", ""))
-            for t in item.get("tags", []):
-                tag = self._pick_tag(t)
-                if tag:
-                    tags.add(tag)
             if item.get("type") == "ugoira":
                 # 转换推迟到下载阶段：此处只登记作品信息 + 页标记
                 wid = str(item.get("id", ""))
                 _ugoira_items[wid] = (time.time(), item)
                 page_ids.append(f"{wid}_webp")
                 page_urls.append(f"pixiv-webp:{wid}")
+                page_tags.append(work_tags)
                 continue
             for pid, purl in self._work_pages(item):
                 page_ids.append(pid)
                 page_urls.append(purl)
+                page_tags.append(work_tags)
         if is_user:
             name = next(((it.get("user") or {}).get("name", "") for it in items), "")
             title = name or gallery_id
@@ -498,6 +499,7 @@ class PixivSource(BaseSource):
             reported_pages=len(page_ids),
             display_id="" if not is_user else None,  # 榜单为非数字 ID：文件名/ComicInfo 省略
             keep_page_names=True,  # 保留 pixiv 原始页面文件名（如 149035907_p2）
+            page_tags=page_tags,
         )
 
     async def _fetch_ranking_items(self, client: httpx.AsyncClient, gallery_id: str, content: str) -> list[dict]:
@@ -606,6 +608,7 @@ class PixivSource(BaseSource):
             upload_date=detail.upload_date, reported_pages=len(keep_idx),
             num_favorites=detail.num_favorites, display_id=detail.display_id,
             keep_page_names=detail.keep_page_names,
+            page_tags=[detail.page_tags[i] for i in keep_idx] if detail.page_tags else [],
         )
         _gc.update_cache_set(detail.native_id, filtered)
         return UpdateResult(has_updates=True, gallery=GallerySummary(

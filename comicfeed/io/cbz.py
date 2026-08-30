@@ -84,7 +84,7 @@ def read_cbz_pages(path: str) -> list[bytes]:
     return pages
 
 
-def _build_comicinfo(detail: GalleryDetail, number: str = "") -> bytes:
+def _build_comicinfo(detail: GalleryDetail, number: str = "", tags: list[str] | None = None) -> bytes:
     root = ET.Element("ComicInfo")
     ET.SubElement(root, "Title").text = detail.title
     if not number:
@@ -92,7 +92,9 @@ def _build_comicinfo(detail: GalleryDetail, number: str = "") -> bytes:
     ET.SubElement(root, "Number").text = number or ""
     if detail.writers:
         ET.SubElement(root, "Writer").text = ", ".join(detail.writers)
-    ET.SubElement(root, "Tags").text = ", ".join(detail.tags)
+    if tags is None:
+        tags = detail.tags
+    ET.SubElement(root, "Tags").text = ", ".join(tags)
     if detail.upload_date:
         try:
             from datetime import datetime
@@ -138,10 +140,11 @@ def _pad_page_id(pid: str) -> str:
     return f"{m.group(1)}_p{int(m.group(2)):03d}" if m else pid
 
 
-def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1, number: str = "", page_ids: list[str] | None = None):
+def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[bytes], start_page: int = 1, number: str = "", page_ids: list[str] | None = None, tags: list[str] | None = None):
     """打包 CBZ 文件到 output，页码从 start_page 开始编号。number 为 ComicInfo Number。
 
     page_ids 与 pages 逐页对齐（绝对页序，由打包器计算）：为空串的页回退序号命名。
+    tags 为卷级标签（None = 用 detail.tags）。
     """
     with ZipFile(output, "w", ZIP_DEFLATED) as z:
         for j, data in enumerate(pages):
@@ -160,4 +163,4 @@ def pack_cbz(output: BytesIO, name: str, detail: GalleryDetail, pages: list[byte
                     if pid:
                         base = _pad_page_id(pid)
             z.writestr(f"{base}{ext}", data)
-        z.writestr("ComicInfo.xml", _build_comicinfo(detail, number))
+        z.writestr("ComicInfo.xml", _build_comicinfo(detail, number, tags))
