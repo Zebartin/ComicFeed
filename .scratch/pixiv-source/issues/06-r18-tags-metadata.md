@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — 插画日榜端到端（tracer bullet）；03 — 画师订阅：全量首检 + 增量巡检
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] web 榜单 mode（含各 R-18 模式）→ app mode 映射表正确
 - [ ] 请求携带 Accept-Language: zh-cn（mock 断言）

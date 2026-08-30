@@ -6,6 +6,7 @@ API 与图片请求需 iOS App 身份，图片下载需 Referer。
 
 import asyncio
 import hashlib
+import json
 import re
 import time
 from collections.abc import Callable
@@ -268,6 +269,31 @@ class PixivSource(BaseSource):
         j = resp.json()
         return j.get("illusts") or [], bool(j.get("next_url"))
 
+    def _apply_work_filters(self, items: list[dict], filters_json: str) -> list[dict]:
+        """订阅筛选条件按作品逐个应用（收藏数/页数/上传日期），不达标的作品不收录。"""
+        if not filters_json:
+            return items
+        try:
+            rules = json.loads(filters_json)
+        except (json.JSONDecodeError, TypeError):
+            return items
+        if not rules:
+            return items
+        from comicfeed.services.subscription import _matches_filter
+        kept = []
+        for it in items:
+            g = GallerySummary(
+                native_id=str(it.get("id", "")),
+                title=it.get("title", ""),
+                cover_url="",
+                page_count=int(it.get("page_count") or 0),
+                num_favorites=int(it.get("total_bookmarks") or 0),
+                upload_date=(it.get("create_date") or "")[:10],
+            )
+            if _matches_filter(g, rules):
+                kept.append(it)
+        return kept
+
     @staticmethod
     def _ranking_url(gallery_id: str) -> str:
         _, mode, content = gallery_id.split(":", 2)
@@ -334,6 +360,7 @@ class PixivSource(BaseSource):
     async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
         old_ids = last_known.get("page_ids") or []
         max_pages = int(last_known.get("max_pages") or 0)
+        filters = last_known.get("filters") or ""
         async with self._client() as client:
             await self._ensure_token(client)
             if gallery_id.startswith("user:"):
@@ -354,12 +381,14 @@ class PixivSource(BaseSource):
                         if max_pages >= 2 and fetched >= max_pages:
                             break
                         offset += 30
+                items = self._apply_work_filters(items, filters)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
                 detail = await self._build_collection_detail(client, gallery_id, items, "illust",
                                                              title=f"user:{uid}")
             elif gallery_id.startswith("ranking:"):
                 _, _, content = gallery_id.split(":", 2)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
+                items = self._apply_work_filters(items, filters)
                 detail = await self._build_collection_detail(client, gallery_id, items, content)
             else:
                 return UpdateResult()

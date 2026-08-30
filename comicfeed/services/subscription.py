@@ -180,7 +180,8 @@ async def track_gallery(
     old_ids = await ids_for_gallery(session, full_gid)
 
     result = await source.check_updates(
-        gid, {"page_ids": old_ids, "max_pages": sub.search_pages or 0}, gallery_url=gurl)
+        gid, {"page_ids": old_ids, "max_pages": sub.search_pages or 0,
+              "filters": sub.filter_rules or ""}, gallery_url=gurl)
 
     sub.last_checked_at = datetime.now()
     await session.commit()

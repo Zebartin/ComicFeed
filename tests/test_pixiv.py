@@ -416,7 +416,7 @@ async def test_track_gallery_passes_max_pages():
         session.add(sub)
         await session.commit()
         await track_gallery(session, sub, _Capture())
-    assert captured == {"page_ids": [], "max_pages": 7}
+    assert captured == {"page_ids": [], "max_pages": 7, "filters": ""}
 
 
 
@@ -518,6 +518,80 @@ async def test_download_service_records_skip_notes_as_failed_events():
     assert f.error == "动图转换失败: boom"
     assert f.subscription_id == 7
     assert f.gallery_id == "note-src:x"
+
+
+
+# --- 05: 榜单增量 + 作品级筛选 ---
+
+async def test_work_filter_favorites_applied_per_work():
+    """收藏数筛选按作品逐个应用：不达标作品整件排除（含其全部页）。"""
+    source = _make_source(_ranking_handler)
+    filters = '[{"field": "num_favorites", "op": "gte", "value": 500}]'
+    result = await source.check_updates("ranking:daily:illust", {"page_ids": [], "filters": filters})
+    assert result.gallery.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]
+
+
+async def test_work_filter_page_count_applied_per_work():
+    """页数筛选按作品页数生效。"""
+    source = _make_source(_ranking_handler)
+    filters = '[{"field": "page_count", "op": "gte", "value": 3}]'
+    result = await source.check_updates("ranking:daily:illust", {"page_ids": [], "filters": filters})
+    assert result.gallery.new_page_ids == ["100002_p0", "100002_p1", "100002_p2"]
+
+
+async def test_work_filter_upload_date():
+    """上传日期筛选：since_days 足够大全部保留，0 则全部排除（无更新）。"""
+    source = _make_source(_ranking_handler)
+    result = await source.check_updates("ranking:daily:illust",
+                                        {"page_ids": [], "filters": '[{"field": "upload_date", "op": "since_days", "value": 100000}]'})
+    assert len(result.gallery.new_page_ids) == 5
+    source2 = _make_source(_ranking_handler)
+    result2 = await source2.check_updates("ranking:daily:illust",
+                                          {"page_ids": [], "filters": '[{"field": "upload_date", "op": "since_days", "value": 0}]'})
+    assert result2.has_updates is False
+
+
+async def test_work_filters_apply_to_artist_collection():
+    """画师订阅同样按作品应用筛选。"""
+    handler, requested = _make_user_handler({
+        0: {"illusts": [
+            {**_user_item(100012), "total_bookmarks": 10},
+            {**_user_item(100011), "total_bookmarks": 900},
+        ], "next": False},
+    })
+    source = _make_source(handler)
+    filters = '[{"field": "num_favorites", "op": "gte", "value": 500}]'
+    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1, "filters": filters})
+    assert result.gallery.new_page_ids == ["100011_p0"]
+
+
+async def test_track_gallery_passes_filters():
+    """服务层把订阅的 filter_rules 原样传给源的 check_updates。"""
+    from comicfeed.infrastructure.database import create_tables, get_session, init_db
+    from comicfeed.models import Subscription
+    from comicfeed.services.subscription import track_gallery
+    init_db(":memory:")
+    await create_tables()
+
+    captured = {}
+
+    class _Capture:
+        key = "pixiv"
+        def parse_url(self, url):
+            return "pixiv:user:20000"
+        async def check_updates(self, gallery_id, last_known, gallery_url=""):
+            captured.update(last_known)
+            from comicfeed.sources.base import UpdateResult
+            return UpdateResult()
+
+    rules = '[{"field": "num_favorites", "op": "gte", "value": 100}]'
+    async with get_session() as session:
+        sub = Subscription(name="t", source_key="pixiv", query="https://www.pixiv.net/users/20000",
+                           mode="SPECIFIC_GALLERY", search_pages=7, filter_rules=rules)
+        session.add(sub)
+        await session.commit()
+        await track_gallery(session, sub, _Capture())
+    assert captured == {"page_ids": [], "max_pages": 7, "filters": rules}
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

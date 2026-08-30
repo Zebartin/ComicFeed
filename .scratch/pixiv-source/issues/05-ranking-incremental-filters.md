@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — 插画日榜端到端（tracer bullet）；03 — 画师订阅：全量首检 + 增量巡检
 
-**Status:** claimed
+**Status:** resolved
 
 - [ ] 榜单巡检每次只请求第一页
 - [ ] 已收录作品（含重复上榜）不再收录
