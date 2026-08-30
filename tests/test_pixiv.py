@@ -167,6 +167,31 @@ _SAMPLE_RANKING = {
 }
 
 
+def _ugoira_zip() -> bytes:
+    import io
+    import zipfile
+    from PIL import Image
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for i, color in enumerate([(255, 0, 0), (0, 255, 0)]):
+            im = Image.new("RGB", (8, 8), color)
+            b = io.BytesIO()
+            im.save(b, "JPEG")
+            zf.writestr(f"00000{i}.jpg", b.getvalue())
+    return buf.getvalue()
+
+
+_UGOIRA_META = {
+    "ugoira_metadata": {
+        "zip_urls": {"medium": "https://i.pximg.net/img-zip-ugoira/img/2024/01/03/00/00/00/100003_ugoira600x600.zip"},
+        "frames": [
+            {"file": "000000.jpg", "delay": 100},
+            {"file": "000001.jpg", "delay": 150},
+        ],
+    },
+}
+
+
 def _ranking_handler(request: httpx.Request) -> httpx.Response:
     if request.url.path == "/auth/token":
         return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
@@ -174,6 +199,12 @@ def _ranking_handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["mode"] == "day"
         assert request.headers["Authorization"] == "Bearer at-1"
         return httpx.Response(200, json=_SAMPLE_RANKING)
+    if request.url.path == "/v1/ugoira/metadata":
+        assert request.headers["Authorization"] == "Bearer at-1"
+        return httpx.Response(200, json=_UGOIRA_META)
+    if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+        assert request.headers.get("Referer") == "https://app-api.pixiv.net"
+        return httpx.Response(200, content=_ugoira_zip())
     return httpx.Response(404)
 
 
@@ -196,19 +227,20 @@ async def test_ranking_first_check_builds_collection():
     assert result.has_updates is True
     g = result.gallery
     assert g.native_id == "ranking:daily:illust"
-    assert g.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]
-    assert g.page_count == 4
+    assert g.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]
+    assert g.page_count == 5
     assert g.cover_url == "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/01/00/00/00/100001_p0_master1200.jpg"
     detail = g.detail
     assert detail.page_urls[0] == "https://i.pximg.net/img-original/img/2024/01/01/00/00/00/100001_p0.jpg"
     assert detail.page_urls[3].endswith("100002_p2.jpg")
-    assert detail.reported_pages == 4
+    assert detail.page_urls[4] == "pixiv-webp:100003"
+    assert detail.reported_pages == 5
 
 
 async def test_ranking_check_skips_known_pages():
     """已收录页 ID 不重复返回；全部已知则无更新。"""
     source = _make_source(_ranking_handler)
-    known = {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]}
+    known = {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]}
     result = await source.check_updates("ranking:daily:illust", known)
     assert result.has_updates is False
 
@@ -217,8 +249,10 @@ async def test_get_gallery_ranking_refetches():
     """无缓存时 get_gallery 重新取第一页构建详情。"""
     source = _make_source(_ranking_handler)
     detail = await source.get_gallery("ranking:daily:illust")
-    assert [u.split("/")[-1] for u in detail.page_urls] == [
+    assert [u.split("/")[-1] for u in detail.page_urls[:4]] == [
         "100001_p0.jpg", "100002_p0.jpg", "100002_p1.jpg", "100002_p2.jpg"]
+    assert detail.page_native_ids == [
+        "100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]
 
 
 async def test_download_pages_sends_referer():
@@ -230,6 +264,10 @@ async def test_download_pages_sends_referer():
             return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
         if request.url.path == "/v1/illust/ranking":
             return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(200, json=_UGOIRA_META)
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            return httpx.Response(200, content=_ugoira_zip())
         if request.url.host == "i.pximg.net":
             seen.append((request.headers.get("Referer"), request.headers.get("User-Agent", "")))
             return httpx.Response(200, content=b"\xff\xd8\xffpixiv" + request.url.path.encode())
@@ -379,6 +417,107 @@ async def test_track_gallery_passes_max_pages():
         await session.commit()
         await track_gallery(session, sub, _Capture())
     assert captured == {"page_ids": [], "max_pages": 7}
+
+
+
+# --- 04: 动图 → 动画 WebP + 跳过记入摘要 ---
+
+async def test_ugoira_download_returns_animated_webp():
+    """webp 页经 download_pages 返回合法动画 WebP，delay 生效。"""
+    import io
+    from PIL import Image
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+    source = _make_source(_ranking_handler)
+    detail = (await source.check_updates("ranking:daily:illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking:daily:illust", slice(4, 5), detail=detail)
+    assert len(pages) == 1
+    data = pages[0]
+    assert data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+    im = Image.open(io.BytesIO(data))
+    assert getattr(im, "n_frames", 1) == 2
+    # Pillow 的 WebP 插件不暴露帧时长，直接从 ANMF chunk 断言首帧 duration（毫秒，小端）
+    idx = data.find(b"ANMF")
+    assert idx > 0
+    assert int.from_bytes(data[idx + 20:idx + 23], "little") == 100
+
+
+async def test_ugoira_conversion_failure_skipped_with_note():
+    """元数据失败：动图作品跳过、静态作品照常收录、跳过说明可弹出。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(500, json={})
+        return httpx.Response(404)
+
+    source = _make_source(handler)
+    result = await source.check_updates("ranking:daily:illust", {"page_ids": []})
+    assert result.has_updates is True
+    assert result.gallery.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]
+    notes = source.pop_download_notes()
+    assert len(notes) == 1
+    assert notes[0]["title"] == "Ugoira Work"
+    assert "动图转换失败" in notes[0]["error"]
+    assert source.pop_download_notes() == []  # 一次性消费
+
+
+async def test_download_service_records_skip_notes_as_failed_events():
+    """下载服务把源的跳过说明记为失败下载事件（进摘要）。"""
+    from comicfeed.infrastructure.database import create_tables, get_session, init_db
+    from comicfeed.models import DownloadEvent
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import AuthSchema, BaseSource, GalleryDetail
+    from sqlalchemy import select
+
+    class _NoteSource(BaseSource):
+        key = "note-src"
+        name = "Note"
+        version = "1.0"
+        domains = ["note.local"]
+        auth_schema = AuthSchema.NONE
+
+        async def search(self, query, page, sort="date"):
+            raise NotImplementedError
+
+        async def get_gallery(self, gallery_id, gallery_url=""):
+            raise NotImplementedError
+
+        async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
+            return [b"\xff\xd8\xff" + bytes([i]) for i in range(page_range.start, page_range.stop)]
+
+        async def check_updates(self, gallery_id, last_known, gallery_url=""):
+            raise NotImplementedError
+
+        def pop_download_notes(self):
+            return [{"title": "Ugoira Work", "error": "动图转换失败: boom"}]
+
+    init_db(":memory:")
+    await create_tables()
+    detail = GalleryDetail(native_id="x", title="T", cover_url="", web_url="",
+                           page_urls=["http://note.local/1.jpg", "http://note.local/2.jpg"],
+                           page_native_ids=["a_p0", "b_p0"], reported_pages=2)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(
+            source=_NoteSource(), gallery_id="x", output_dir=tmp,
+            detail=detail, save_to_db=True, subscription_id=7, subscription_name="订阅A")
+    assert len(result.files) == 1
+    async with get_session() as session:
+        rows = (await session.execute(select(DownloadEvent))).scalars().all()
+    by_status = {}
+    for r in rows:
+        by_status.setdefault(r.status, []).append(r)
+    assert len(by_status["success"]) == 1
+    assert len(by_status["failed"]) == 1
+    f = by_status["failed"][0]
+    assert f.title == "Ugoira Work"
+    assert f.error == "动图转换失败: boom"
+    assert f.subscription_id == 7
+    assert f.gallery_id == "note-src:x"
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

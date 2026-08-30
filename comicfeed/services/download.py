@@ -230,6 +230,16 @@ async def _download_gallery(
         source, gallery_id, gallery_url, detail, total, cache_dir, tracker, full_gid
     )
 
+    # 源上报的跳过说明（如动图转换失败）→ 记录为失败下载事件，进入摘要通知
+    for note in source.pop_download_notes():
+        _log.info("源跳过说明: %s - %s", note.get("title", ""), note.get("error", ""))
+        await record_download_event("failed", subscription_id=subscription_id,
+                                    subscription_name=subscription_name,
+                                    source_key=source.key, gallery_id=full_gid,
+                                    title=note.get("title", full_gid),
+                                    cover_url=detail.cover_url, web_url=detail.web_url,
+                                    page_count=0, error=note.get("error", ""))
+
     # 广告检测（从缓存读尾部页）
     ad_count, detail.tags = strip_ads(cache_dir, detail, total, detail.tags)
     downloaded -= ad_count

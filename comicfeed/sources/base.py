@@ -101,6 +101,10 @@ class BaseSource(ABC):
     async def resolve_domain(self) -> list[str]:
         return self.domains
 
+    def pop_download_notes(self) -> list[dict]:
+        """下载服务调用：取走并清空本源在下载阶段积累的跳过说明（如动图转换失败）。"""
+        return []
+
     async def test_connection(self) -> tuple[bool, str]:
         """通用连接测试：GET 第一个域名。源可覆盖为更精确的探活。"""
         if not self.domains:

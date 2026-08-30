@@ -27,6 +27,12 @@ class PixivAuthError(Exception):
     """refresh_token 无效、过期或未配置。"""
 
 
+# 动图转换产物与跳过说明（跨源实例共享：check 时转换、download 时消费）
+_webp_cache: dict[str, tuple[float, bytes]] = {}
+_webp_ttl = 3000.0
+_skip_notes: list[dict] = []
+
+
 class PixivSource(BaseSource):
     key = "pixiv"
     name = "Pixiv"
@@ -132,7 +138,8 @@ class PixivSource(BaseSource):
             return itype == "ugoira"
         if content == "manga":
             return itype == "illust" and int(item.get("page_count") or 0) > 1
-        return itype == "illust"
+        # content=illust：插画（含多页）+ 动图混排（动图转 WebP 进同一卷）
+        return itype in ("illust", "ugoira")
 
     def _work_pages(self, item: dict) -> list[tuple[str, str]]:
         """作品的全部原图页：[(page_native_id, url)]。"""
@@ -151,17 +158,63 @@ class PixivSource(BaseSource):
                 pages.append((f"{wid}_p0", url))
         return pages
 
-    def _build_collection_detail(self, gallery_id: str, items: list[dict], content: str,
-                                 title: str = "") -> GalleryDetail:
+    async def _convert_ugoira(self, client: httpx.AsyncClient, item: dict) -> bytes | None:
+        """动图 → 动画 WebP。失败时记录跳过说明并返回 None。"""
+        import io
+        import zipfile
+        from PIL import Image
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
+        wid = str(item.get("id", ""))
+        title = item.get("title", "") or wid
+        try:
+            resp = await client.get(f"{self._BASE}/v1/ugoira/metadata", params={"illust_id": wid},
+                                    headers={"Authorization": f"Bearer {self._access_token}"})
+            if resp.status_code != 200:
+                raise PixivAuthError(f"元数据 HTTP {resp.status_code}")
+            meta = resp.json().get("ugoira_metadata") or {}
+            zurls = meta.get("zip_urls") or {}
+            zip_url = zurls.get("medium") or zurls.get("large", "")
+            if not zip_url:
+                raise PixivAuthError("元数据缺少 zip_urls")
+            zresp = await client.get(zip_url, headers={"Referer": "https://app-api.pixiv.net"})
+            zresp.raise_for_status()
+            frames = meta.get("frames") or []
+            images, durations = [], []
+            with zipfile.ZipFile(io.BytesIO(zresp.content)) as zf:
+                for fmeta in frames:
+                    fname = fmeta.get("file", "")
+                    if not fname:
+                        continue
+                    im = Image.open(io.BytesIO(zf.read(fname))).convert("RGB")
+                    images.append(im)
+                    durations.append(int(fmeta.get("delay") or 0))
+            if not images:
+                raise PixivAuthError("帧列表为空")
+            buf = io.BytesIO()
+            if len(images) == 1:
+                images[0].save(buf, "WEBP")
+            else:
+                images[0].save(buf, "WEBP", save_all=True, append_images=images[1:],
+                               duration=durations, loop=0)
+            data = buf.getvalue()
+            _webp_cache[wid] = (time.time(), data)
+            return data
+        except Exception as e:
+            _log.warning("pixiv 动图转换失败: %s %s - %r", wid, title, e)
+            _skip_notes.append({"title": title, "error": f"动图转换失败: {e}"})
+            return None
+
+    def pop_download_notes(self) -> list[dict]:
+        """下载服务调用：取走并清空本源积累的跳过说明（一次性消费）。"""
+        notes, _skip_notes[:] = list(_skip_notes), []
+        return notes
+
+    async def _build_collection_detail(self, client: httpx.AsyncClient, gallery_id: str,
+                                       items: list[dict], content: str, title: str = "") -> GalleryDetail:
         page_ids, page_urls, tags, writers = [], [], set(), set()
         cover_url = ""
         for item in items:
-            if item.get("type") == "ugoira":
-                _log.info("pixiv 跳过动图作品（暂未支持，04 转换）: %s %s",
-                          item.get("id"), item.get("title", ""))
-                continue
             if not cover_url:
                 cover_url = (item.get("image_urls") or {}).get("medium", "")
             writers.add((item.get("user") or {}).get("name", ""))
@@ -169,6 +222,14 @@ class PixivSource(BaseSource):
                 tag = t.get("translated_name") or t.get("name")
                 if tag:
                     tags.add(tag)
+            if item.get("type") == "ugoira":
+                data = await self._convert_ugoira(client, item)
+                if data is None:
+                    continue
+                wid = str(item.get("id", ""))
+                page_ids.append(f"{wid}_webp")
+                page_urls.append(f"pixiv-webp:{wid}")
+                continue
             for pid, purl in self._work_pages(item):
                 page_ids.append(pid)
                 page_urls.append(purl)
@@ -226,7 +287,7 @@ class PixivSource(BaseSource):
             if gallery_id.startswith("ranking:"):
                 _, _, content = gallery_id.split(":", 2)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
-                detail = self._build_collection_detail(gallery_id, items, content)
+                detail = await self._build_collection_detail(client, gallery_id, items, content)
             elif gallery_id.startswith("user:"):
                 uid = gallery_id.split(":", 1)[1]
                 items = []
@@ -238,8 +299,8 @@ class PixivSource(BaseSource):
                         break
                     offset += 30
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
-                detail = self._build_collection_detail(gallery_id, items, "illust",
-                                                       title=f"user:{uid}")
+                detail = await self._build_collection_detail(client, gallery_id, items, "illust",
+                                                             title=f"user:{uid}")
             else:
                 raise NotImplementedError("pixiv 作品详情由后续工单实现")
         detail.web_url = gallery_url or (self._ranking_url(gallery_id)
@@ -294,12 +355,12 @@ class PixivSource(BaseSource):
                             break
                         offset += 30
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
-                detail = self._build_collection_detail(gallery_id, items, "illust",
-                                                       title=f"user:{uid}")
+                detail = await self._build_collection_detail(client, gallery_id, items, "illust",
+                                                             title=f"user:{uid}")
             elif gallery_id.startswith("ranking:"):
                 _, _, content = gallery_id.split(":", 2)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
-                detail = self._build_collection_detail(gallery_id, items, content)
+                detail = await self._build_collection_detail(client, gallery_id, items, content)
             else:
                 return UpdateResult()
         return self._updates_from(detail, old_ids, gallery_url)
@@ -319,6 +380,15 @@ class PixivSource(BaseSource):
                                      headers=headers, transport=self._transport) as client:
             results = []
             for i, url in enumerate(urls):
+                if url.startswith("pixiv-webp:"):
+                    wid = url.split(":", 1)[1]
+                    entry = _webp_cache.get(wid)
+                    if not entry or time.time() - entry[0] >= _webp_ttl:
+                        raise RuntimeError(f"动图转换数据已过期，请重新检查订阅: {wid}")
+                    results.append(entry[1])
+                    if on_page:
+                        on_page()
+                    continue
                 last_err = None
                 for attempt in range(_retry):
                     try:
