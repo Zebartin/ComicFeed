@@ -75,6 +75,7 @@ class PixivSource(BaseSource):
         self._time = time_fn or time.time
         self._access_token = ""
         self._expires_at = 0.0
+        self._next_url = ""  # 搜索游标翻页（与 exhentai 同机制）
 
     def get_config_schema(self) -> list[dict]:
         return [
@@ -470,7 +471,46 @@ class PixivSource(BaseSource):
                     raise last_err
         return results
 
-    # --- 以下方法由后续工单实现（05/06/07） ---
+    # --- 搜索页透传（07） ---
+
+    _SORTS = {"date": "date_desc", "date_desc": "date_desc", "date_asc": "date_asc"}
+
+    def get_sort_options(self) -> list[dict]:
+        return [
+            {"value": "date_desc", "label": "最新"},
+            {"value": "date_asc", "label": "最旧"},
+        ]
 
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
-        raise NotImplementedError
+        async with self._client() as client:
+            await self._ensure_token(client)
+            if page > 1 and self._next_url:
+                url, params = self._next_url, None
+            else:
+                url = f"{self._BASE}/v1/search/illust"
+                params = {"word": query, "sort": self._SORTS.get(sort, "date_desc")}
+                if page > 1:
+                    params["offset"] = (page - 1) * 30
+            resp = await client.get(url, params=params,
+                                    headers={"Authorization": f"Bearer {self._access_token}"})
+            if resp.status_code != 200:
+                raise PixivAuthError(f"搜索失败: HTTP {resp.status_code}")
+            data = resp.json()
+            self._next_url = data.get("next_url") or ""
+            return self._parse_search(data, page)
+
+    def _parse_search(self, data: dict, page: int) -> SearchResult:
+        from comicfeed.io.cbz import normalize_title
+        items = []
+        for it in data.get("illusts") or []:
+            tags = [t.get("translated_name") or t.get("name") for t in (it.get("tags") or [])]
+            items.append(GallerySummary(
+                native_id=str(it.get("id", "")),
+                title=normalize_title(it.get("title", "")),
+                cover_url=(it.get("image_urls") or {}).get("medium", ""),
+                web_url=f"https://www.pixiv.net/artworks/{it.get('id', '')}",
+                page_count=int(it.get("page_count") or 0),
+                num_favorites=int(it.get("total_bookmarks") or 0),
+                tags=[t for t in tags if t],
+            ))
+        return SearchResult(items=items, total_pages=0, current_page=page, next_url=self._next_url)

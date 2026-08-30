@@ -93,6 +93,13 @@ def _web_url(source_key: str, native_id: str, stored_url: str = "") -> str:
         return f"https://nhentai.net/g/{native_id}/"
     if source_key == "exhentai":
         return f"https://exhentai.org/?f_search=gid:{native_id}"
+    if source_key == "pixiv":
+        if native_id.startswith("user:"):
+            return f"https://www.pixiv.net/users/{native_id.split(':', 1)[1]}/"
+        if native_id.startswith("ranking:"):
+            _, mode, content = native_id.split(":", 2)
+            return f"https://www.pixiv.net/ranking.php?mode={mode}&content={content}"
+        return f"https://www.pixiv.net/artworks/{native_id}"
     return ""
 
 

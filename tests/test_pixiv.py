@@ -677,6 +677,61 @@ async def test_ranking_ugoira_title():
     assert result.has_updates is False
 
 
+
+# --- 07: 画廊源站链接 + 搜索页透传 ---
+
+def test_web_url_pixiv_mapping():
+    """画廊页源站链接：pixiv 各 native_id 形态 → 对应页面。"""
+    from comicfeed.web.routes.galleries import _web_url
+    assert _web_url("pixiv", "user:12345") == "https://www.pixiv.net/users/12345/"
+    assert _web_url("pixiv", "ranking:daily_r18:illust") == "https://www.pixiv.net/ranking.php?mode=daily_r18&content=illust"
+    assert _web_url("pixiv", "100001") == "https://www.pixiv.net/artworks/100001"
+
+
+def _search_handler(seen):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/search/illust":
+            seen.append({"url": str(request.url), "auth": request.headers.get("Authorization")})
+            return httpx.Response(200, json={
+                "illusts": [_SAMPLE_RANKING["illusts"][0]],
+                "next_url": "https://app-api.pixiv.net/v1/search/illust?word=chinese&offset=30",
+            })
+        return httpx.Response(404)
+    return handler
+
+
+async def test_search_passthrough():
+    """搜索透传 app-api：参数映射、结果解析、游标翻页。"""
+    from comicfeed.sources.pixiv import PixivSource
+    seen = []
+    source = _make_source(_search_handler(seen))
+    result = await source.search("chinese", page=1)
+    assert seen[0]["auth"] == "Bearer at-1"
+    assert "word=chinese" in seen[0]["url"]
+    assert "sort=date_desc" in seen[0]["url"]
+    item = result.items[0]
+    assert item.native_id == "100001"
+    assert item.page_count == 1
+    assert item.num_favorites == 1234
+    assert item.web_url == "https://www.pixiv.net/artworks/100001"
+    assert item.tags == ["原创"]
+    assert source._next_url.endswith("offset=30")
+    # 游标翻页：第二次直接请求 next_url
+    await source.search("chinese", page=2)
+    assert seen[1]["url"].startswith("https://app-api.pixiv.net/v1/search/illust?word=chinese&offset=30")
+
+
+async def test_sort_options():
+    """排序选项不含 premium-only 的人气排序。"""
+    from comicfeed.sources.pixiv import PixivSource
+    opts = PixivSource().get_sort_options()
+    values = [o["value"] for o in opts]
+    assert "date_desc" in values and "date_asc" in values
+    assert not any("popular" in v for v in values)
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

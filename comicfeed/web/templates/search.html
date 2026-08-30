@@ -133,6 +133,10 @@ async function saveAsSub(){
     }
     $('sel-info').textContent = '订阅名: ' + esc(subName)
   }
+  if (srcKey === 'pixiv') {
+    $('sel-info').textContent = 'pixiv 不支持按关键词创建订阅：请到「订阅」页粘贴画师主页或榜单 URL（特定画廊模式）'
+    return
+  }
   await api('/api/subscriptions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:subName,source_key:srcKey,query:searchQuery,mode:'SEARCH',sort:sortBy})})
   $('sel-info').textContent='已保存为订阅';setTimeout(()=>{$('sel-info').textContent='点选卡片选择'},2000)
 }

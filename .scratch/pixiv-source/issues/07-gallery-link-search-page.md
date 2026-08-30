@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — 画师订阅：全量首检 + 增量巡检；06 — R-18 映射 + 官方中文标签 + 标题元数据
 
-**Status:** claimed
+**Status:** resolved
 
 - [ ] 画师与榜单 native_id 映射为正确的 www.pixiv.net 页面 URL（画廊页可跳转）
 - [ ] 搜索透传 /v1/search/illust 并解析结果（样本 JSON）
