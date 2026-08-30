@@ -4,7 +4,7 @@
 
 **Blocked by:** None — 可立即开始
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 启动扫描后 pixiv 源被加载（key/name/version/domains/auth_schema 校验通过）
 - [ ] 配置表单渲染 refresh_token（加密存储）与代理字段、R-18 显示设置 hint 文案

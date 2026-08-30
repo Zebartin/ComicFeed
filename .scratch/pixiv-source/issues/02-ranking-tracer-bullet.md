@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — pixiv 源骨架 + OAuth 认证 + 测试连接
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 榜单 URL 解析：插画日榜/动图榜等 → 榜单 native_id；垃圾 URL 返回 None
 - [ ] 检查返回第一页作品的标题/封面/页数/收藏数（样本 JSON 离线断言）

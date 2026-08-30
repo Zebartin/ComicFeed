@@ -123,6 +123,130 @@ class _OkManager:
         return _OkSource()
 
 
+
+# --- 02: 榜单端到端（tracer bullet） ---
+
+_SAMPLE_RANKING = {
+    "illusts": [
+        {
+            "id": 100001, "title": "Sample Art", "type": "illust", "page_count": 1,
+            "user": {"id": 20001, "name": "ArtistA"},
+            "image_urls": {
+                "medium": "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/01/00/00/00/100001_p0_master1200.jpg"},
+            "meta_single_page": {"original_image_url": "https://i.pximg.net/img-original/img/2024/01/01/00/00/00/100001_p0.jpg"},
+            "meta_pages": [],
+            "total_bookmarks": 1234,
+            "tags": [{"name": "オリジナル", "translated_name": "原创"}],
+            "create_date": "2024-01-01T00:00:00+09:00",
+        },
+        {
+            "id": 100002, "title": "Multi Page", "type": "illust", "page_count": 3,
+            "user": {"id": 20002, "name": "ArtistB"},
+            "image_urls": {"medium": "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/02/00/00/00/100002_p0_master1200.jpg"},
+            "meta_single_page": {},
+            "meta_pages": [
+                {"image_urls": {"original": "https://i.pximg.net/img-original/img/2024/01/02/00/00/00/100002_p0.jpg"}},
+                {"image_urls": {"original": "https://i.pximg.net/img-original/img/2024/01/02/00/00/00/100002_p1.jpg"}},
+                {"image_urls": {"original": "https://i.pximg.net/img-original/img/2024/01/02/00/00/00/100002_p2.jpg"}},
+            ],
+            "total_bookmarks": 567,
+            "tags": [{"name": "女の子", "translated_name": None}],
+            "create_date": "2024-01-02T00:00:00+09:00",
+        },
+        {
+            "id": 100003, "title": "Ugoira Work", "type": "ugoira", "page_count": 1,
+            "user": {"id": 20003, "name": "ArtistC"},
+            "image_urls": {"medium": "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/03/00/00/00/100003_p0_master1200.jpg"},
+            "meta_single_page": {"original_image_url": "https://i.pximg.net/img-original/img/2024/01/03/00/00/00/100003_p0.jpg"},
+            "meta_pages": [],
+            "total_bookmarks": 89,
+            "tags": [],
+            "create_date": "2024-01-03T00:00:00+09:00",
+        },
+    ],
+}
+
+
+def _ranking_handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/auth/token":
+        return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+    if request.url.path == "/v1/illust/ranking":
+        assert request.url.params["mode"] == "day"
+        assert request.headers["Authorization"] == "Bearer at-1"
+        return httpx.Response(200, json=_SAMPLE_RANKING)
+    return httpx.Response(404)
+
+
+async def test_parse_ranking_url():
+    from comicfeed.sources.pixiv import PixivSource
+    s = PixivSource()
+    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking:daily:illust"
+    assert s.parse_url("https://www.pixiv.net/ranking.php?content=ugoira&mode=weekly") == "pixiv:ranking:weekly:ugoira"
+    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily") is None
+    assert s.parse_url("https://www.pixiv.net/artworks/123") is None
+    assert s.parse_url("garbage") is None
+
+
+async def test_ranking_first_check_builds_collection():
+    """空 page_ids 的榜单检查：全部静态作品页作为新页返回，动图跳过。"""
+    source = _make_source(_ranking_handler)
+    result = await source.check_updates(
+        "ranking:daily:illust", {"page_ids": []},
+        gallery_url="https://www.pixiv.net/ranking.php?mode=daily&content=illust")
+    assert result.has_updates is True
+    g = result.gallery
+    assert g.native_id == "ranking:daily:illust"
+    assert g.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]
+    assert g.page_count == 4
+    assert g.cover_url == "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/01/00/00/00/100001_p0_master1200.jpg"
+    detail = g.detail
+    assert detail.page_urls[0] == "https://i.pximg.net/img-original/img/2024/01/01/00/00/00/100001_p0.jpg"
+    assert detail.page_urls[3].endswith("100002_p2.jpg")
+    assert detail.reported_pages == 4
+
+
+async def test_ranking_check_skips_known_pages():
+    """已收录页 ID 不重复返回；全部已知则无更新。"""
+    source = _make_source(_ranking_handler)
+    known = {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]}
+    result = await source.check_updates("ranking:daily:illust", known)
+    assert result.has_updates is False
+
+
+async def test_get_gallery_ranking_refetches():
+    """无缓存时 get_gallery 重新取第一页构建详情。"""
+    source = _make_source(_ranking_handler)
+    detail = await source.get_gallery("ranking:daily:illust")
+    assert [u.split("/")[-1] for u in detail.page_urls] == [
+        "100001_p0.jpg", "100002_p0.jpg", "100002_p1.jpg", "100002_p2.jpg"]
+
+
+async def test_download_pages_sends_referer():
+    """图片下载携带 Referer 与 iOS App UA，逐页回调。"""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.host == "i.pximg.net":
+            seen.append((request.headers.get("Referer"), request.headers.get("User-Agent", "")))
+            return httpx.Response(200, content=b"\xff\xd8\xffpixiv" + request.url.path.encode())
+        return httpx.Response(404)
+
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+    source = _make_source(handler)
+    detail = (await source.check_updates("ranking:daily:illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking:daily:illust", slice(0, 2), detail=detail)
+    assert len(pages) == 2
+    assert pages[0].startswith(b"\xff\xd8\xff")
+    assert seen and all(ref == "https://app-api.pixiv.net" for ref, _ in seen)
+    assert all("PixivIOSApp" in ua for _, ua in seen)
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()
