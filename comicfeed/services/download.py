@@ -197,6 +197,11 @@ async def _download_gallery(
             lookup_id = replaces_native_id or gallery_id
             pattern = os.path.join(output_dir, f"[[]{lookup_id}[]]*.cbz")
             existing = sorted(glob.glob(pattern))
+            if not existing and getattr(detail, "display_id", None) == "":
+                # 文件名省略 ID 的画廊（如 pixiv 榜单）：按标题匹配旧卷
+                from comicfeed.io.cbz import sanitize_filename
+                pattern = os.path.join(output_dir, f"*{sanitize_filename(title)}*.cbz")
+                existing = sorted(glob.glob(pattern))
             _log.debug("查找已有 CBZ: pattern=%s found=%d", pattern, len(existing))
             if existing:
                 if do_split:

@@ -94,12 +94,13 @@ def _web_url(source_key: str, native_id: str, stored_url: str = "") -> str:
     if source_key == "exhentai":
         return f"https://exhentai.org/?f_search=gid:{native_id}"
     if source_key == "pixiv":
-        if native_id.startswith("user_"):
-            return f"https://www.pixiv.net/users/{native_id.split('_', 1)[1]}/"
-        if native_id.startswith("ranking:"):
-            _, mode, content = native_id.split(":", 2)
+        if native_id.startswith("ranking_"):
+            from comicfeed.sources.pixiv import PixivSource
+            mode, content = PixivSource._split_ranking_id(native_id)
             return f"https://www.pixiv.net/ranking.php?mode={mode}&content={content}"
-        return f"https://www.pixiv.net/artworks/{native_id}"
+        if native_id.isdigit():
+            return f"https://www.pixiv.net/artworks/{native_id}"
+        return ""
     return ""
 
 

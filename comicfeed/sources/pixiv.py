@@ -95,7 +95,7 @@ class PixivSource(BaseSource):
     def parse_url(self, url: str) -> str | None:
         m = re.match(r"https?://(?:www\.)?pixiv\.net/(?:en/)?users/(\d+)", url)
         if m:
-            return f"pixiv:user_{m.group(1)}"
+            return f"pixiv:{m.group(1)}"
         u = urlparse(url)
         if u.hostname not in ("www.pixiv.net", "pixiv.net") or u.path != "/ranking.php":
             return None
@@ -104,7 +104,7 @@ class PixivSource(BaseSource):
         content = (qs.get("content") or [""])[0]
         if not mode or not content:
             return None
-        return f"pixiv:ranking:{mode}:{content}"
+        return f"pixiv:ranking_{mode}_{content}"
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -195,11 +195,17 @@ class PixivSource(BaseSource):
     def _has_cjk(s: str) -> bool:
         return any("\u4e00" <= ch <= "\u9fff" for ch in s)
 
+    _MILESTONE_USERS = re.compile(r"\d+\s*users入り$", re.IGNORECASE)  # 原神10000users入り
+    _MILESTONE_FAV = re.compile(r"^\D*\d+\s*收藏$")  # 翻译形态：原神10000收藏
+
     @classmethod
     def _pick_tag(cls, t: dict) -> str | None:
-        """官方中文优先；官方翻译是罗马音/英文（无汉字）时回退日文原文。"""
+        """官方中文优先；官方翻译是罗马音/英文（无汉字）时回退日文原文；里程碑标签丢弃。"""
         name = t.get("name") or ""
         translated = t.get("translated_name") or ""
+        if (cls._MILESTONE_USERS.search(name) or cls._MILESTONE_FAV.match(name)
+                or cls._MILESTONE_FAV.match(translated)):
+            return None
         if not name:
             return translated or None
         if not translated:
@@ -290,9 +296,19 @@ class PixivSource(BaseSource):
         notes, _skip_notes[:] = list(_skip_notes), []
         return notes
 
+    @staticmethod
+    def _split_ranking_id(gallery_id: str) -> tuple[str, str]:
+        """ranking_{mode}_{content} → (mode, content)。content 为已知后缀，mode 可含下划线。"""
+        rest = gallery_id[len("ranking_"):]
+        for c in ("illust", "manga", "ugoira"):
+            suffix = "_" + c
+            if rest.endswith(suffix):
+                return rest[:-len(suffix)], c
+        raise PixivAuthError(f"不支持的榜单 ID: {gallery_id}")
+
     @classmethod
     def _collection_title(cls, gallery_id: str) -> str:
-        _, mode, content = gallery_id.split(":", 2)
+        mode, content = cls._split_ranking_id(gallery_id)
         c = cls._CONTENT_LABELS.get(content, content)
         m = cls._RANK_MODE_LABELS.get(mode, mode)
         return f"Pixiv {c}{m}榜"
@@ -303,7 +319,7 @@ class PixivSource(BaseSource):
         _log = get(__name__)
         page_ids, page_urls, tags, writers = [], [], set(), set()
         cover_url = ""
-        is_user = gallery_id.startswith("user_")
+        is_user = gallery_id.isdigit()
         for item in items:
             # 诊断：输出原始标签对，供人工核对官方翻译策略（name=translated_name）
             _log.debug("pixiv 标签明细 gallery=%s work=%s: %s", gallery_id, item.get("id"),
@@ -329,9 +345,8 @@ class PixivSource(BaseSource):
                 page_ids.append(pid)
                 page_urls.append(purl)
         if is_user:
-            uid = gallery_id.split("_", 1)[1]
             name = next(((it.get("user") or {}).get("name", "") for it in items), "")
-            title = f"{name}({uid})" if name else gallery_id
+            title = f"{name}({gallery_id})" if name else gallery_id
         else:
             title = self._collection_title(gallery_id)
         return GalleryDetail(
@@ -344,10 +359,11 @@ class PixivSource(BaseSource):
             tags=sorted(t for t in tags if t),
             writers=sorted(w for w in writers if w),
             reported_pages=len(page_ids),
+            display_id="" if not is_user else None,  # 榜单为非数字 ID：文件名/ComicInfo 省略
         )
 
     async def _fetch_ranking_items(self, client: httpx.AsyncClient, gallery_id: str, content: str) -> list[dict]:
-        _, mode, _content = gallery_id.split(":", 2)
+        mode, _content = self._split_ranking_id(gallery_id)
         app_mode = self._RANK_MODES.get(mode)
         if not app_mode:
             raise PixivAuthError(f"不支持的榜单模式: {mode}")
@@ -406,9 +422,9 @@ class PixivSource(BaseSource):
                 kept.append(it)
         return kept
 
-    @staticmethod
-    def _ranking_url(gallery_id: str) -> str:
-        _, mode, content = gallery_id.split(":", 2)
+    @classmethod
+    def _ranking_url(cls, gallery_id: str) -> str:
+        mode, content = cls._split_ranking_id(gallery_id)
         return f"https://www.pixiv.net/ranking.php?mode={mode}&content={content}"
 
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:
@@ -422,19 +438,18 @@ class PixivSource(BaseSource):
             return cached
         async with self._client() as client:
             await self._ensure_token(client)
-            if gallery_id.startswith("ranking:"):
-                _, _, content = gallery_id.split(":", 2)
+            if gallery_id.startswith("ranking_"):
+                _, content = self._split_ranking_id(gallery_id)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
                 detail = await self._build_collection_detail(client, gallery_id, items, content)
-            elif gallery_id.startswith("user_"):
-                uid = gallery_id.split("_", 1)[1]
-                items = await self._fetch_all_user_items(client, uid, 1)
+            elif gallery_id.isdigit():
+                items = await self._fetch_all_user_items(client, gallery_id, 1)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
                 detail = await self._build_collection_detail(client, gallery_id, items, "illust")
             else:
                 raise NotImplementedError("pixiv 作品详情由后续工单实现")
         detail.web_url = gallery_url or (self._ranking_url(gallery_id)
-                                         if gallery_id.startswith("ranking:") else "")
+                                         if gallery_id.startswith("ranking_") else "")
         _gc.cache_set(key, detail)
         return detail
 
@@ -451,7 +466,7 @@ class PixivSource(BaseSource):
             page_native_ids=[detail.page_native_ids[i] for i in keep_idx],
             tags=list(detail.tags), writers=list(detail.writers),
             upload_date=detail.upload_date, reported_pages=len(keep_idx),
-            num_favorites=detail.num_favorites,
+            num_favorites=detail.num_favorites, display_id=detail.display_id,
         )
         _gc.update_cache_set(detail.native_id, filtered)
         return UpdateResult(has_updates=True, gallery=GallerySummary(
@@ -467,17 +482,16 @@ class PixivSource(BaseSource):
         filters = last_known.get("filters") or ""
         async with self._client() as client:
             await self._ensure_token(client)
-            if gallery_id.startswith("user_"):
-                uid = gallery_id.split("_", 1)[1]
+            if gallery_id.isdigit():
                 if old_ids:
-                    items, _ = await self._fetch_user_items(client, uid)
+                    items, _ = await self._fetch_user_items(client, gallery_id)
                 else:
-                    items = await self._fetch_all_user_items(client, uid, max_pages)
+                    items = await self._fetch_all_user_items(client, gallery_id, max_pages)
                 items = self._apply_work_filters(items, filters)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
                 detail = await self._build_collection_detail(client, gallery_id, items, "illust")
-            elif gallery_id.startswith("ranking:"):
-                _, _, content = gallery_id.split(":", 2)
+            elif gallery_id.startswith("ranking_"):
+                _, content = self._split_ranking_id(gallery_id)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
                 items = self._apply_work_filters(items, filters)
                 detail = await self._build_collection_detail(client, gallery_id, items, content)

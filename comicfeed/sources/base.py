@@ -24,6 +24,7 @@ class GalleryDetail:
     upload_date: str = ""
     reported_pages: int = 0
     num_favorites: int = 0
+    display_id: str | None = None  # 文件名/ComicInfo 展示用 ID；None=用 native_id，""=省略
 
 
 @dataclass

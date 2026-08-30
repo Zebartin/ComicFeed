@@ -73,6 +73,9 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
                       append_ctx: AppendContext | None = None) -> list[str]:
     """从磁盘缓存读取页面，分卷打包 CBZ。"""
 
+    # 展示用 ID：detail.display_id 显式设置时用它（"" = 文件名/ComicInfo 省略 ID）
+    display_gid = gallery_id if getattr(detail, "display_id", None) is None else detail.display_id
+
     # 合并卷使用旧 CBZ 的 Number；新建卷扫描目录取最大 Number + 1
     old_vol_number = ""
     next_vol = 1
@@ -86,8 +89,8 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
         if not vol_pages:
             return None
         if number is None:
-            number = str((start_page // cbz_max_pages) + 1) if do_split else gallery_id
-        fname = make_cbz_name(gallery_id, title, start_page + 1,
+            number = str((start_page // cbz_max_pages) + 1) if do_split else display_gid
+        fname = make_cbz_name(display_gid, title, start_page + 1,
                               start_page + len(vol_pages),
                               total_pages=0 if do_split else len(vol_pages))
         fpath = os.path.join(output_dir, fname)
@@ -136,7 +139,10 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
         idx += vol_count
 
     if append_ctx:
+        new_abs = {os.path.abspath(f) for f in files}
         for p in append_ctx.old_cbz_paths:
+            if os.path.abspath(p) in new_abs:
+                continue  # 新卷覆盖了旧路径（同名不分卷），不能删
             try:
                 os.remove(p)
             except OSError:

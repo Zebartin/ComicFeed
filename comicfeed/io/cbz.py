@@ -56,8 +56,8 @@ def sanitize_filename(name: str) -> str:
 
 
 def make_cbz_name(native_id: str, normalized_title: str, start_page: int, end_page: int, total_pages: int = 0) -> str:
-    """生成 CBZ 文件名: [id] title (0001-0034).cbz"""
-    prefix = f"[{native_id}] "
+    """生成 CBZ 文件名: [id] title (0001-0034).cbz；native_id 为空时不带 [id] 前缀。"""
+    prefix = f"[{native_id}] " if native_id else ""
     suffix = ""
     if not (total_pages > 0 and start_page == 1 and end_page >= total_pages):
         suffix = f" ({start_page:04d}-{end_page:04d})"
@@ -87,7 +87,9 @@ def read_cbz_pages(path: str) -> list[bytes]:
 def _build_comicinfo(detail: GalleryDetail, number: str = "") -> bytes:
     root = ET.Element("ComicInfo")
     ET.SubElement(root, "Title").text = detail.title
-    ET.SubElement(root, "Number").text = number or detail.native_id
+    if not number:
+        number = detail.display_id if detail.display_id is not None else detail.native_id
+    ET.SubElement(root, "Number").text = number or ""
     if detail.writers:
         ET.SubElement(root, "Writer").text = ", ".join(detail.writers)
     ET.SubElement(root, "Tags").text = ", ".join(detail.tags)

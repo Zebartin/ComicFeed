@@ -212,8 +212,8 @@ def _ranking_handler(request: httpx.Request) -> httpx.Response:
 async def test_parse_ranking_url():
     from comicfeed.sources.pixiv import PixivSource
     s = PixivSource()
-    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking:daily:illust"
-    assert s.parse_url("https://www.pixiv.net/ranking.php?content=ugoira&mode=weekly") == "pixiv:ranking:weekly:ugoira"
+    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking_daily_illust"
+    assert s.parse_url("https://www.pixiv.net/ranking.php?content=ugoira&mode=weekly") == "pixiv:ranking_weekly_ugoira"
     assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily") is None
     assert s.parse_url("https://www.pixiv.net/artworks/123") is None
     assert s.parse_url("garbage") is None
@@ -223,11 +223,11 @@ async def test_ranking_first_check_builds_collection():
     """空 page_ids 的榜单检查：全部静态作品页作为新页返回，动图跳过。"""
     source = _make_source(_ranking_handler)
     result = await source.check_updates(
-        "ranking:daily:illust", {"page_ids": []},
+        "ranking_daily_illust", {"page_ids": []},
         gallery_url="https://www.pixiv.net/ranking.php?mode=daily&content=illust")
     assert result.has_updates is True
     g = result.gallery
-    assert g.native_id == "ranking:daily:illust"
+    assert g.native_id == "ranking_daily_illust"
     assert g.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]
     assert g.page_count == 5
     assert g.cover_url == "https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/01/00/00/00/100001_p0_master1200.jpg"
@@ -242,14 +242,14 @@ async def test_ranking_check_skips_known_pages():
     """已收录页 ID 不重复返回；全部已知则无更新。"""
     source = _make_source(_ranking_handler)
     known = {"page_ids": ["100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]}
-    result = await source.check_updates("ranking:daily:illust", known)
+    result = await source.check_updates("ranking_daily_illust", known)
     assert result.has_updates is False
 
 
 async def test_get_gallery_ranking_refetches():
     """无缓存时 get_gallery 重新取第一页构建详情。"""
     source = _make_source(_ranking_handler)
-    detail = await source.get_gallery("ranking:daily:illust")
+    detail = await source.get_gallery("ranking_daily_illust")
     assert [u.split("/")[-1] for u in detail.page_urls[:4]] == [
         "100001_p0.jpg", "100002_p0.jpg", "100002_p1.jpg", "100002_p2.jpg"]
     assert detail.page_native_ids == [
@@ -278,8 +278,8 @@ async def test_download_pages_sends_referer():
     init_db(":memory:")
     await create_tables()
     source = _make_source(handler)
-    detail = (await source.check_updates("ranking:daily:illust", {"page_ids": []})).gallery.detail
-    pages = await source.download_pages("ranking:daily:illust", slice(0, 2), detail=detail)
+    detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking_daily_illust", slice(0, 2), detail=detail)
     assert len(pages) == 2
     assert pages[0].startswith(b"\xff\xd8\xff")
     assert seen and all(ref == "https://app-api.pixiv.net" for ref, _ in seen)
@@ -324,9 +324,9 @@ def _make_user_handler(pages: dict[int, dict]):
 async def test_parse_artist_url():
     from comicfeed.sources.pixiv import PixivSource
     s = PixivSource()
-    assert s.parse_url("https://www.pixiv.net/users/12345") == "pixiv:user_12345"
-    assert s.parse_url("https://www.pixiv.net/en/users/67890/artworks") == "pixiv:user_67890"
-    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking:daily:illust"
+    assert s.parse_url("https://www.pixiv.net/users/12345") == "pixiv:12345"
+    assert s.parse_url("https://www.pixiv.net/en/users/67890/artworks") == "pixiv:67890"
+    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking_daily_illust"
 
 
 async def test_artist_first_check_paginates_all():
@@ -337,7 +337,7 @@ async def test_artist_first_check_paginates_all():
         60: {"illusts": [_user_item(100007)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
+    result = await source.check_updates("20000", {"page_ids": [], "max_pages": 1})
     assert requested == [0, 30, 60]
     assert result.gallery.new_page_ids == [
         "100007_p0", "100008_p0", "100009_p0", "100010_p0", "100011_p0", "100012_p0"]
@@ -351,7 +351,7 @@ async def test_artist_first_check_respects_max_pages_cap():
         60: {"illusts": [_user_item(100010)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 2})
+    result = await source.check_updates("20000", {"page_ids": [], "max_pages": 2})
     assert requested == [0, 30]
     assert result.gallery.new_page_ids == ["100011_p0", "100012_p0"]
 
@@ -363,7 +363,7 @@ async def test_artist_first_check_zero_max_pages_single_page():
         30: {"illusts": [_user_item(100011)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 0})
+    result = await source.check_updates("20000", {"page_ids": [], "max_pages": 0})
     assert requested == [0]
     assert result.gallery.new_page_ids == ["100012_p0"]
 
@@ -376,7 +376,7 @@ async def test_artist_incremental_check_only_first_page():
     })
     source = _make_source(handler)
     known = {"page_ids": ["100012_p0", "100011_p0", "100010_p0"], "max_pages": 1}
-    result = await source.check_updates("user_20000", known)
+    result = await source.check_updates("20000", known)
     assert requested == [0]
     assert result.has_updates is True
     assert result.gallery.new_page_ids == ["100013_p0"]
@@ -388,14 +388,14 @@ async def test_artist_incremental_check_no_updates():
         0: {"illusts": [_user_item(100012)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user_20000", {"page_ids": ["100012_p0"], "max_pages": 1})
+    result = await source.check_updates("20000", {"page_ids": ["100012_p0"], "max_pages": 1})
     assert result.has_updates is False
 
 
 class _TrackCapture:
     key = "pixiv"
     def parse_url(self, url):
-        return "pixiv:user_20000"
+        return "pixiv:20000"
     async def check_updates(self, gallery_id, last_known, gallery_url=""):
         from comicfeed.sources.base import UpdateResult
         return UpdateResult()
@@ -437,8 +437,8 @@ async def test_ugoira_download_returns_animated_webp():
     init_db(":memory:")
     await create_tables()
     source = _make_source(_ranking_handler)
-    detail = (await source.check_updates("ranking:daily:illust", {"page_ids": []})).gallery.detail
-    pages = await source.download_pages("ranking:daily:illust", slice(4, 5), detail=detail)
+    detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking_daily_illust", slice(4, 5), detail=detail)
     assert len(pages) == 1
     data = pages[0]
     assert data.startswith(b"RIFF") and data[8:12] == b"WEBP"
@@ -462,7 +462,7 @@ async def test_ugoira_conversion_failure_skipped_with_note():
         return httpx.Response(404)
 
     source = _make_source(handler)
-    result = await source.check_updates("ranking:daily:illust", {"page_ids": []})
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
     assert result.has_updates is True
     assert result.gallery.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]
     notes = source.pop_download_notes()
@@ -534,7 +534,7 @@ async def test_work_filter_favorites_applied_per_work():
     """收藏数筛选按作品逐个应用：不达标作品整件排除（含其全部页）。"""
     source = _make_source(_ranking_handler)
     filters = '[{"field": "num_favorites", "op": "gte", "value": 500}]'
-    result = await source.check_updates("ranking:daily:illust", {"page_ids": [], "filters": filters})
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": [], "filters": filters})
     assert result.gallery.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2"]
 
 
@@ -542,18 +542,18 @@ async def test_work_filter_page_count_applied_per_work():
     """页数筛选按作品页数生效。"""
     source = _make_source(_ranking_handler)
     filters = '[{"field": "page_count", "op": "gte", "value": 3}]'
-    result = await source.check_updates("ranking:daily:illust", {"page_ids": [], "filters": filters})
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": [], "filters": filters})
     assert result.gallery.new_page_ids == ["100002_p0", "100002_p1", "100002_p2"]
 
 
 async def test_work_filter_upload_date():
     """上传日期筛选：since_days 足够大全部保留，0 则全部排除（无更新）。"""
     source = _make_source(_ranking_handler)
-    result = await source.check_updates("ranking:daily:illust",
+    result = await source.check_updates("ranking_daily_illust",
                                         {"page_ids": [], "filters": '[{"field": "upload_date", "op": "since_days", "value": 100000}]'})
     assert len(result.gallery.new_page_ids) == 5
     source2 = _make_source(_ranking_handler)
-    result2 = await source2.check_updates("ranking:daily:illust",
+    result2 = await source2.check_updates("ranking_daily_illust",
                                           {"page_ids": [], "filters": '[{"field": "upload_date", "op": "since_days", "value": 0}]'})
     assert result2.has_updates is False
 
@@ -568,7 +568,7 @@ async def test_work_filters_apply_to_artist_collection():
     })
     source = _make_source(handler)
     filters = '[{"field": "num_favorites", "op": "gte", "value": 500}]'
-    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1, "filters": filters})
+    result = await source.check_updates("20000", {"page_ids": [], "max_pages": 1, "filters": filters})
     assert result.gallery.new_page_ids == ["100011_p0"]
 
 
@@ -629,7 +629,7 @@ async def test_r18_ranking_mode_mapping():
     }
     for web_mode, app_mode in cases.items():
         source = _make_source(_mode_handler(app_mode))
-        result = await source.check_updates(f"ranking:{web_mode}:illust", {"page_ids": []})
+        result = await source.check_updates(f"ranking_{web_mode}_illust", {"page_ids": []})
         assert result.has_updates is False  # 空榜单 → 无更新，但请求已按映射发出
 
 
@@ -653,14 +653,14 @@ async def test_accept_language_header_on_api_calls():
             return httpx.Response(200, json={"illusts": [], "next_url": None})
         return httpx.Response(404)
     source = _make_source(handler)
-    await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
+    await source.check_updates("20000", {"page_ids": [], "max_pages": 1})
     assert seen == ["zh-hans"]
 
 
 async def test_tag_translation_fallback():
     """标签：官方中文优先，缺失回退日文原文。"""
     source = _make_source(_ranking_handler)
-    result = await source.check_updates("ranking:daily:illust", {"page_ids": []})
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
     assert set(result.gallery.detail.tags) == {"原创", "女の子"}
 
 
@@ -670,7 +670,7 @@ async def test_artist_gallery_title_and_writer():
         0: {"illusts": [_user_item(100012, "ArtistName")], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
+    result = await source.check_updates("20000", {"page_ids": [], "max_pages": 1})
     assert result.gallery.title == "ArtistName(20000)"
     assert result.gallery.detail.writers == ["ArtistName"]
 
@@ -678,7 +678,7 @@ async def test_artist_gallery_title_and_writer():
 async def test_ranking_gallery_title_no_writer():
     """榜单 Gallery：title=Pixiv {内容}{周期}榜，writer 为空。"""
     source = _make_source(_ranking_handler)
-    result = await source.check_updates("ranking:daily:illust", {"page_ids": []})
+    result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
     assert result.gallery.title == "Pixiv 插画日榜"
     assert result.gallery.detail.writers == []
 
@@ -686,7 +686,7 @@ async def test_ranking_gallery_title_no_writer():
 async def test_ranking_ugoira_title():
     """动图周榜标题。"""
     source = _make_source(_mode_handler("week"))
-    result = await source.check_updates("ranking:weekly:ugoira", {"page_ids": []})
+    result = await source.check_updates("ranking_weekly_ugoira", {"page_ids": []})
     assert result.has_updates is False
 
 
@@ -696,9 +696,11 @@ async def test_ranking_ugoira_title():
 def test_web_url_pixiv_mapping():
     """画廊页源站链接：pixiv 各 native_id 形态 → 对应页面。"""
     from comicfeed.web.routes.galleries import _web_url
-    assert _web_url("pixiv", "user_12345") == "https://www.pixiv.net/users/12345/"
-    assert _web_url("pixiv", "ranking:daily_r18:illust") == "https://www.pixiv.net/ranking.php?mode=daily_r18&content=illust"
+    assert _web_url("pixiv", "12345") == "https://www.pixiv.net/artworks/12345"
+    assert _web_url("pixiv", "ranking_daily_r18_illust") == "https://www.pixiv.net/ranking.php?mode=daily_r18&content=illust"
     assert _web_url("pixiv", "100001") == "https://www.pixiv.net/artworks/100001"
+    # 画师画廊优先用已存 web_url（stored_url）
+    assert _web_url("pixiv", "2350706", "https://www.pixiv.net/users/2350706") == "https://www.pixiv.net/users/2350706"
 
 
 def _search_handler(seen):
@@ -779,7 +781,7 @@ async def test_tag_dump_logged_per_work(caplog):
     """每个作品的原始标签对（name=translated_name）记录到日志，供人工核对翻译策略。"""
     with caplog.at_level("DEBUG"):
         source = _make_source(_ranking_handler)
-        await source.check_updates("ranking:daily:illust", {"page_ids": []})
+        await source.check_updates("ranking_daily_illust", {"page_ids": []})
     lines = [r.message for r in caplog.records]
     dump1 = next((m for m in lines if m.startswith("pixiv 标签明细") and "work=100001" in m), "")
     dump2 = next((m for m in lines if m.startswith("pixiv 标签明细") and "work=100002" in m), "")
@@ -803,9 +805,13 @@ async def test_tag_selection_prefers_cjk_translation():
         ({"name": "おっぱい", "translated_name": "欧派"}, "欧派"),
         ({"name": "ふともも", "translated_name": "大腿"}, "大腿"),
         ({"name": "甘雨(原神)", "translated_name": "Ganyu (Genshin Impact)"}, "甘雨(原神)"),
-        ({"name": "原神10000users入り", "translated_name": "原神10000收藏"}, "原神10000收藏"),
         ({"name": "R-18", "translated_name": "R-18"}, "R-18"),
         ({"name": "Pixiv", "translated_name": "PIXIV"}, "Pixiv"),  # 双方无汉字 → 用原文
+        # 里程碑标签（XXXusers入り / 翻译形态 XXX收藏）→ 丢弃
+        ({"name": "原神10000users入り", "translated_name": "原神10000收藏"}, None),
+        ({"name": "10000users入り", "translated_name": "10000收藏"}, None),
+        ({"name": "5000users入り", "translated_name": None}, None),
+        ({"name": "收藏", "translated_name": "收藏"}, "收藏"),  # 普通「收藏」标签保留
     ]
     for tag, expected in pairs:
         assert PixivSource._pick_tag(tag) == expected
@@ -846,8 +852,8 @@ async def test_download_pages_throttles_between_pages(monkeypatch):
         return _ranking_handler(request)
 
     source = _make_source(handler)
-    detail = (await source.check_updates("ranking:daily:illust", {"page_ids": []})).gallery.detail
-    pages = await source.download_pages("ranking:daily:illust", slice(0, 2), detail=detail)
+    detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking_daily_illust", slice(0, 2), detail=detail)
     assert len(pages) == 2
     assert any(abs(d - 0.3) < 0.01 for d in sleeps)
 
@@ -865,7 +871,7 @@ async def test_api_pagination_paced(monkeypatch):
         30: {"illusts": [_user_item(100011)], "next": False},
     })
     source = _make_source(handler)
-    await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
+    await source.check_updates("20000", {"page_ids": [], "max_pages": 1})
     assert any(abs(d - 0.5) < 0.01 for d in sleeps)
 
 
@@ -889,8 +895,97 @@ async def test_429_sets_global_cooldown(monkeypatch):
     import pytest as _pytest
     source = _make_source(handler)
     with _pytest.raises(Exception):
-        await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
+        await source.check_updates("20000", {"page_ids": [], "max_pages": 1})
     assert px._cooldown_until > 0
+
+
+
+# --- ID 格式：画师纯数字 / 榜单 ranking_mode_content ---
+
+def test_split_ranking_id():
+    from comicfeed.sources.pixiv import PixivSource
+    assert PixivSource._split_ranking_id("ranking_daily_illust") == ("daily", "illust")
+    assert PixivSource._split_ranking_id("ranking_daily_r18_ugoira") == ("daily_r18", "ugoira")
+    assert PixivSource._split_ranking_id("ranking_weekly_r18g_manga") == ("weekly_r18g", "manga")
+
+
+def _make_fake_pixiv_source(pages_map):
+    """下载集成测试用假源：按 detail.page_urls 返回可识别 JPEG 头。"""
+    from comicfeed.sources.base import AuthSchema, BaseSource
+
+    class _Fake(BaseSource):
+        key = "pixiv"
+        name = "Pixiv"
+        version = "1.0"
+        domains = ["fake.local"]
+        auth_schema = AuthSchema.NONE
+
+        async def search(self, query, page, sort="date"):
+            raise NotImplementedError
+
+        async def get_gallery(self, gallery_id, gallery_url=""):
+            raise NotImplementedError
+
+        async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
+            urls = detail.page_urls[page_range]
+            return [b"\xff\xd8\xff" + url.split("/")[-1].encode() for url in urls]
+
+        async def check_updates(self, gallery_id, last_known, gallery_url=""):
+            raise NotImplementedError
+
+    return _Fake()
+
+
+async def test_ranking_cbz_omits_non_numeric_id():
+    """榜单 Gallery：CBZ 文件名与 ComicInfo Number 不带 ranking_ id。"""
+    import tempfile
+    import zipfile
+    import xml.etree.ElementTree as ET
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    detail = GalleryDetail(
+        native_id="ranking_daily_illust", title="Pixiv 插画日榜", cover_url="",
+        web_url="https://www.pixiv.net/ranking.php?mode=daily&content=illust",
+        page_urls=["http://fake.local/100001_p0.jpg", "http://fake.local/100002_p0.jpg"],
+        page_native_ids=["100001_p0", "100002_p0"], reported_pages=2, display_id="")
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="ranking_daily_illust",
+                                        output_dir=tmp, detail=detail, save_to_db=True)
+        assert len(result.files) == 1
+        assert result.files[0].endswith("Pixiv 插画日榜.cbz")
+        with zipfile.ZipFile(result.files[0]) as z:
+            root = ET.fromstring(z.read("ComicInfo.xml"))
+            num = root.find("Number")
+            assert num is None or not (num.text or "").strip()
+
+
+async def test_ranking_incremental_appends_by_title():
+    """榜单增量：文件名无 [id] 时按标题匹配旧卷追加，不产生重复卷。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.io.cbz import read_cbz_pages
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    base = dict(native_id="ranking_daily_illust", title="Pixiv 插画日榜", cover_url="",
+                web_url="https://www.pixiv.net/ranking.php?mode=daily&content=illust", display_id="")
+    first = GalleryDetail(page_urls=["http://fake.local/a.jpg", "http://fake.local/b.jpg"],
+                          page_native_ids=["100001_p0", "100002_p0"], reported_pages=2, **base)
+    second = GalleryDetail(page_urls=["http://fake.local/c.jpg"],
+                           page_native_ids=["100003_p0"], reported_pages=1, **base)
+    with tempfile.TemporaryDirectory() as tmp:
+        r1 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="ranking_daily_illust",
+                                    output_dir=tmp, detail=first, save_to_db=True)
+        r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="ranking_daily_illust",
+                                    output_dir=tmp, detail=second, save_to_db=True, append_pages=True)
+        assert len(r1.files) == 1 and len(r2.files) == 1
+        assert r2.files[0].endswith("Pixiv 插画日榜.cbz")
+        pages = read_cbz_pages(r2.files[0])
+        assert len(pages) == 3
 
 
 async def test_test_connection_endpoint(app, monkeypatch):
