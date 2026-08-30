@@ -42,6 +42,7 @@ class PixivSource(BaseSource):
     auth_schema = AuthSchema.TOKEN
 
     _BASE = "https://app-api.pixiv.net"
+    _AUTH = "https://oauth.secure.pixiv.net"  # token 端点在 oauth 域名，不在 app-api
     _CLIENT_ID = "MOBrBDS8blbauoSck0ZfDbtuzpyT"
     _CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
     _HASH_SECRET = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c"
@@ -118,7 +119,7 @@ class PixivSource(BaseSource):
         if not rt:
             raise PixivAuthError("未配置 refresh_token，请在源配置中填写")
         resp = await client.post(
-            f"{self._BASE}/auth/token",
+            f"{self._AUTH}/auth/token",
             data={"client_id": self._CLIENT_ID, "client_secret": self._CLIENT_SECRET,
                   "grant_type": "refresh_token", "refresh_token": rt, "get_secure_url": "1"},
             headers=self._auth_headers(),

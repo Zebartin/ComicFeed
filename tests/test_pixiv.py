@@ -14,6 +14,7 @@ _CLIENT_HASH = "68fa070e55d8ca52b0e989b6b91cc011"  # md5("1234567890" + HASH_SEC
 def _auth_handler(request: httpx.Request) -> httpx.Response:
     """mock app-api：token 刷新 + 排行探活。断言请求头与请求体为外部可观察契约。"""
     if request.url.path == "/auth/token":
+        assert request.url.host == "oauth.secure.pixiv.net"
         assert request.headers["X-Client-Time"] == "1234567890"
         assert request.headers["X-Client-Hash"] == _CLIENT_HASH
         assert "refresh_token" in request.content.decode()
