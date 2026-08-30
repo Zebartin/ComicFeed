@@ -81,7 +81,7 @@ async function load(page) {
       const tags = x.tags && x.tags.length ? x.tags.slice(0, 6) : []
       return `<div class="g-card" id="gc-${i}">
         <div class="cover" onclick="pick(${i},event)">
-          ${x.cover_url ? `<img src="${x.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+          ${x.cover_url ? `<img src="${cv(x.source_key, x.cover_url)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
           <div class="no-img" style="${x.cover_url?'display:none':'display:flex'}">&mdash;</div>
           <div class="sel"></div>
         </div>

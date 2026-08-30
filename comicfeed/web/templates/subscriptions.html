@@ -466,7 +466,7 @@ async function checkSub(id, loadMore=false) {
         const idx = startIdx + i
         return `<div class="g-card" id="gc-${idx}">
         <div class="cover" onclick="toggleCard('${g.native_id}',${idx})">
-          ${g.cover_url ? `<img src="${g.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
+          ${g.cover_url ? `<img src="${cv(current.source_key, g.cover_url)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ''}
           <div class="no-img" style="${g.cover_url?'display:none':'display:flex'}">&mdash;</div>
           <div class="sel"></div>
         </div>

@@ -123,6 +123,13 @@ tbody tr:hover { background: rgba(184,134,11,.03); }
 </style>
 </head>
 <body>
+<script>
+// pixiv 封面防盗链（i.pximg.net 需 Referer）：经 /api/cover 代理显示
+function cv(srcKey, url) {
+  if (!url) return url
+  return srcKey === 'pixiv' ? '/api/cover?url=' + encodeURIComponent(url) : url
+}
+</script>
 <nav>
   <span class="brand">ComicFeed</span>
   <a href="/">订阅</a>

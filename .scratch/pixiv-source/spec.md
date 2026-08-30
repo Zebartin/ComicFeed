@@ -48,12 +48,12 @@ Status: ready-for-agent
 - **认证**：refresh_token OAuth 2.0（X-Client-Time/X-Client-Hash 签名头），access_token 进程内缓存、过期自动用 refresh_token 换新；不做密码登录（reCAPTCHA 风控）、不做 PHPSESSID 通道。
 - **API 端点**：`/v1/illust/ranking`（榜单）、`/v1/user/illusts`（画师作品）、`/v1/illust/detail`（详情与页 URL）、`/v1/ugoira/metadata`（动图帧与 delay）、`/v1/search/illust`（搜索页最小透传）。
 - **动图转换**：下载 ugoira 帧 zip（带 Referer）→ 按 metadata 的 frames 顺序与 delay（毫秒）用 Pillow 合成动画 WebP（save_all + duration），作为单页 bytes 交给打包流程；不做 GIF/APNG 输出。转换失败的作品跳过、不阻塞同画廊其余作品，但**记录为失败下载事件（作品标题 + 原因）**，进入摘要通知的失败汇总（沿用现有每订阅 ≤5 条的展示上限）。跳过清单带画廊归属、由源回传给下载服务、由下载服务按当前画廊匹配后写事件（源不直接写持久化；通过向后兼容的可选钩子，现有源零改动）。
-- **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-cn`，`translated_name` 有值用官方中文、否则回退 `name`（日文）；v1 不接 EhTagTranslation。
+- **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-hans`（实测 `zh-cn` 被服务端忽略、返回英文默认翻译），`translated_name` 有值用官方中文、否则回退 `name`（日文）；v1 不接 EhTagTranslation。
 - **元数据**：画师 Gallery 标题 `画师名(画师id)`、writer=画师名、封面不特殊处理；榜单 Gallery 标题 `Pixiv {内容}{周期}榜`、writer 为空；作品标题经 `normalize_title` 归一化（无官方翻译字段）。
 - **URL 解析**：`parse_url` 识别画师主页与榜单 URL（含 R-18 模式），web 榜单 mode 参数映射到 app-api mode（如 `daily_r18` → `day_r18`）；app-api 无等价物的模式（如 `daily_r18g`，app 端仅有周 R-18G）明确报错而非静默错榜；订阅走现有「特定画廊」贴 URL 流程。
 - **R-18 策略**：R-18 作品/榜单直接通过 app-api 获取，取决于账号的「显示 R-18/R-18G」设置；源配置 hint 文案说明该依赖；未开启时 R-18 被 pixiv 静默过滤，源不做额外标记或告警。
 - **网络行为**：模拟 iOS App UA + `Referer: app-api.pixiv.net`；429 指数退避 + Retry-After；代理沿用现有源级/全局代理机制。
-- **Web 层改动**：画廊页「打开源站链接」增加 pixiv 分支（native_id → 对应 pixiv 页面）；其余（配置表单、订阅创建、搜索页）复用通用的 `get_config_schema` / `parse_url` / `search` 流程，无订阅服务改动。
+- **Web 层改动**：画廊页「打开源站链接」增加 pixiv 分支（native_id → 对应 pixiv 页面）；新增 `/api/cover` 封面代理（pixiv 图片服务器防盗链要求 Referer 为 pixiv 域，浏览器直连 403；仅放行 i.pximg.net 主机、带内存缓存、认证豁免），模板中 pixiv 封面统一走该代理；其余（配置表单、订阅创建、搜索页）复用通用流程。
 - **search() 实现**：透传 `/v1/search/illust` 的最小可用实现（复用同一解析器），供 WebUI 搜索页使用；订阅创建不为 pixiv 引导 SEARCH 模式。
 - **无 schema 变更**：不新增表/列，不动 Gallery/Page 模型。
 
@@ -80,7 +80,7 @@ Status: ready-for-agent
 ## Further Notes
 
 - 调研已确认：R-18 的显示由账号设置控制而非 premium；「R-18 搜索/榜单需要 premium」为过时 lore。真正 premium-only 的是人气排序与收藏数筛选（本 spec 未使用）。
-- 不确定项（实现时以实测为准）：`Accept-Language` 精确值（`zh-cn` vs `zh-hans`）；refresh_token 有效期（官方不公布）；数据中心 IP 403（社区报告，需用户环境实测）。
+- `Accept-Language` 已实测：`zh-cn` 不生效（返回英文翻译），`zh-hans` 生效（官方中文）。其余不确定项：refresh_token 有效期（官方不公布）；数据中心 IP 403（社区报告，需用户环境实测）。
 - Komga 官方文档确认 GIF/WebP 均为支持的 CBZ 页格式；动画是否播放取决于客户端。
 - pixiv 官方 translated_name 覆盖有限，小众/R-18 标签常为 null，回退日文原文是预期行为。
 - 源可执行任意代码（ADR 0001 无沙箱），pixiv 源仅使用仓库既有依赖（curl_cffi/httpx/Pillow），不引入新依赖。

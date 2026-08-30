@@ -105,7 +105,7 @@ class PixivSource(BaseSource):
         return httpx.AsyncClient(
             proxy=self.proxy,
             timeout=30,
-            headers={"User-Agent": self._UA, "Accept-Language": "zh-cn"},
+            headers={"User-Agent": self._UA, "Accept-Language": "zh-hans"},
             transport=self._transport,
         )
 

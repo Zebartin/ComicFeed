@@ -607,7 +607,7 @@ def _mode_handler(expected_mode: str):
             return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
         if request.url.path == "/v1/illust/ranking":
             assert request.url.params["mode"] == expected_mode
-            assert request.headers["Accept-Language"] == "zh-cn"
+            assert request.headers["Accept-Language"] == "zh-hans"
             return httpx.Response(200, json={"illusts": []})
         return httpx.Response(404)
     return handler
@@ -654,7 +654,7 @@ async def test_accept_language_header_on_api_calls():
         return httpx.Response(404)
     source = _make_source(handler)
     await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
-    assert seen == ["zh-cn"]
+    assert seen == ["zh-hans"]
 
 
 async def test_tag_translation_fallback():
@@ -743,6 +743,33 @@ async def test_sort_options():
     values = [o["value"] for o in opts]
     assert "date_desc" in values and "date_asc" in values
     assert not any("popular" in v for v in values)
+
+
+
+# --- 封面代理（pixiv 防盗链） ---
+
+async def test_cover_proxy(app, monkeypatch):
+    """/api/cover 仅放行 i.pximg.net，带缓存，且无需认证（img 标签无法带 Basic Auth）。"""
+    from comicfeed.web.routes import covers
+    calls = []
+
+    async def fake_fetch(url):
+        calls.append(url)
+        return "image/jpeg", b"\xff\xd8\xffcover"
+
+    monkeypatch.setattr(covers, "_fetch_cover", fake_fetch)
+    px_url = "https://i.pximg.net/c/540x540_70/img-master/img/2021/05/01/00/03/33/89501057_p0_master1200.jpg"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        r = await client.get("/api/cover", params={"url": px_url})
+        assert r.status_code == 200
+        assert r.content == b"\xff\xd8\xffcover"
+        assert calls == [px_url]
+        # 缓存命中
+        await client.get("/api/cover", params={"url": px_url})
+        assert len(calls) == 1
+        # 非 pixiv 主机拒绝
+        r2 = await client.get("/api/cover", params={"url": "https://evil.com/x.jpg"})
+        assert r2.status_code == 400
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

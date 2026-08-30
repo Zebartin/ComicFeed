@@ -97,7 +97,7 @@ async function fetchPage(loadMore=false) {
   $('res-title').textContent='搜索结果';$('res-count').textContent=`共 ${results.length} 个`
   $('res-body').innerHTML=results.length?results.map((g,i)=>`<div class="g-card" id="gc-${i}">
     <div class="cover" onclick="pick(${i})">
-      ${g.cover_url?`<img src="${g.cover_url}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}
+      ${g.cover_url?`<img src="${cv(srcKey, g.cover_url)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}
       <div class="no-img" style="${g.cover_url?'display:none':'display:flex'}">&mdash;</div><div class="sel"></div>
     </div>
     <div class="info" onclick="event.stopPropagation();window.open('${g.web_url||''}','_blank')" style="cursor:pointer" title="在源站打开">

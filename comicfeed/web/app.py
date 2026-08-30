@@ -14,6 +14,7 @@ from comicfeed.services.download import DownloadPool
 from comicfeed.services.queue import DownloadTracker
 from comicfeed.infrastructure.source_manager import SourceManager
 from comicfeed.web.routes.credentials import router as cred_router
+from comicfeed.web.routes.covers import router as cover_router
 from comicfeed.web.routes.galleries import router as gallery_router
 from comicfeed.web.routes.logs import router as log_router
 from comicfeed.web.routes.queue import router as queue_router
@@ -122,7 +123,7 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
         u = _asyncio.run(_gs("auth_username")) or "admin"
         p = _asyncio.run(_gs("auth_password")) or ""
     if u and p:
-        app.add_middleware(BasicAuthMiddleware, username=u, password=p, exclude_paths=["/health"])
+        app.add_middleware(BasicAuthMiddleware, username=u, password=p, exclude_paths=["/health", "/api/cover"])
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -153,6 +154,7 @@ def create_app(config: dict | None = None, source_manager: SourceManager | None 
     app.include_router(settings_router)
     app.include_router(search_router)
     app.include_router(setup_router)
+    app.include_router(cover_router)
 
     templates = Jinja2Templates(directory="comicfeed/web/templates")
 
