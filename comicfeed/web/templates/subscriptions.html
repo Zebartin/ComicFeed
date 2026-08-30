@@ -179,13 +179,13 @@
     <label>模式 <select id="mode" onchange="onModeChange()"><option value="SEARCH">搜索条件</option><option value="SPECIFIC_GALLERY">特定画廊</option></select></label>
     <label class="search-only">排序 <select id="sort"></select></label>
     <label>间隔 (分钟) <input id="interval" type="number" value="1440"></label>
-    <label class="search-only">搜索页数 <input id="search_pages" type="number" value="1"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">自动检查翻页数</span></label>
+    <label class="search-only" id="search-pages-label"><span id="search-pages-text">搜索页数</span> <input id="search_pages" type="number" value="1"><span id="search-pages-hint" style="font-size:10px;color:var(--text-muted);margin-top:3px">自动检查翻页数</span></label>
     <label>CBZ 分卷 <input id="cbz_max_pages" type="number" value="0"><span style="font-size:10px;color:var(--text-muted);margin-top:3px">0 = 不分卷</span></label>
     <label>下载目录 <input id="download_dir" placeholder="留空使用全局设置"></label>
   </div>
   <div style="margin-top:12px" class="search-only" id="filter-section">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">筛选条件</span>
+      <span id="filter-title" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em">筛选条件</span>
       <button class="btn btn-ghost btn-xs" onclick="addFilterRow()">+ 添加</button>
     </div>
     <div id="filter-rows"></div>
@@ -371,6 +371,13 @@ function onModeChange() {
   document.getElementById('query-label').textContent = isPixiv ? '画师主页或榜单 URL' : (isSearch ? '查询串' : '画廊URL')
   $('query').placeholder = isPixiv ? 'https://www.pixiv.net/users/… 或 …/ranking.php?mode=daily&content=illust' : ''
   document.querySelectorAll('.search-only').forEach(el => el.style.display = (isSearch && !isPixiv) ? '' : 'none')
+  // pixiv（特定画廊模式）：筛选条件与首检翻页数可用，其余搜索专属项隐藏
+  $('filter-section').style.display = (isSearch || isPixiv) ? '' : 'none'
+  $('search-pages-label').style.display = (isSearch || isPixiv) ? '' : 'none'
+  $('use_global_search').closest('label').style.display = isSearch ? '' : 'none'
+  $('filter-title').textContent = isPixiv ? '筛选条件（pixiv 按作品生效）' : '筛选条件'
+  $('search-pages-text').textContent = isPixiv ? '首检翻页数' : '搜索页数'
+  $('search-pages-hint').textContent = isPixiv ? '0=只翻第1页，1=全部，≥2=上限' : '自动检查翻页数'
 }
 function updateModeForSource() {
   const isPixiv = $('source_key').value === 'pixiv'

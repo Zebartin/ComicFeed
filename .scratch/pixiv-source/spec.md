@@ -52,7 +52,7 @@ Status: ready-for-agent
 - **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-hans`（实测 `zh-cn` 被服务端忽略、返回英文默认翻译）。选译规则：`translated_name` **含汉字**才采用（官方中文）；否则回退 `name`（日文原文）——官方翻译表对角色名/作品名常给罗马音或英文（如 `九条裟羅→Kujou Sara`、`原神→Genshin Impact`），对中文用户不如原文；原文无汉字的标签直接丢弃（`_pick_tag` 返回 None）。里程碑标签（`\d+users入り` 及其翻译形态 `\d+收藏`）直接丢弃。v1 不接 EhTagTranslation。
 - **元数据**：画师 Gallery 标题 `画师名`（不带 id 后缀）、writer=画师名、封面不特殊处理；榜单 Gallery 标题 `Pixiv {内容}{周期}榜`、writer 为空；作品标题经 `normalize_title` 归一化（无官方翻译字段）。**展示 ID**（`GalleryDetail.display_id`）：画师用纯数字 uid 进入 CBZ 文件名与 ComicInfo Number；榜单为非数字 ID，文件名省略 `[id]` 前缀、ComicInfo Number 留空（增量追加拿标题匹配旧卷）。
 - **URL 解析**：`parse_url` 识别画师主页与榜单 URL（含 R-18 模式），web 榜单 mode 参数映射到 app-api mode（如 `daily_r18` → `day_r18`）；app-api 无等价物的模式（如 `daily_r18g`，app 端仅有周 R-18G）明确报错而非静默错榜；订阅走现有「特定画廊」贴 URL 流程。
-- **订阅模式语义**：pixiv 为集合模型（画师/榜单 = Gallery），源声明 `supports_search_mode=False`——订阅表单选中 pixiv 时模式锁定为 SPECIFIC_GALLERY、查询串标签显示「画师主页或榜单 URL」；后端对 pixiv 的 SEARCH 模式创建/更新强制改写为 SPECIFIC_GALLERY（防御性兜底）。
+- **订阅模式语义**：pixiv 为集合模型（画师/榜单 = Gallery），源声明 `supports_search_mode=False`——订阅表单选中 pixiv 时模式锁定为 SPECIFIC_GALLERY、查询串标签显示「画师主页或榜单 URL」、筛选条件区块显示（标注「按作品生效」）并复用「搜索页数」字段作为首检翻页数（0=1页/1=全部/≥2=上限）；后端对 pixiv 的 SEARCH 模式创建/更新强制改写为 SPECIFIC_GALLERY（防御性兜底）。
 - **R-18 策略**：R-18 作品/榜单直接通过 app-api 获取，取决于账号的「显示 R-18/R-18G」设置；源配置 hint 文案说明该依赖；未开启时 R-18 被 pixiv 静默过滤，源不做额外标记或告警。
 - **网络行为**：模拟 iOS App UA + `Referer: app-api.pixiv.net`；图片下载复用 `retry_get`（429 指数退避 + Retry-After + 永久错误不重试）；页间节流默认 0.1s（源配置「请求间隔」可调，0/- 关闭）；API 翻页间 0.5s；429 触发全局冷却（后续请求先等待 30s）；代理沿用现有源级/全局代理机制。
 - **Web 层改动**：画廊页「打开源站链接」增加 pixiv 分支（native_id → 对应 pixiv 页面）；新增 `/api/cover` 封面代理（pixiv 图片服务器防盗链要求 Referer 为 pixiv 域，浏览器直连 403；仅放行 i.pximg.net 主机、带内存缓存、认证豁免），模板中 pixiv 封面统一走该代理；其余（配置表单、订阅创建、搜索页）复用通用流程。
