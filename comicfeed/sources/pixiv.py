@@ -70,7 +70,7 @@ class PixivSource(BaseSource):
         "daily_r18_ai": "日R-18AI", "weekly_r18_ai": "周R-18AI",
         "monthly_r18_ai": "月R-18AI",
     }
-    _CONTENT_LABELS = {"illust": "插画", "manga": "漫画", "ugoira": "动图"}
+    _CONTENT_LABELS = {"illust": "插画", "manga": "漫画", "ugoira": "动图", "all": "综合"}
 
     def __init__(self, proxy=None, credentials=None,
                  transport: httpx.AsyncBaseTransport | None = None, time_fn=None):
@@ -218,6 +218,8 @@ class PixivSource(BaseSource):
 
     @staticmethod
     def _match_content(item: dict, content: str) -> bool:
+        if content == "all":
+            return True  # 综合榜：全部类型混排
         itype = item.get("type", "")
         if content == "ugoira":
             return itype == "ugoira"
@@ -300,7 +302,7 @@ class PixivSource(BaseSource):
     def _split_ranking_id(gallery_id: str) -> tuple[str, str]:
         """ranking_{mode}_{content} → (mode, content)。content 为已知后缀，mode 可含下划线。"""
         rest = gallery_id[len("ranking_"):]
-        for c in ("illust", "manga", "ugoira"):
+        for c in ("all", "illust", "manga", "ugoira"):
             suffix = "_" + c
             if rest.endswith(suffix):
                 return rest[:-len(suffix)], c

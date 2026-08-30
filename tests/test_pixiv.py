@@ -214,6 +214,7 @@ async def test_parse_ranking_url():
     s = PixivSource()
     assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking_daily_illust"
     assert s.parse_url("https://www.pixiv.net/ranking.php?content=ugoira&mode=weekly") == "pixiv:ranking_weekly_ugoira"
+    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=all") == "pixiv:ranking_daily_all"
     assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily") is None
     assert s.parse_url("https://www.pixiv.net/artworks/123") is None
     assert s.parse_url("garbage") is None
@@ -690,6 +691,26 @@ async def test_ranking_ugoira_title():
     assert result.has_updates is False
 
 
+async def test_ranking_all_content_mixed():
+    """content=all 综合榜：插画与动图混排收录。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            assert request.url.params["mode"] == "day"
+            return httpx.Response(200, json=_SAMPLE_RANKING)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(200, json=_UGOIRA_META)
+        if request.url.host == "i.pximg.net" and "img-zip-ugoira" in request.url.path:
+            return httpx.Response(200, content=_ugoira_zip())
+        return httpx.Response(404)
+
+    source = _make_source(handler)
+    result = await source.check_updates("ranking_daily_all", {"page_ids": []})
+    assert result.gallery.title == "Pixiv 综合日榜"
+    assert result.gallery.new_page_ids == ["100001_p0", "100002_p0", "100002_p1", "100002_p2", "100003_webp"]
+
+
 
 # --- 07: 画廊源站链接 + 搜索页透传 ---
 
@@ -907,6 +928,7 @@ def test_split_ranking_id():
     assert PixivSource._split_ranking_id("ranking_daily_illust") == ("daily", "illust")
     assert PixivSource._split_ranking_id("ranking_daily_r18_ugoira") == ("daily_r18", "ugoira")
     assert PixivSource._split_ranking_id("ranking_weekly_r18g_manga") == ("weekly_r18g", "manga")
+    assert PixivSource._split_ranking_id("ranking_daily_all") == ("daily", "all")
 
 
 def _make_fake_pixiv_source(pages_map):

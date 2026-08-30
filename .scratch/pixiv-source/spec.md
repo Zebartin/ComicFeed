@@ -39,7 +39,7 @@ Status: ready-for-agent
 ## Implementation Decisions
 
 - **新源插件**：pixiv 实现为独立 Source 插件（ADR 0001 模型），`key="pixiv"`、`AuthSchema.TOKEN`，无沙箱、随启动扫描加载。
-- **Gallery 映射语义**：画师 = 一个 Gallery（native_id 为**纯数字 uid**），榜单 = 一个 Gallery（native_id 为 `ranking_{mode}_{content}`，mode 可含下划线、content 为已知后缀）；Gallery 的页面 = 作品的全部页。这是 pixiv 源与现有两个源的语义差异，仅存在于源插件内部，不改动系统 Gallery 模型。
+- **Gallery 映射语义**：画师 = 一个 Gallery（native_id 为**纯数字 uid**），榜单 = 一个 Gallery（native_id 为 `ranking_{mode}_{content}`，mode 可含下划线、content ∈ all/illust/manga/ugoira；all=综合榜全类型混排）；Gallery 的页面 = 作品的全部页。这是 pixiv 源与现有两个源的语义差异，仅存在于源插件内部，不改动系统 Gallery 模型。
 - **页面 ID 与增量**：插画/漫画页的 page_native_id 为 `{illust_id}_p{n}`，动图页为 `{illust_id}_webp`；`check_updates` 按作品 ID 差集返回 `new_page_ids`，复用现有「新页追加到最后 CBZ 卷」的增量机制。
 - **页序**：画师 Gallery 按作品 ID 升序（旧→新，新作自然追加到末尾）；榜单 Gallery 按首次收录顺序。
 - **榜单检查边界**：榜单订阅每次检查只取第一页；按作品 ID 在画廊内去重（该榜单 Gallery 中已收录的作品永不再收录于其中；不同榜单 Gallery 之间不做跨画廊去重，物理上各存各卷）。
