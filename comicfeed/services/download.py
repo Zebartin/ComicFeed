@@ -232,6 +232,8 @@ async def _download_gallery(
 
     # 源上报的跳过说明（如动图转换失败）→ 记录为失败下载事件，进入摘要通知
     for note in source.pop_download_notes():
+        if note.get("gallery_id") and note["gallery_id"] != gallery_id:
+            continue  # 其他画廊的说明不记到本画廊名下
         _log.info("源跳过说明: %s - %s", note.get("title", ""), note.get("error", ""))
         await record_download_event("failed", subscription_id=subscription_id,
                                     subscription_name=subscription_name,

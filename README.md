@@ -4,7 +4,7 @@
 
 ## 功能
 
-- **多源支持** — exhentai、nhentai，源为插件式可扩展
+- **多源支持** — exhentai、nhentai、pixiv，源为插件式可扩展
 - **订阅模式** — 搜索条件订阅（自动发现新画廊）、特定画廊追踪（增量更新检测），按间隔定时巡检
 - **增量更新** — exhentai 画廊新增页面后自动检测，只下载新页，合并到已有 CBZ
 - **本地筛选** — 收藏数、页数、上传日期条件过滤
@@ -63,6 +63,8 @@ python main.py
 
 exhentai 需要配置 `ipb_member_id`、`ipb_pass_hash`、`igneous`，nhentai 通常无需凭证。
 
+pixiv 需要配置 `refresh_token`（OAuth 长期凭证，一次配置长期有效）。可用第三方工具（如 gppt、pixiv-token）或在浏览器开发者工具中抓取获取。**R-18 作品与 R-18 榜单的显示取决于账号设置**（pixiv 设置 → 浏览与显示 → 显示可能包含敏感内容的作品），未开启时会被静默过滤，无需 premium。
+
 ### 全局设置
 
 | 设置项 | 说明 |
@@ -88,6 +90,8 @@ exhentai 需要配置 `ipb_member_id`、`ipb_pass_hash`、`igneous`，nhentai �
 - **CBZ 分卷**：每卷最多页数，0=不分卷
 - **筛选条件**（可选）：收藏数 ≥、页数 ≥、上传日期距今 ≤
 
+**pixiv 订阅**：在「特定画廊」模式粘贴画师主页 URL（`https://www.pixiv.net/users/…`）自动收集该画师全部作品；或粘贴榜单 URL（`https://www.pixiv.net/ranking.php?mode=daily&content=illust`，`content` 可选 `illust`/`manga`/`ugoira`，`mode` 含 `daily_r18` 等 R-18 榜）收集榜单作品。首次检查默认翻全部作品页建立画廊（订阅的「搜索页数」≥2 时作为页数上限，0 表示只翻第 1 页），之后巡检只翻最新页增量追加；榜单 Gallery 只增不缩、按作品去重；动图作品自动转换为动画 WebP 页面混排进 CBZ；筛选条件对 pixiv 按**作品**逐个生效。
+
 保存后自动执行首次检查。
 
 ### 2. 检查结果
@@ -104,7 +108,7 @@ exhentai 需要配置 `ipb_member_id`、`ipb_pass_hash`、`igneous`，nhentai �
 
 ### 4. 搜索（不创建订阅）
 
-搜索页可直接搜索任意源的任意关键词，结果展示方式与订阅检查一致。搜到感兴趣的结果可点击「保存为订阅」一键创建。
+搜索页可直接搜索任意源的任意关键词，结果展示方式与订阅检查一致。搜到感兴趣的结果可点击「保存为订阅」一键创建（pixiv 支持关键词浏览，但不支持按关键词创建订阅——请粘贴画师/榜单 URL 创建）。
 
 ### 5. 画廊管理
 
@@ -123,7 +127,7 @@ comicfeed/
   services/              # 下载编排、订阅检查、去重、队列
   repositories/          # Gallery / Page 数据访问
   io/                    # CBZ 打包、广告检测、页面下载
-  sources/               # 漫画源插件（exhentai / nhentai）
+  sources/               # 漫画源插件（exhentai / nhentai / pixiv）
   web/                   # FastAPI 路由 + Jinja2 模板
 ```
 

@@ -51,7 +51,7 @@ class PixivSource(BaseSource):
         "male": "day_male", "female": "day_female", "rookie": "week_rookie",
         "daily_r18": "day_r18", "weekly_r18": "week_r18",
         "male_r18": "day_male_r18", "female_r18": "day_female_r18",
-        "daily_r18g": "week_r18g", "weekly_r18g": "week_r18g",
+        "weekly_r18g": "week_r18g",
         "daily_ai": "day_ai", "weekly_ai": "week_ai", "monthly_ai": "month_ai",
         "daily_r18_ai": "day_r18_ai", "weekly_r18_ai": "week_r18_ai",
         "monthly_r18_ai": "month_r18_ai",
@@ -61,7 +61,7 @@ class PixivSource(BaseSource):
         "male": "男性", "female": "女性",
         "daily_r18": "日R-18", "weekly_r18": "周R-18",
         "male_r18": "男性R-18", "female_r18": "女性R-18",
-        "daily_r18g": "日R-18G", "weekly_r18g": "周R-18G",
+        "weekly_r18g": "周R-18G",
         "daily_ai": "日AI", "weekly_ai": "周AI", "monthly_ai": "月AI",
         "daily_r18_ai": "日R-18AI", "weekly_r18_ai": "周R-18AI",
         "monthly_r18_ai": "月R-18AI",
@@ -89,7 +89,7 @@ class PixivSource(BaseSource):
     def parse_url(self, url: str) -> str | None:
         m = re.match(r"https?://(?:www\.)?pixiv\.net/(?:en/)?users/(\d+)", url)
         if m:
-            return f"pixiv:user:{m.group(1)}"
+            return f"pixiv:user_{m.group(1)}"
         u = urlparse(url)
         if u.hostname not in ("www.pixiv.net", "pixiv.net") or u.path != "/ranking.php":
             return None
@@ -179,7 +179,7 @@ class PixivSource(BaseSource):
                 pages.append((f"{wid}_p0", url))
         return pages
 
-    async def _convert_ugoira(self, client: httpx.AsyncClient, item: dict) -> bytes | None:
+    async def _convert_ugoira(self, client: httpx.AsyncClient, item: dict, gallery_id: str = "") -> bytes | None:
         """动图 → 动画 WebP。失败时记录跳过说明并返回 None。"""
         import io
         import zipfile
@@ -223,7 +223,8 @@ class PixivSource(BaseSource):
             return data
         except Exception as e:
             _log.warning("pixiv 动图转换失败: %s %s - %r", wid, title, e)
-            _skip_notes.append({"title": title, "error": f"动图转换失败: {e}"})
+            _skip_notes.append({"gallery_id": gallery_id, "title": title,
+                                 "error": f"动图转换失败: {e}"})
             return None
 
     def pop_download_notes(self) -> list[dict]:
@@ -239,10 +240,10 @@ class PixivSource(BaseSource):
         return f"Pixiv {c}{m}榜"
 
     async def _build_collection_detail(self, client: httpx.AsyncClient, gallery_id: str,
-                                       items: list[dict], content: str, title: str = "") -> GalleryDetail:
+                                       items: list[dict], content: str) -> GalleryDetail:
         page_ids, page_urls, tags, writers = [], [], set(), set()
         cover_url = ""
-        is_user = gallery_id.startswith("user:")
+        is_user = gallery_id.startswith("user_")
         for item in items:
             if not cover_url:
                 cover_url = (item.get("image_urls") or {}).get("medium", "")
@@ -253,7 +254,7 @@ class PixivSource(BaseSource):
                 if tag:
                     tags.add(tag)
             if item.get("type") == "ugoira":
-                data = await self._convert_ugoira(client, item)
+                data = await self._convert_ugoira(client, item, gallery_id)
                 if data is None:
                     continue
                 wid = str(item.get("id", ""))
@@ -263,16 +264,12 @@ class PixivSource(BaseSource):
             for pid, purl in self._work_pages(item):
                 page_ids.append(pid)
                 page_urls.append(purl)
-        if not title:
-            if is_user:
-                uid = gallery_id.split(":", 1)[1]
-                name = next(((it.get("user") or {}).get("name", "") for it in items), "")
-                title = f"{name}({uid})" if name else f"user:{uid}"
-            elif gallery_id.startswith("ranking:"):
-                title = self._collection_title(gallery_id)
-            else:
-                _, mode, _content = gallery_id.split(":", 2)
-                title = f"pixiv {mode} {content}"
+        if is_user:
+            uid = gallery_id.split("_", 1)[1]
+            name = next(((it.get("user") or {}).get("name", "") for it in items), "")
+            title = f"{name}({uid})" if name else gallery_id
+        else:
+            title = self._collection_title(gallery_id)
         return GalleryDetail(
             native_id=gallery_id,
             title=title,
@@ -295,6 +292,23 @@ class PixivSource(BaseSource):
         if resp.status_code != 200:
             raise PixivAuthError(f"榜单请求失败: HTTP {resp.status_code}")
         return [it for it in (resp.json().get("illusts") or []) if self._match_content(it, content)]
+
+    async def _fetch_all_user_items(self, client: httpx.AsyncClient, uid: str, max_pages: int) -> list[dict]:
+        """翻页收集画师作品。max_pages: 0=只翻第 1 页；1=翻到底；≥2=上限 N 页。"""
+        items, fetched = [], 0
+        offset = 0
+        while True:
+            page_items, has_next = await self._fetch_user_items(client, uid, offset)
+            items.extend(page_items)
+            fetched += 1
+            if not has_next:
+                break
+            if max_pages == 0:
+                break
+            if max_pages >= 2 and fetched >= max_pages:
+                break
+            offset += 30
+        return items
 
     async def _fetch_user_items(self, client: httpx.AsyncClient, uid: str, offset: int = 0):
         resp = await client.get(f"{self._BASE}/v1/user/illusts",
@@ -350,16 +364,9 @@ class PixivSource(BaseSource):
                 _, _, content = gallery_id.split(":", 2)
                 items = await self._fetch_ranking_items(client, gallery_id, content)
                 detail = await self._build_collection_detail(client, gallery_id, items, content)
-            elif gallery_id.startswith("user:"):
-                uid = gallery_id.split(":", 1)[1]
-                items = []
-                offset = 0
-                while True:
-                    page_items, has_next = await self._fetch_user_items(client, uid, offset)
-                    items.extend(page_items)
-                    if not has_next:
-                        break
-                    offset += 30
+            elif gallery_id.startswith("user_"):
+                uid = gallery_id.split("_", 1)[1]
+                items = await self._fetch_all_user_items(client, uid, 1)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
                 detail = await self._build_collection_detail(client, gallery_id, items, "illust")
             else:
@@ -398,24 +405,12 @@ class PixivSource(BaseSource):
         filters = last_known.get("filters") or ""
         async with self._client() as client:
             await self._ensure_token(client)
-            if gallery_id.startswith("user:"):
-                uid = gallery_id.split(":", 1)[1]
+            if gallery_id.startswith("user_"):
+                uid = gallery_id.split("_", 1)[1]
                 if old_ids:
                     items, _ = await self._fetch_user_items(client, uid)
                 else:
-                    items, fetched = [], 0
-                    offset = 0
-                    while True:
-                        page_items, has_next = await self._fetch_user_items(client, uid, offset)
-                        items.extend(page_items)
-                        fetched += 1
-                        if not has_next:
-                            break
-                        if max_pages == 0:
-                            break
-                        if max_pages >= 2 and fetched >= max_pages:
-                            break
-                        offset += 30
+                    items = await self._fetch_all_user_items(client, uid, max_pages)
                 items = self._apply_work_filters(items, filters)
                 items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
                 detail = await self._build_collection_detail(client, gallery_id, items, "illust")
@@ -425,7 +420,7 @@ class PixivSource(BaseSource):
                 items = self._apply_work_filters(items, filters)
                 detail = await self._build_collection_detail(client, gallery_id, items, content)
             else:
-                return UpdateResult()
+                raise NotImplementedError(f"不支持的 pixiv 画廊 ID: {gallery_id}")
         return self._updates_from(detail, old_ids, gallery_url)
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "",

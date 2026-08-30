@@ -4,7 +4,7 @@
 
 **Blocked by:** 01–07 全部
 
-**Status:** claimed
+**Status:** resolved
 
 - [ ] README 功能列表包含 pixiv；源凭证章节含 refresh_token 获取步骤与 R-18 账号设置说明
 - [ ] 使用章节含画师主页 URL 与榜单 URL 订阅示例、筛选条件按作品生效的说明

@@ -42,15 +42,15 @@ Status: ready-for-agent
 - **Gallery 映射语义**：画师 = 一个 Gallery（native_id `user_{uid}`），榜单 = 一个 Gallery（native_id 由榜单 URL 的 mode/content 参数推导）；Gallery 的页面 = 作品的全部页。这是 pixiv 源与现有两个源的语义差异，仅存在于源插件内部，不改动系统 Gallery 模型。
 - **页面 ID 与增量**：插画/漫画页的 page_native_id 为 `{illust_id}_p{n}`，动图页为 `{illust_id}_webp`；`check_updates` 按作品 ID 差集返回 `new_page_ids`，复用现有「新页追加到最后 CBZ 卷」的增量机制。
 - **页序**：画师 Gallery 按作品 ID 升序（旧→新，新作自然追加到末尾）；榜单 Gallery 按首次收录顺序。
-- **榜单检查边界**：榜单订阅每次检查只取第一页；按作品 ID 全局去重（已收录作品永不再收录）。
-- **画师检查深度**：首次检查翻全部作品页（受订阅 `max_search_pages` 上限保护）；后续巡检只翻第 1 页做差集。
+- **榜单检查边界**：榜单订阅每次检查只取第一页；按作品 ID 在画廊内去重（该榜单 Gallery 中已收录的作品永不再收录于其中；不同榜单 Gallery 之间不做跨画廊去重，物理上各存各卷）。
+- **画师检查深度**：首次检查翻全部作品页（受订阅 `max_search_pages` 上限保护：0=只翻第 1 页；1（订阅默认）=翻到底；≥2=上限 N 页）；后续巡检只翻第 1 页做差集。
 - **筛选语义**：订阅的筛选条件（收藏数/页数/上传日期）对 pixiv 按**作品**逐个应用，不达标的作品不收录；收藏数使用 app-api 的公开收藏数（`total_bookmarks`），页数使用作品页数。
 - **认证**：refresh_token OAuth 2.0（X-Client-Time/X-Client-Hash 签名头），access_token 进程内缓存、过期自动用 refresh_token 换新；不做密码登录（reCAPTCHA 风控）、不做 PHPSESSID 通道。
 - **API 端点**：`/v1/illust/ranking`（榜单）、`/v1/user/illusts`（画师作品）、`/v1/illust/detail`（详情与页 URL）、`/v1/ugoira/metadata`（动图帧与 delay）、`/v1/search/illust`（搜索页最小透传）。
-- **动图转换**：下载 ugoira 帧 zip（带 Referer）→ 按 metadata 的 frames 顺序与 delay（毫秒）用 Pillow 合成动画 WebP（save_all + duration），作为单页 bytes 交给打包流程；不做 GIF/APNG 输出。转换失败的作品跳过、不阻塞同画廊其余作品，但**记录为失败下载事件（作品标题 + 原因）**，进入摘要通知的失败汇总（沿用现有每订阅 ≤5 条的展示上限）。跳过清单由源回传给下载服务、由下载服务写事件（源不直接写持久化；通过向后兼容的可选钩子，现有源零改动）。
+- **动图转换**：下载 ugoira 帧 zip（带 Referer）→ 按 metadata 的 frames 顺序与 delay（毫秒）用 Pillow 合成动画 WebP（save_all + duration），作为单页 bytes 交给打包流程；不做 GIF/APNG 输出。转换失败的作品跳过、不阻塞同画廊其余作品，但**记录为失败下载事件（作品标题 + 原因）**，进入摘要通知的失败汇总（沿用现有每订阅 ≤5 条的展示上限）。跳过清单带画廊归属、由源回传给下载服务、由下载服务按当前画廊匹配后写事件（源不直接写持久化；通过向后兼容的可选钩子，现有源零改动）。
 - **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-cn`，`translated_name` 有值用官方中文、否则回退 `name`（日文）；v1 不接 EhTagTranslation。
 - **元数据**：画师 Gallery 标题 `画师名(画师id)`、writer=画师名、封面不特殊处理；榜单 Gallery 标题 `Pixiv {内容}{周期}榜`、writer 为空；作品标题经 `normalize_title` 归一化（无官方翻译字段）。
-- **URL 解析**：`parse_url` 识别画师主页与榜单 URL（含 R-18 模式），web 榜单 mode 参数映射到 app-api mode（如 `daily_r18` → `day_r18`）；订阅走现有「特定画廊」贴 URL 流程。
+- **URL 解析**：`parse_url` 识别画师主页与榜单 URL（含 R-18 模式），web 榜单 mode 参数映射到 app-api mode（如 `daily_r18` → `day_r18`）；app-api 无等价物的模式（如 `daily_r18g`，app 端仅有周 R-18G）明确报错而非静默错榜；订阅走现有「特定画廊」贴 URL 流程。
 - **R-18 策略**：R-18 作品/榜单直接通过 app-api 获取，取决于账号的「显示 R-18/R-18G」设置；源配置 hint 文案说明该依赖；未开启时 R-18 被 pixiv 静默过滤，源不做额外标记或告警。
 - **网络行为**：模拟 iOS App UA + `Referer: app-api.pixiv.net`；429 指数退避 + Retry-After；代理沿用现有源级/全局代理机制。
 - **Web 层改动**：画廊页「打开源站链接」增加 pixiv 分支（native_id → 对应 pixiv 页面）；其余（配置表单、订阅创建、搜索页）复用通用的 `get_config_schema` / `parse_url` / `search` 流程，无订阅服务改动。

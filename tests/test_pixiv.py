@@ -119,7 +119,7 @@ class _OkManager:
         return key if key == "pixiv" else None
 
     def get_source(self, key, credentials=None, proxy=None):
-        assert credentials == {} and proxy is None
+        assert credentials == {"refresh_token": "rt-x"} and proxy is None
         return _OkSource()
 
 
@@ -323,8 +323,8 @@ def _make_user_handler(pages: dict[int, dict]):
 async def test_parse_artist_url():
     from comicfeed.sources.pixiv import PixivSource
     s = PixivSource()
-    assert s.parse_url("https://www.pixiv.net/users/12345") == "pixiv:user:12345"
-    assert s.parse_url("https://www.pixiv.net/en/users/67890/artworks") == "pixiv:user:67890"
+    assert s.parse_url("https://www.pixiv.net/users/12345") == "pixiv:user_12345"
+    assert s.parse_url("https://www.pixiv.net/en/users/67890/artworks") == "pixiv:user_67890"
     assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking:daily:illust"
 
 
@@ -336,7 +336,7 @@ async def test_artist_first_check_paginates_all():
         60: {"illusts": [_user_item(100007)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1})
+    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
     assert requested == [0, 30, 60]
     assert result.gallery.new_page_ids == [
         "100007_p0", "100008_p0", "100009_p0", "100010_p0", "100011_p0", "100012_p0"]
@@ -350,7 +350,7 @@ async def test_artist_first_check_respects_max_pages_cap():
         60: {"illusts": [_user_item(100010)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 2})
+    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 2})
     assert requested == [0, 30]
     assert result.gallery.new_page_ids == ["100011_p0", "100012_p0"]
 
@@ -362,7 +362,7 @@ async def test_artist_first_check_zero_max_pages_single_page():
         30: {"illusts": [_user_item(100011)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 0})
+    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 0})
     assert requested == [0]
     assert result.gallery.new_page_ids == ["100012_p0"]
 
@@ -375,7 +375,7 @@ async def test_artist_incremental_check_only_first_page():
     })
     source = _make_source(handler)
     known = {"page_ids": ["100012_p0", "100011_p0", "100010_p0"], "max_pages": 1}
-    result = await source.check_updates("user:20000", known)
+    result = await source.check_updates("user_20000", known)
     assert requested == [0]
     assert result.has_updates is True
     assert result.gallery.new_page_ids == ["100013_p0"]
@@ -387,8 +387,17 @@ async def test_artist_incremental_check_no_updates():
         0: {"illusts": [_user_item(100012)], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user:20000", {"page_ids": ["100012_p0"], "max_pages": 1})
+    result = await source.check_updates("user_20000", {"page_ids": ["100012_p0"], "max_pages": 1})
     assert result.has_updates is False
+
+
+class _TrackCapture:
+    key = "pixiv"
+    def parse_url(self, url):
+        return "pixiv:user_20000"
+    async def check_updates(self, gallery_id, last_known, gallery_url=""):
+        from comicfeed.sources.base import UpdateResult
+        return UpdateResult()
 
 
 async def test_track_gallery_passes_max_pages():
@@ -401,10 +410,7 @@ async def test_track_gallery_passes_max_pages():
 
     captured = {}
 
-    class _Capture:
-        key = "pixiv"
-        def parse_url(self, url):
-            return "pixiv:user:20000"
+    class _Capture(_TrackCapture):
         async def check_updates(self, gallery_id, last_known, gallery_url=""):
             captured.update(last_known)
             from comicfeed.sources.base import UpdateResult
@@ -561,7 +567,7 @@ async def test_work_filters_apply_to_artist_collection():
     })
     source = _make_source(handler)
     filters = '[{"field": "num_favorites", "op": "gte", "value": 500}]'
-    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1, "filters": filters})
+    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1, "filters": filters})
     assert result.gallery.new_page_ids == ["100011_p0"]
 
 
@@ -575,10 +581,7 @@ async def test_track_gallery_passes_filters():
 
     captured = {}
 
-    class _Capture:
-        key = "pixiv"
-        def parse_url(self, url):
-            return "pixiv:user:20000"
+    class _Capture(_TrackCapture):
         async def check_updates(self, gallery_id, last_known, gallery_url=""):
             captured.update(last_known)
             from comicfeed.sources.base import UpdateResult
@@ -629,6 +632,15 @@ async def test_r18_ranking_mode_mapping():
         assert result.has_updates is False  # 空榜单 → 无更新，但请求已按映射发出
 
 
+async def test_unsupported_ranking_mode_raises():
+    """web 有但 app-api 无等价物的榜单模式（如 daily_r18g）明确报错。"""
+    import pytest as _pytest
+    from comicfeed.sources.pixiv import PixivAuthError, PixivSource
+    source = PixivSource(credentials={"refresh_token": "rt"})
+    with _pytest.raises(PixivAuthError):
+        await source.check_updates("ranking:daily_r18g:illust", {"page_ids": []})
+
+
 async def test_accept_language_header_on_api_calls():
     """app-api 请求携带 Accept-Language: zh-cn。"""
     seen = []
@@ -640,7 +652,7 @@ async def test_accept_language_header_on_api_calls():
             return httpx.Response(200, json={"illusts": [], "next_url": None})
         return httpx.Response(404)
     source = _make_source(handler)
-    await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1})
+    await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
     assert seen == ["zh-cn"]
 
 
@@ -657,7 +669,7 @@ async def test_artist_gallery_title_and_writer():
         0: {"illusts": [_user_item(100012, "ArtistName")], "next": False},
     })
     source = _make_source(handler)
-    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1})
+    result = await source.check_updates("user_20000", {"page_ids": [], "max_pages": 1})
     assert result.gallery.title == "ArtistName(20000)"
     assert result.gallery.detail.writers == ["ArtistName"]
 
@@ -683,7 +695,7 @@ async def test_ranking_ugoira_title():
 def test_web_url_pixiv_mapping():
     """画廊页源站链接：pixiv 各 native_id 形态 → 对应页面。"""
     from comicfeed.web.routes.galleries import _web_url
-    assert _web_url("pixiv", "user:12345") == "https://www.pixiv.net/users/12345/"
+    assert _web_url("pixiv", "user_12345") == "https://www.pixiv.net/users/12345/"
     assert _web_url("pixiv", "ranking:daily_r18:illust") == "https://www.pixiv.net/ranking.php?mode=daily_r18&content=illust"
     assert _web_url("pixiv", "100001") == "https://www.pixiv.net/artworks/100001"
 
@@ -737,7 +749,8 @@ async def test_test_connection_endpoint(app, monkeypatch):
     await create_tables()
     monkeypatch.setattr("comicfeed.web.routes.sources._get_manager", lambda: _OkManager())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/sources/pixiv/test", auth=("admin", "secret"))
+        resp = await client.post("/api/sources/pixiv/test", auth=("admin", "secret"),
+                                 json={"credentials": {"refresh_token": "rt-x"}})
         assert resp.status_code == 200
         assert resp.json() == {"ok": True, "message": "连接成功"}
         resp2 = await client.post("/api/sources/nope/test", auth=("admin", "secret"))
