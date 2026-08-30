@@ -291,7 +291,7 @@ class PixivSource(BaseSource):
         if not name:
             return translated or None
         if not translated:
-            return name if cls._has_cjk(name) else None
+            return name
         if cls._has_cjk(translated):
             return translated
         if cls._has_cjk(name):
