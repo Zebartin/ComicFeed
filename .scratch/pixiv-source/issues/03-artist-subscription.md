@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — 插画日榜端到端（tracer bullet）
 
-**Status:** claimed
+**Status:** resolved
 
 - [ ] 画师主页 URL 解析 → 画师 native_id（user_ 前缀格式）
 - [ ] 首次检查全量翻页、受 max_search_pages 上限保护（样本多页 JSON 覆盖）

@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — 插画日榜端到端（tracer bullet）
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] 内存帧 zip fixture → 合法动画 WebP（Pillow 可打开、帧数 > 1）
 - [ ] 混合 jpg + webp 页的卷打包成功，CBZ 命名/分卷不受影响

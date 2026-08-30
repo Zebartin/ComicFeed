@@ -247,6 +247,140 @@ async def test_download_pages_sends_referer():
     assert all("PixivIOSApp" in ua for _, ua in seen)
 
 
+
+# --- 03: 画师订阅（全量首检 + 增量巡检） ---
+
+def _user_item(wid: int, name: str = "Artist") -> dict:
+    return {
+        "id": wid, "title": f"Work {wid}", "type": "illust", "page_count": 1,
+        "user": {"id": 20000, "name": name},
+        "image_urls": {"medium": f"https://i.pximg.net/c/600x1200_90/img-master/img/2024/01/01/00/00/00/{wid}_p0_master1200.jpg"},
+        "meta_single_page": {"original_image_url": f"https://i.pximg.net/img-original/img/2024/01/01/00/00/00/{wid}_p0.jpg"},
+        "meta_pages": [],
+        "total_bookmarks": 100,
+        "tags": [],
+        "create_date": "2024-01-01T00:00:00+09:00",
+    }
+
+
+def _make_user_handler(pages: dict[int, dict]):
+    """pages: {offset: {"illusts": [...], "next": bool}}。记录请求过的 offset。"""
+    requested = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/user/illusts":
+            assert request.headers["Authorization"] == "Bearer at-1"
+            offset = int(request.url.params["offset"])
+            requested.append(offset)
+            page = pages[offset]
+            body = {"illusts": page["illusts"], "next_url": f"/v1/user/illusts?offset={offset + 30}" if page.get("next") else None}
+            return httpx.Response(200, json=body)
+        return httpx.Response(404)
+
+    return handler, requested
+
+
+async def test_parse_artist_url():
+    from comicfeed.sources.pixiv import PixivSource
+    s = PixivSource()
+    assert s.parse_url("https://www.pixiv.net/users/12345") == "pixiv:user:12345"
+    assert s.parse_url("https://www.pixiv.net/en/users/67890/artworks") == "pixiv:user:67890"
+    assert s.parse_url("https://www.pixiv.net/ranking.php?mode=daily&content=illust") == "pixiv:ranking:daily:illust"
+
+
+async def test_artist_first_check_paginates_all():
+    """空 page_ids 且 max_pages=1（默认）：翻到底，页序按作品 ID 升序。"""
+    handler, requested = _make_user_handler({
+        0: {"illusts": [_user_item(100012), _user_item(100011), _user_item(100010)], "next": True},
+        30: {"illusts": [_user_item(100009), _user_item(100008)], "next": True},
+        60: {"illusts": [_user_item(100007)], "next": False},
+    })
+    source = _make_source(handler)
+    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 1})
+    assert requested == [0, 30, 60]
+    assert result.gallery.new_page_ids == [
+        "100007_p0", "100008_p0", "100009_p0", "100010_p0", "100011_p0", "100012_p0"]
+
+
+async def test_artist_first_check_respects_max_pages_cap():
+    """max_pages=2：最多翻 2 页。"""
+    handler, requested = _make_user_handler({
+        0: {"illusts": [_user_item(100012)], "next": True},
+        30: {"illusts": [_user_item(100011)], "next": True},
+        60: {"illusts": [_user_item(100010)], "next": False},
+    })
+    source = _make_source(handler)
+    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 2})
+    assert requested == [0, 30]
+    assert result.gallery.new_page_ids == ["100011_p0", "100012_p0"]
+
+
+async def test_artist_first_check_zero_max_pages_single_page():
+    """max_pages=0：只翻第 1 页。"""
+    handler, requested = _make_user_handler({
+        0: {"illusts": [_user_item(100012)], "next": True},
+        30: {"illusts": [_user_item(100011)], "next": False},
+    })
+    source = _make_source(handler)
+    result = await source.check_updates("user:20000", {"page_ids": [], "max_pages": 0})
+    assert requested == [0]
+    assert result.gallery.new_page_ids == ["100012_p0"]
+
+
+async def test_artist_incremental_check_only_first_page():
+    """已有 page_ids：巡检只请求第 1 页，差集出新增作品。"""
+    handler, requested = _make_user_handler({
+        0: {"illusts": [_user_item(100013), _user_item(100012), _user_item(100011)], "next": True},
+        30: {"illusts": [_user_item(100010)], "next": False},
+    })
+    source = _make_source(handler)
+    known = {"page_ids": ["100012_p0", "100011_p0", "100010_p0"], "max_pages": 1}
+    result = await source.check_updates("user:20000", known)
+    assert requested == [0]
+    assert result.has_updates is True
+    assert result.gallery.new_page_ids == ["100013_p0"]
+
+
+async def test_artist_incremental_check_no_updates():
+    """第 1 页无新作品 → 无更新。"""
+    handler, requested = _make_user_handler({
+        0: {"illusts": [_user_item(100012)], "next": False},
+    })
+    source = _make_source(handler)
+    result = await source.check_updates("user:20000", {"page_ids": ["100012_p0"], "max_pages": 1})
+    assert result.has_updates is False
+
+
+async def test_track_gallery_passes_max_pages():
+    """服务层把订阅的 search_pages 作为 max_pages 传给源的 check_updates。"""
+    from comicfeed.infrastructure.database import create_tables, get_session, init_db
+    from comicfeed.models import Subscription
+    from comicfeed.services.subscription import track_gallery
+    init_db(":memory:")
+    await create_tables()
+
+    captured = {}
+
+    class _Capture:
+        key = "pixiv"
+        def parse_url(self, url):
+            return "pixiv:user:20000"
+        async def check_updates(self, gallery_id, last_known, gallery_url=""):
+            captured.update(last_known)
+            from comicfeed.sources.base import UpdateResult
+            return UpdateResult()
+
+    async with get_session() as session:
+        sub = Subscription(name="t", source_key="pixiv", query="https://www.pixiv.net/users/20000",
+                           mode="SPECIFIC_GALLERY", search_pages=7)
+        session.add(sub)
+        await session.commit()
+        await track_gallery(session, sub, _Capture())
+    assert captured == {"page_ids": [], "max_pages": 7}
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

@@ -6,6 +6,7 @@ API 与图片请求需 iOS App 身份，图片下载需 Referer。
 
 import asyncio
 import hashlib
+import re
 import time
 from collections.abc import Callable
 from urllib.parse import parse_qs, urlparse
@@ -59,6 +60,9 @@ class PixivSource(BaseSource):
         ]
 
     def parse_url(self, url: str) -> str | None:
+        m = re.match(r"https?://(?:www\.)?pixiv\.net/(?:en/)?users/(\d+)", url)
+        if m:
+            return f"pixiv:user:{m.group(1)}"
         u = urlparse(url)
         if u.hostname not in ("www.pixiv.net", "pixiv.net") or u.path != "/ranking.php":
             return None
@@ -119,7 +123,7 @@ class PixivSource(BaseSource):
             except Exception as e:
                 return False, f"连接失败: {e}"
 
-    # --- 榜单 / 作品页构建 ---
+    # --- 作品/集合构建 ---
 
     @staticmethod
     def _match_content(item: dict, content: str) -> bool:
@@ -147,7 +151,8 @@ class PixivSource(BaseSource):
                 pages.append((f"{wid}_p0", url))
         return pages
 
-    def _build_collection_detail(self, gallery_id: str, items: list[dict], content: str) -> GalleryDetail:
+    def _build_collection_detail(self, gallery_id: str, items: list[dict], content: str,
+                                 title: str = "") -> GalleryDetail:
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
         page_ids, page_urls, tags, writers = [], [], set(), set()
@@ -167,10 +172,12 @@ class PixivSource(BaseSource):
             for pid, purl in self._work_pages(item):
                 page_ids.append(pid)
                 page_urls.append(purl)
-        _, mode, _content = gallery_id.split(":", 2)
+        if not title:
+            _, mode, _content = gallery_id.split(":", 2)
+            title = f"pixiv {mode} {content}"
         return GalleryDetail(
             native_id=gallery_id,
-            title=f"pixiv {mode} {content}",
+            title=title,
             cover_url=cover_url,
             web_url="",
             page_urls=page_urls,
@@ -191,6 +198,15 @@ class PixivSource(BaseSource):
             raise PixivAuthError(f"榜单请求失败: HTTP {resp.status_code}")
         return [it for it in (resp.json().get("illusts") or []) if self._match_content(it, content)]
 
+    async def _fetch_user_items(self, client: httpx.AsyncClient, uid: str, offset: int = 0):
+        resp = await client.get(f"{self._BASE}/v1/user/illusts",
+                                params={"user_id": uid, "offset": offset},
+                                headers={"Authorization": f"Bearer {self._access_token}"})
+        if resp.status_code != 200:
+            raise PixivAuthError(f"画师作品请求失败: HTTP {resp.status_code}")
+        j = resp.json()
+        return j.get("illusts") or [], bool(j.get("next_url"))
+
     @staticmethod
     def _ranking_url(gallery_id: str) -> str:
         _, mode, content = gallery_id.split(":", 2)
@@ -201,45 +217,92 @@ class PixivSource(BaseSource):
         upd = _gc.update_cache_get(gallery_id)
         if upd:
             return upd
-        if not gallery_id.startswith("ranking:"):
-            raise NotImplementedError("pixiv 作品/画师详情由后续工单实现")
-        _, _, content = gallery_id.split(":", 2)
+        key = gallery_url or gallery_id
+        cached = _gc.cache_get(key)
+        if cached:
+            return cached
         async with self._client() as client:
             await self._ensure_token(client)
-            items = await self._fetch_ranking_items(client, gallery_id, content)
-        detail = self._build_collection_detail(gallery_id, items, content)
-        detail.web_url = gallery_url or self._ranking_url(gallery_id)
+            if gallery_id.startswith("ranking:"):
+                _, _, content = gallery_id.split(":", 2)
+                items = await self._fetch_ranking_items(client, gallery_id, content)
+                detail = self._build_collection_detail(gallery_id, items, content)
+            elif gallery_id.startswith("user:"):
+                uid = gallery_id.split(":", 1)[1]
+                items = []
+                offset = 0
+                while True:
+                    page_items, has_next = await self._fetch_user_items(client, uid, offset)
+                    items.extend(page_items)
+                    if not has_next:
+                        break
+                    offset += 30
+                items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
+                detail = self._build_collection_detail(gallery_id, items, "illust",
+                                                       title=f"user:{uid}")
+            else:
+                raise NotImplementedError("pixiv 作品详情由后续工单实现")
+        detail.web_url = gallery_url or (self._ranking_url(gallery_id)
+                                         if gallery_id.startswith("ranking:") else "")
+        _gc.cache_set(key, detail)
         return detail
 
-    async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
-        if not gallery_id.startswith("ranking:"):
-            return UpdateResult()  # user_ 订阅由 03 实现
+    def _updates_from(self, detail: GalleryDetail, old_ids, gallery_url: str = "") -> UpdateResult:
         from comicfeed.infrastructure import gallery_cache as _gc
-        _, _, content = gallery_id.split(":", 2)
-        async with self._client() as client:
-            await self._ensure_token(client)
-            items = await self._fetch_ranking_items(client, gallery_id, content)
-        detail = self._build_collection_detail(gallery_id, items, content)
-        old_ids = set(last_known.get("page_ids") or [])
-        keep_idx = [i for i, pid in enumerate(detail.page_native_ids) if pid not in old_ids]
+        old = set(old_ids or [])
+        keep_idx = [i for i, pid in enumerate(detail.page_native_ids) if pid not in old]
         if not keep_idx:
             return UpdateResult()
         filtered = GalleryDetail(
             native_id=detail.native_id, title=detail.title, cover_url=detail.cover_url,
-            web_url=gallery_url or self._ranking_url(gallery_id),
+            web_url=gallery_url or detail.web_url,
             page_urls=[detail.page_urls[i] for i in keep_idx],
             page_native_ids=[detail.page_native_ids[i] for i in keep_idx],
             tags=list(detail.tags), writers=list(detail.writers),
             upload_date=detail.upload_date, reported_pages=len(keep_idx),
             num_favorites=detail.num_favorites,
         )
-        _gc.update_cache_set(gallery_id, filtered)
+        _gc.update_cache_set(detail.native_id, filtered)
         return UpdateResult(has_updates=True, gallery=GallerySummary(
-            native_id=gallery_id, title=detail.title, cover_url=detail.cover_url,
+            native_id=detail.native_id, title=detail.title, cover_url=detail.cover_url,
             web_url=filtered.web_url, page_count=len(keep_idx), tags=list(detail.tags),
             new_page_ids=[detail.page_native_ids[i] for i in keep_idx],
             detail=filtered,
         ))
+
+    async def check_updates(self, gallery_id: str, last_known: dict, gallery_url: str = "") -> UpdateResult:
+        old_ids = last_known.get("page_ids") or []
+        max_pages = int(last_known.get("max_pages") or 0)
+        async with self._client() as client:
+            await self._ensure_token(client)
+            if gallery_id.startswith("user:"):
+                uid = gallery_id.split(":", 1)[1]
+                if old_ids:
+                    items, _ = await self._fetch_user_items(client, uid)
+                else:
+                    items, fetched = [], 0
+                    offset = 0
+                    while True:
+                        page_items, has_next = await self._fetch_user_items(client, uid, offset)
+                        items.extend(page_items)
+                        fetched += 1
+                        if not has_next:
+                            break
+                        if max_pages == 0:
+                            break
+                        if max_pages >= 2 and fetched >= max_pages:
+                            break
+                        offset += 30
+                items = sorted(items, key=lambda it: str(it.get("id", "")).zfill(12))
+                detail = self._build_collection_detail(gallery_id, items, "illust",
+                                                       title=f"user:{uid}")
+            elif gallery_id.startswith("ranking:"):
+                _, _, content = gallery_id.split(":", 2)
+                items = await self._fetch_ranking_items(client, gallery_id, content)
+                detail = self._build_collection_detail(gallery_id, items, content)
+            else:
+                return UpdateResult()
+        return self._updates_from(detail, old_ids, gallery_url)
 
     async def download_pages(self, gallery_id: str, page_range: slice, gallery_url: str = "",
                              detail: GalleryDetail | None = None,
@@ -275,7 +338,7 @@ class PixivSource(BaseSource):
                     raise last_err
         return results
 
-    # --- 以下方法由后续工单实现（03/05/06/07） ---
+    # --- 以下方法由后续工单实现（05/06/07） ---
 
     async def search(self, query: str, page: int, sort: str = "date") -> SearchResult:
         raise NotImplementedError
