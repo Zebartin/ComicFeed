@@ -25,6 +25,7 @@ class GalleryDetail:
     reported_pages: int = 0
     num_favorites: int = 0
     display_id: str | None = None  # 文件名/ComicInfo 展示用 ID；None=用 native_id，""=省略
+    keep_page_names: bool = False  # CBZ 条目名保留 page_native_ids（如 pixiv 的 149035907_p2）
 
 
 @dataclass
@@ -63,6 +64,7 @@ class BaseSource(ABC):
     version: str
     domains: list[str]
     auth_schema: AuthSchema = AuthSchema.NONE
+    supports_search_mode: bool = True  # False = 该源不支持 SEARCH 订阅（如 pixiv 的集合模型）
     proxy: str | None = None
     credentials: dict[str, str]
 

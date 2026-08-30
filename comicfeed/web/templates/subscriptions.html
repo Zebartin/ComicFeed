@@ -363,26 +363,34 @@ function getFilterRules() {
 function setFilterRules(json) { $('filter-rows').innerHTML=''; try { JSON.parse(json||'[]').forEach(r => addFilterRow(r.field, r.op, r.value)) } catch(_){} }
 
 /* Form */
-function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','search_pages','download_dir'].forEach(k=>$(k).value=''); $('interval').value='1440'; $('cbz_max_pages').value='0'; $('search_pages').value='1'; $('use_global_search').checked=true; document.getElementById('query-label').textContent='查询串'; setFilterRules(''); $('form').classList.add('on') }
+function openForm() { $('sub-id').value=''; ['name','source_key','query','interval','cbz_max_pages','search_pages','download_dir'].forEach(k=>$(k).value=''); $('interval').value='1440'; $('cbz_max_pages').value='0'; $('search_pages').value='1'; $('use_global_search').checked=true; $('mode').value='SEARCH'; $('mode').disabled=false; setFilterRules(''); $('form').classList.add('on'); updateModeForSource() }
 function closeForm() { $('form').classList.remove('on') }
 function onModeChange() {
+  const isPixiv = $('source_key').value === 'pixiv'
   const isSearch = $('mode').value === 'SEARCH'
-  document.getElementById('query-label').textContent = isSearch ? '查询串' : '画廊URL'
-  document.querySelectorAll('.search-only').forEach(el => el.style.display = isSearch ? '' : 'none')
+  document.getElementById('query-label').textContent = isPixiv ? '画师主页或榜单 URL' : (isSearch ? '查询串' : '画廊URL')
+  $('query').placeholder = isPixiv ? 'https://www.pixiv.net/users/… 或 …/ranking.php?mode=daily&content=illust' : ''
+  document.querySelectorAll('.search-only').forEach(el => el.style.display = (isSearch && !isPixiv) ? '' : 'none')
+}
+function updateModeForSource() {
+  const isPixiv = $('source_key').value === 'pixiv'
+  if (isPixiv) $('mode').value = 'SPECIFIC_GALLERY'
+  $('mode').disabled = isPixiv
+  onModeChange()
 }
 function updateSortForm() {
   const key = $('source_key').value
   const s = window._srcs?.find(x => x.key === key)
   const opts = s?.sort_options || []
   $('sort').innerHTML = opts.length ? opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('') : '<option value="">(无)</option>'
+  updateModeForSource()
 }
 
 async function editSub(id) {
   const s = await api('/api/subscriptions/'+id); $('sub-id').value = id
   for (const k of ['name','source_key','query','mode','interval_minutes','cbz_max_pages','search_pages','download_dir']) $(k==='interval_minutes'?'interval':k).value = s[k] ?? ''
   updateSortForm(); $('sort').value = s.sort || 'date'
-  document.getElementById('query-label').textContent = s.mode === 'SPECIFIC_GALLERY' ? '画廊URL' : '查询串'
-  onModeChange()
+  $('mode').disabled = false
   setFilterRules(s.filter_rules || '')
   $('use_global_search').checked = s.use_global_search !== false
   $('enabled').checked = s.enabled; $('form').classList.add('on')

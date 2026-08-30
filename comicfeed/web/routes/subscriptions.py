@@ -62,7 +62,9 @@ async def list_subscriptions():
 @router.post("", status_code=201)
 async def create_subscription(data: SubCreate):
     async with get_session() as session:
-        sub = Subscription(**data.model_dump())
+        payload = data.model_dump()
+        payload["mode"] = _force_mode(payload["source_key"], payload["mode"])
+        sub = Subscription(**payload)
         session.add(sub)
         await session.commit()
         await session.refresh(sub)
@@ -87,6 +89,8 @@ async def update_subscription(sub_id: int, data: SubUpdate):
             raise HTTPException(404, "未找到")
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(sub, field, value)
+        if data.mode is not None:
+            sub.mode = _force_mode(data.source_key or sub.source_key, data.mode)
         await session.commit()
         await session.refresh(sub)
         _log.info("更新订阅: #%d %s", sub_id, sub.name)
@@ -155,6 +159,16 @@ async def check_subscription_now(sub_id: int, req: CheckRequest | None = None):
             "current_page": req.page + req.max_search_pages,
             "next_url": getattr(source, '_next_url', ''),
         }
+
+
+def _force_mode(source_key: str, mode: str) -> str:
+    """不支持 SEARCH 模式的源（如 pixiv）强制使用 SPECIFIC_GALLERY。"""
+    from comicfeed.web.app import get_source_manager
+    mgr = get_source_manager()
+    cls = mgr.get_source_cls(source_key) if mgr else None
+    if cls is not None and not getattr(cls, "supports_search_mode", True):
+        return "SPECIFIC_GALLERY"
+    return mode
 
 
 def _sub_to_dict(s: Subscription) -> dict:

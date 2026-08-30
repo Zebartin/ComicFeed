@@ -106,8 +106,11 @@ def app():
 
 
 def _create_app():
+    from comicfeed.infrastructure.source_manager import SourceManager
     from comicfeed.web.app import create_app
-    return create_app({"auth_username": "admin", "auth_password": "secret"})
+    mgr = SourceManager()
+    mgr.load_sources("comicfeed/sources")
+    return create_app({"auth_username": "admin", "auth_password": "secret"}, source_manager=mgr)
 
 
 class _OkSource:
@@ -1289,6 +1292,29 @@ async def test_ugoira_falls_back_to_medium_zip():
     result = await source.check_updates("ranking_daily_illust", {"page_ids": []})
     assert "100003_webp" in result.gallery.new_page_ids
     assert source.pop_download_notes() == []
+
+
+
+# --- 订阅模式语义：pixiv 锁定特定画廊 ---
+
+async def test_pixiv_source_disables_search_mode():
+    """pixiv 源声明不支持 SEARCH 模式。"""
+    from comicfeed.sources.pixiv import PixivSource
+    assert PixivSource.supports_search_mode is False
+
+
+async def test_pixiv_subscription_forces_specific_gallery_mode(app):
+    """创建/更新订阅：pixiv 的 SEARCH 模式被强制为 SPECIFIC_GALLERY。"""
+    await create_tables()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        r = await client.post("/api/subscriptions", auth=("admin", "secret"),
+                              json={"name": "p", "source_key": "pixiv",
+                                    "query": "https://www.pixiv.net/users/20000", "mode": "SEARCH"})
+        assert r.status_code == 201
+        assert r.json()["mode"] == "SPECIFIC_GALLERY"
+        r2 = await client.put(f"/api/subscriptions/{r.json()['id']}", auth=("admin", "secret"),
+                              json={"mode": "SEARCH"})
+        assert r2.json()["mode"] == "SPECIFIC_GALLERY"
 
 
 async def test_test_connection_endpoint(app, monkeypatch):
