@@ -51,7 +51,7 @@
     <button class="btn btn-ghost btn-sm" id="load-more-btn" onclick="loadMore()" style="display:none">加载更多</button>
     <button class="btn btn-ghost btn-sm" onclick="toggleAll()">全选</button>
     <button class="btn btn-gold btn-sm" onclick="downloadPicked()">下载选中</button>
-    <button class="btn btn-ghost btn-sm" onclick="saveAsSub()">保存为订阅</button>
+    <button class="btn btn-ghost btn-sm" id="save-sub-btn" onclick="saveAsSub()">保存为订阅</button>
   </div>
 </div>
 
@@ -75,6 +75,14 @@ function updateSort() {
   const s=window._srcs?.find(x=>x.key===$('src-key').value)
   const opts=s?.sort_options||[]
   $('sort').innerHTML=opts.length?opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join(''):'<option value="">(无)</option>'
+  updateSaveBtn()
+}
+function updateSaveBtn() {
+  const isPixiv = $('src-key').value === 'pixiv'
+  const btn = $('save-sub-btn')
+  if (!btn) return
+  btn.disabled = isPixiv
+  btn.title = isPixiv ? 'pixiv 不支持按关键词创建订阅：请到「订阅」页粘贴画师主页或榜单 URL' : ''
 }
 async function doSearch() {
   srcKey=$('src-key').value;searchQuery=$('query').value;sortBy=$('sort').value
