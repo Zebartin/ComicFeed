@@ -86,7 +86,7 @@ class PixivSource(BaseSource):
             {"key": "proxy", "label": "代理", "type": "text",
              "placeholder": "空=全局, -=直连", "hint": "留空沿用全局代理"},
             {"key": "throttle", "label": "请求间隔（秒）", "type": "text",
-             "placeholder": "0.3", "hint": "每页下载后的等待间隔，防限流；0 或 - 表示不等待"},
+             "placeholder": "0.1", "hint": "每页下载后的等待间隔，防限流；0 或 - 表示不等待"},
             {"key": "refresh_token", "label": "refresh_token", "type": "password",
              "credential": True, "placeholder": "pixiv 的 refresh_token（OAuth）",
              "hint": "长期凭证，加密存储。R-18 内容显示取决于账号设置：pixiv 设置 → 浏览与显示 → 显示敏感内容（未开启时 R-18 作品/榜单会被静默过滤）。"},
@@ -163,15 +163,15 @@ class PixivSource(BaseSource):
         try:
             v = str(cfg.get("throttle") or "").strip()
         except (ValueError, TypeError):
-            return 0.3
+            return 0.1
         if v in ("-", "0"):
             return 0.0
         if not v:
-            return 0.3
+            return 0.1
         try:
             return float(v)
         except ValueError:
-            return 0.3
+            return 0.1
 
     async def _respect_cooldown(self) -> None:
         wait = _cooldown_until - time.time()
@@ -346,7 +346,7 @@ class PixivSource(BaseSource):
                 page_urls.append(purl)
         if is_user:
             name = next(((it.get("user") or {}).get("name", "") for it in items), "")
-            title = f"{name}({gallery_id})" if name else gallery_id
+            title = name or gallery_id
         else:
             title = self._collection_title(gallery_id)
         return GalleryDetail(

@@ -671,7 +671,7 @@ async def test_artist_gallery_title_and_writer():
     })
     source = _make_source(handler)
     result = await source.check_updates("20000", {"page_ids": [], "max_pages": 1})
-    assert result.gallery.title == "ArtistName(20000)"
+    assert result.gallery.title == "ArtistName"
     assert result.gallery.detail.writers == ["ArtistName"]
 
 
@@ -821,17 +821,17 @@ async def test_tag_selection_prefers_cjk_translation():
 # --- 节流与限流 ---
 
 def test_throttle_config_parsing():
-    """"请求间隔"配置解析：默认 0.3s；0 / - 表示不等待。"""
+    """"请求间隔"配置解析：默认 0.1s；0 / - 表示不等待。"""
     from comicfeed.sources.pixiv import PixivSource
-    assert PixivSource._throttle_from_cfg({}) == 0.3
+    assert PixivSource._throttle_from_cfg({}) == 0.1
     assert PixivSource._throttle_from_cfg({"throttle": "0"}) == 0
     assert PixivSource._throttle_from_cfg({"throttle": "-"}) == 0
     assert PixivSource._throttle_from_cfg({"throttle": "1.5"}) == 1.5
-    assert PixivSource._throttle_from_cfg({"throttle": "abc"}) == 0.3
+    assert PixivSource._throttle_from_cfg({"throttle": "abc"}) == 0.1
 
 
 async def test_download_pages_throttles_between_pages(monkeypatch):
-    """页间按配置等待（默认 0.3s）。"""
+    """页间按配置等待（默认 0.1s）。"""
     from comicfeed.infrastructure.database import create_tables, init_db
     init_db(":memory:")
     await create_tables()
@@ -855,7 +855,7 @@ async def test_download_pages_throttles_between_pages(monkeypatch):
     detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
     pages = await source.download_pages("ranking_daily_illust", slice(0, 2), detail=detail)
     assert len(pages) == 2
-    assert any(abs(d - 0.3) < 0.01 for d in sleeps)
+    assert any(abs(d - 0.1) < 0.01 for d in sleeps)
 
 
 async def test_api_pagination_paced(monkeypatch):
