@@ -47,7 +47,7 @@ Status: ready-for-agent
 - **筛选语义**：订阅的筛选条件（收藏数/页数/上传日期）对 pixiv 按**作品**逐个应用，不达标的作品不收录；收藏数使用 app-api 的公开收藏数（`total_bookmarks`），页数使用作品页数。
 - **认证**：refresh_token OAuth 2.0（X-Client-Time/X-Client-Hash 签名头），access_token 进程内缓存、过期自动用 refresh_token 换新；不做密码登录（reCAPTCHA 风控）、不做 PHPSESSID 通道。
 - **API 端点**：`/v1/illust/ranking`（榜单）、`/v1/user/illusts`（画师作品）、`/v1/illust/detail`（详情与页 URL）、`/v1/ugoira/metadata`（动图帧与 delay）、`/v1/search/illust`（搜索页最小透传）。
-- **画质选项**：源配置暴露「画质」下拉（original 默认 / master1200 最长边 1200px / large 600×1200）。原图 URL 经 `/img-original/ → /c/{size}_90/img-master/ + _master1200` 变换获得低档画质；多页作品的 large 优先用 API 原生字段；动图（ugoira）固定用官方帧包不受影响。
+- **画质选项**：源配置暴露「画质」下拉（original 默认 / large 600×1200 / medium 540×540）。**只用 API 原生字段**：多页用 `meta_pages[i].image_urls`，单页用顶层 `image_urls`（p0）；字段缺失或未知画质回退原图。不做 URL 变换（实测 pixiv 对未达尺寸的图不生成对应档位，变换会 404）；动图（ugoira）固定用官方帧包不受影响。
 - **动图转换**：下载 ugoira 帧 zip（带 Referer）→ 按 metadata 的 frames 顺序与 delay（毫秒）用 Pillow 合成动画 WebP（save_all + duration），作为单页 bytes 交给打包流程；不做 GIF/APNG 输出。转换失败的作品跳过、不阻塞同画廊其余作品，但**记录为失败下载事件（作品标题 + 原因）**，进入摘要通知的失败汇总（沿用现有每订阅 ≤5 条的展示上限）。跳过清单带画廊归属、由源回传给下载服务、由下载服务按当前画廊匹配后写事件（源不直接写持久化；通过向后兼容的可选钩子，现有源零改动）。
 - **标签翻译**：所有 app-api 请求带 `Accept-Language: zh-hans`（实测 `zh-cn` 被服务端忽略、返回英文默认翻译）。选译规则：`translated_name` **含汉字**才采用（官方中文）；否则回退 `name`（日文原文）——官方翻译表对角色名/作品名常给罗马音或英文（如 `九条裟羅→Kujou Sara`、`原神→Genshin Impact`），对中文用户不如原文；原文无汉字的标签直接丢弃（`_pick_tag` 返回 None）。里程碑标签（`\d+users入り` 及其翻译形态 `\d+收藏`）直接丢弃。v1 不接 EhTagTranslation。
 - **元数据**：画师 Gallery 标题 `画师名`（不带 id 后缀）、writer=画师名、封面不特殊处理；榜单 Gallery 标题 `Pixiv {内容}{周期}榜`、writer 为空；作品标题经 `normalize_title` 归一化（无官方翻译字段）。**展示 ID**（`GalleryDetail.display_id`）：画师用纯数字 uid 进入 CBZ 文件名与 ComicInfo Number；榜单为非数字 ID，文件名省略 `[id]` 前缀、ComicInfo Number 留空（增量追加拿标题匹配旧卷）。

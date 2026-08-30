@@ -89,9 +89,9 @@ class PixivSource(BaseSource):
              "placeholder": "0.1", "hint": "每页下载后的等待间隔，防限流；0 或 - 表示不等待"},
             {"key": "quality", "label": "画质", "type": "select",
              "options": [{"value": "original", "label": "原图"},
-                         {"value": "master1200", "label": "最长边 1200px（约 1/4 体积）"},
-                         {"value": "large", "label": "大图 600×1200"}],
-             "hint": "动图（ugoira）固定使用官方帧包，不受此选项影响"},
+                         {"value": "large", "label": "大图 600×1200"},
+                         {"value": "medium", "label": "中图 540×540"}],
+             "hint": "只用 pixiv 官方提供的尺寸档（无 URL 变换，不会 404）；动图（ugoira）固定用官方帧包不受影响"},
             {"key": "refresh_token", "label": "refresh_token", "type": "password",
              "credential": True, "placeholder": "pixiv 的 refresh_token（OAuth）",
              "hint": "长期凭证，加密存储。R-18 内容显示取决于账号设置：pixiv 设置 → 浏览与显示 → 显示敏感内容（未开启时 R-18 作品/榜单会被静默过滤）。"},
@@ -233,36 +233,31 @@ class PixivSource(BaseSource):
         # content=illust：插画（含多页）+ 动图混排（动图转 WebP 进同一卷）
         return itype in ("illust", "ugoira")
 
-    @staticmethod
-    def _quality_url(url: str, quality: str) -> str:
-        """原图 URL → 指定画质：master1200 / large（c/{size}_90/img-master 变换）。"""
-        if quality in ("", "original") or "/img-original/" not in url:
-            return url
-        size = "1200x1200_90" if quality == "master1200" else "600x1200_90"
-        u = url.replace("/img-original/", f"/c/{size}/img-master/")
-        path = u.rsplit("/", 1)[-1]
-        stem, _, ext = path.rpartition(".")
-        if stem.endswith("_master1200"):
-            return u
-        return f"{u.rsplit('.', 1)[0]}_master1200.{ext}" if ext else f"{u}_master1200"
-
     def _work_pages(self, item: dict, quality: str = "original") -> list[tuple[str, str]]:
-        """作品的全部页：[(page_native_id, url)]。画质：original / master1200 / large。"""
+        """作品的全部页：[(page_native_id, url)]。
+
+        画质只用 API 原生字段：original / large（600×1200）/ medium（540×540）。
+        单页作品用顶层 image_urls（p0 的 large/medium）；字段缺失回退原图；未知画质回退原图。
+        """
         wid = str(item.get("id", ""))
         pages = []
         metas = item.get("meta_pages") or []
+        top = item.get("image_urls") or {}
         if metas:
             for i, meta in enumerate(metas):
                 urls = meta.get("image_urls") or {}
-                if quality == "large" and urls.get("large"):
-                    url = urls["large"]
+                if quality in ("large", "medium") and urls.get(quality):
+                    url = urls[quality]
                 else:
-                    url = self._quality_url(urls.get("original", ""), quality)
+                    url = urls.get("original", "")
                 if url:
                     pages.append((f"{wid}_p{i}", url))
         else:
             single = item.get("meta_single_page") or {}
-            url = self._quality_url(single.get("original_image_url", ""), quality)
+            if quality in ("large", "medium") and top.get(quality):
+                url = top[quality]
+            else:
+                url = single.get("original_image_url", "")
             if url:
                 pages.append((f"{wid}_p0", url))
         return pages
