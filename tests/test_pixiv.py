@@ -844,7 +844,7 @@ async def test_tag_selection_prefers_cjk_translation():
     from comicfeed.sources.pixiv import PixivSource
     pairs = [
         ({"name": "原神", "translated_name": "Genshin Impact"}, "原神"),
-        ({"name": "GenshinImpact", "translated_name": None}, None),  # 无翻译且原文无汉字 → 丢弃
+        ({"name": "GenshinImpact", "translated_name": None}, "GenshinImpact"),  # 无翻译 → 回退原文（用户意图）
         ({"name": "尻神様", "translated_name": "尻神样"}, "尻神样"),
         ({"name": "九条裟羅", "translated_name": "Kujou Sara"}, "九条裟羅"),
         ({"name": "夜蘭", "translated_name": "Yelan"}, "夜蘭"),
@@ -1513,6 +1513,48 @@ async def test_pixiv_detail_carries_page_tags():
     d2 = result2.gallery.detail
     assert d2.page_native_ids == ["100003_webp"]
     assert d2.page_tags == [[]]
+
+
+
+# --- 增量更新：画廊条目累加而非覆盖 ---
+
+async def test_append_accumulates_gallery_counts_and_tags():
+    """增量追加：页数累加、标签并集；标题/封面保留；重复追加同一分块幂等。"""
+    import tempfile
+    from sqlalchemy import select
+    from comicfeed.infrastructure.database import create_tables, get_session, init_db
+    from comicfeed.models import Gallery
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    base = dict(native_id="2350706", title="画师名", web_url="https://www.pixiv.net/users/2350706",
+                keep_page_names=True)
+    first = GalleryDetail(page_urls=["http://fake.local/a.jpg", "http://fake.local/b.jpg"],
+                          page_native_ids=["100001_p0", "100001_p1"],
+                          page_tags=[["原创"], ["原创"]], tags=["原创"], reported_pages=2,
+                          cover_url="http://fake.local/cover1.jpg", **base)
+    second = GalleryDetail(page_urls=["http://fake.local/c.jpg"],
+                           page_native_ids=["100002_p0"],
+                           page_tags=[["大腿"]], tags=["大腿"], reported_pages=1,
+                           cover_url="http://fake.local/cover2.jpg", **base)
+    with tempfile.TemporaryDirectory() as tmp:
+        await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                               output_dir=tmp, detail=first, save_to_db=True)
+        await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                               output_dir=tmp, detail=second, save_to_db=True, append_pages=True)
+        # 同一分块重复追加（模拟重下）→ 幂等
+        await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                               output_dir=tmp, detail=second, save_to_db=True, append_pages=True)
+        async with get_session() as session:
+            g = await session.get(Gallery, "pixiv:2350706")
+            assert g is not None
+            assert g.reported_pages == 3
+            assert g.actual_pages == 3
+            assert g.normalized_title == "画师名"
+            assert g.cover_url == "http://fake.local/cover1.jpg"  # 保留旧封面
+            import json as _json
+            assert sorted(_json.loads(g.tags)) == ["原创", "大腿"]
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

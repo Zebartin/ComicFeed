@@ -11,7 +11,8 @@ from comicfeed.models import Gallery
 async def get_or_create(session: AsyncSession, full_gid: str, source_key: str,
                         native_id: str, title: str, cover_url: str, web_url: str,
                         tags: list[str], num_favorites: int, reported_pages: int,
-                        actual_pages: int) -> Gallery:
+                        actual_pages: int, append_pages: bool = False,
+                        page_native_ids: list[str] | None = None) -> Gallery:
     g = await session.get(Gallery, full_gid)
     now = datetime.now()
     if g is None:
@@ -25,6 +26,17 @@ async def get_or_create(session: AsyncSession, full_gid: str, source_key: str,
             downloaded_at=now,
         )
         session.add(g)
+    elif append_pages:
+        # 增量追加：按「真正新增的页」累加计数与标签并集，标题/封面/来源保留旧值
+        from comicfeed.repositories.page import ids_for_gallery
+        existing = set(await ids_for_gallery(session, full_gid))
+        new_pids = [p for p in (page_native_ids or []) if p not in existing]
+        if new_pids:
+            g.reported_pages += reported_pages
+            g.actual_pages += actual_pages
+            old_tags = set(json.loads(g.tags or "[]"))
+            g.tags = json.dumps(sorted(old_tags | set(tags)), ensure_ascii=False)
+        g.downloaded_at = now
     else:
         g.actual_pages = actual_pages
         g.reported_pages = reported_pages

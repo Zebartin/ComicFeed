@@ -58,7 +58,7 @@ Status: ready-for-agent
 - **网络行为**：模拟 iOS App UA + `Referer: app-api.pixiv.net`；图片下载复用 `retry_get`（429 指数退避 + Retry-After + 永久错误不重试）；页间节流默认 0.1s（源配置「请求间隔」可调，0/- 关闭）；API 翻页间 0.5s；429 触发全局冷却（后续请求先等待 30s）；代理沿用现有源级/全局代理机制。
 - **Web 层改动**：画廊页「打开源站链接」增加 pixiv 分支（native_id → 对应 pixiv 页面）；新增 `/api/cover` 封面代理（pixiv 图片服务器防盗链要求 Referer 为 pixiv 域，浏览器直连 403；仅放行 i.pximg.net 主机、带内存缓存、认证豁免），模板中 pixiv 封面统一走该代理；其余（配置表单、订阅创建、搜索页）复用通用流程。
 - **search() 实现**：透传 `/v1/search/illust` 的最小可用实现（复用同一解析器），供 WebUI 搜索页使用；订阅创建不为 pixiv 引导 SEARCH 模式。
-- **无 schema 变更**：不新增表/列，不动 Gallery/Page 模型。
+- **无 schema 变更**：不新增表/列，不动 Gallery/Page 模型。画廊条目在增量追加时**累加而非覆盖**：`reported_pages`/`actual_pages` 按真正新增的页数累加、标签取并集、标题/封面/来源链接保留旧值；重复下载同一分块幂等（按已完成页 ID 判断）。
 
 ## Testing Decisions
 
