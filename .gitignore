@@ -12,3 +12,4 @@ _debug*.py
 
 tools/*.toml
 tools/dedup_cache.json
+comicfeed/data/
