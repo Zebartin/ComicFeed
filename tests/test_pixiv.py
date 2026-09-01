@@ -1448,28 +1448,31 @@ def _read_cbz_tags(path: str) -> list[str]:
 
 
 async def test_split_volumes_tags_scoped_per_volume():
-    """分卷：每卷 ComicInfo 标签只含该卷作品的标签。"""
+    """分卷：每卷 ComicInfo 标签只含该卷作品的标签（超一部作品策略下，
+
+    cap=2、作品 [A(2)][B(2)][C(2)] → 第1卷 A+B，第2卷 C）。"""
     import tempfile
     from comicfeed.infrastructure.database import create_tables, init_db
     from comicfeed.services.download import download_gallery
     from comicfeed.sources.base import GalleryDetail
     init_db(":memory:")
     await create_tables()
+    pids = ["100001_p0", "100001_p1", "100002_p0", "100002_p1", "100003_p0", "100003_p1"]
+    ptags = [["原创"], ["原创"], ["大腿"], ["大腿"], ["女の子"], ["女の子"]]
     detail = GalleryDetail(
         native_id="2350706", title="画师名", cover_url="", web_url="",
-        page_urls=[f"http://fake.local/{i}.jpg" for i in range(4)],
-        page_native_ids=["100001_p0", "100001_p1", "100002_p0", "100002_p1"],
-        page_tags=[["原创"], ["原创"], ["大腿"], ["大腿"]],
-        tags=["原创", "大腿"],
-        reported_pages=4, keep_page_names=True)
+        page_urls=[f"http://fake.local/{i}.jpg" for i in range(6)],
+        page_native_ids=pids, page_tags=ptags,
+        tags=["原创", "大腿", "女の子"],
+        reported_pages=6, keep_page_names=True)
     with tempfile.TemporaryDirectory() as tmp:
         result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
                                         output_dir=tmp, detail=detail, save_to_db=True,
                                         cbz_max_pages=2)
         assert len(result.files) == 2
         t1, t2 = _read_cbz_tags(result.files[0]), _read_cbz_tags(result.files[1])
-    assert t1 == ["原创"]
-    assert t2 == ["大腿"]
+    assert sorted(t1) == ["原创", "大腿"]
+    assert t2 == ["女の子"]
 
 
 async def test_incremental_volume_tags_merge_old_and_new():
@@ -1619,14 +1622,17 @@ def _cbz_entries(path: str) -> list[str]:
 
 
 async def test_split_volumes_respect_work_boundaries():
-    """卷上限 6：100 作品(2页) + 12345 作品(5页) → 第1卷=100 整卷，第2卷=12345 整卷。"""
+    """卷上限 6，作品 [100(2)][12345(5)][99999(3)]：
+
+    12345 跨过上限（2+5=7>6）但自身 ≤ 上限 → 超出一部作品放入首卷；99999 开新卷。
+    """
     import tempfile
     from comicfeed.infrastructure.database import create_tables, init_db
     from comicfeed.services.download import download_gallery
     from comicfeed.sources.base import GalleryDetail
     init_db(":memory:")
     await create_tables()
-    pids = ["100_p0", "100_p1", "12345_p0", "12345_p1", "12345_p2", "12345_p3", "12345_p4"]
+    pids = ["100_p0", "100_p1"] + [f"12345_p{i}" for i in range(5)] + ["99999_p0", "99999_p1", "99999_p2"]
     detail = GalleryDetail(
         native_id="2350706", title="画师名", cover_url="", web_url="",
         page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
@@ -1639,8 +1645,8 @@ async def test_split_volumes_respect_work_boundaries():
                                         cbz_max_pages=6)
         assert len(result.files) == 2
         v1, v2 = _cbz_entries(result.files[0]), _cbz_entries(result.files[1])
-    assert v1 == ["100_p000.jpg", "100_p001.jpg"]
-    assert v2 == [f"12345_p{i:03d}.jpg" for i in range(5)]
+    assert v1 == ["100_p000.jpg", "100_p001.jpg"] + [f"12345_p{i:03d}.jpg" for i in range(5)]
+    assert v2 == [f"99999_p{i:03d}.jpg" for i in range(3)]
 
 
 async def test_split_volumes_long_work_hard_cut():
@@ -1665,6 +1671,34 @@ async def test_split_volumes_long_work_hard_cut():
         v1, v2 = _cbz_entries(result.files[0]), _cbz_entries(result.files[1])
     assert v1 == [f"A_p{i:03d}.jpg" for i in range(6)]
     assert v2 == [f"A_p{i:03d}.jpg" for i in range(6, 10)]
+
+
+
+# --- 分卷策略：允许超出一部作品 ---
+
+async def test_split_volumes_overshoot_by_one_work():
+    """用户场景：cap=20，作品 [15][10][8] → 第1卷 25 页(15+10)，第2卷 8 页。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    pids = [f"w15_p{i}" for i in range(15)] + [f"w10_p{i}" for i in range(10)] + [f"w8_p{i}" for i in range(8)]
+    detail = GalleryDetail(
+        native_id="2350706", title="画师名", cover_url="", web_url="",
+        page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+        page_native_ids=pids, page_tags=[["t"] for _ in pids], tags=["t"],
+        reported_pages=len(pids), keep_page_names=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                        output_dir=tmp, detail=detail, save_to_db=True,
+                                        cbz_max_pages=20)
+        assert len(result.files) == 2
+        v1, v2 = _cbz_entries(result.files[0]), _cbz_entries(result.files[1])
+    assert len(v1) == 25  # 15+10，允许超出上限一部作品
+    assert len(v2) == 8
+    assert v1[-1] == "w10_p009.jpg" and v2[0] == "w8_p000.jpg"
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

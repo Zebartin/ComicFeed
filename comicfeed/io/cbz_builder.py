@@ -51,8 +51,11 @@ def _volume_boundary(ids: list[str], idx: int, cap: int) -> int:
         k = j
         while k < total and _work_key(ids[k]) == _work_key(ids[j]):
             k += 1
+        work_size = k - j
         if k - idx > cap:
-            break  # 该作品放不下本卷（含跨窗口的长作品）→ 停在作品边界
+            if work_size > cap:
+                break  # 该作品本身超过卷上限：本卷不纳入，交给下一卷硬切
+            return k - idx  # 作品边界优先：允许超出一部作品后封卷
         last_full = k
         j = k
     if last_full == idx:
