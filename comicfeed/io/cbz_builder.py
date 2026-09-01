@@ -1,5 +1,6 @@
 """CBZ 打包：广告检测 + 分卷 + 增量追加。页面从磁盘缓存读取，不驻内存。"""
 import os
+import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from zipfile import ZipFile as _ZipFile
@@ -18,6 +19,45 @@ class AppendContext:
     start_page: int
     vacancy: int
     old_cbz_paths: list[str]
+
+
+_WORK_PAGE_RE = re.compile(r"^(.*)_p\d+$")
+
+
+def _work_key(pid: str) -> str | None:
+    """页 ID → 作品 key：12345_p3 → 12345；12345_webp → 12345；非作品形态返回 None。"""
+    m = _WORK_PAGE_RE.match(pid)
+    if m:
+        return m.group(1)
+    if pid.endswith("_webp"):
+        return pid[:-5]
+    return None
+
+
+def _volume_boundary(ids: list[str], idx: int, cap: int) -> int:
+    """按作品边界定卷页数：窗口内能完整容纳的作品整卷收纳；
+
+    首个作品就超过上限（窗口即被它占满）→ 硬切 cap。
+    """
+    total = len(ids)
+    if not ids or idx >= total:
+        return min(cap, total - idx)
+    keys = [_work_key(p) for p in ids[idx:total]]
+    if any(k is None for k in keys):
+        return min(cap, total - idx)  # 页 ID 非作品形态 → 维持位置切分
+    j = idx
+    last_full = idx
+    while j < total:
+        k = j
+        while k < total and _work_key(ids[k]) == _work_key(ids[j]):
+            k += 1
+        if k - idx > cap:
+            break  # 该作品放不下本卷（含跨窗口的长作品）→ 停在作品边界
+        last_full = k
+        j = k
+    if last_full == idx:
+        return min(cap, total - idx)  # 首个作品即超上限 → 硬切
+    return last_full - idx
 
 
 def strip_ads(cache_dir: str, detail, total: int, tags: list[str]) -> tuple[int, list[str]]:
@@ -162,8 +202,12 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
     elif append_ctx:
         page_offset = append_ctx.start_page
 
+    old_n = (append_ctx.start_page + len(append_ctx.old_pages)) if (
+        append_ctx and append_ctx.old_pages) else 0
     while idx < total:
         vol_count = min(cbz_max_pages, total - idx)
+        if getattr(detail, "keep_page_names", False) and detail.page_native_ids:
+            vol_count = _volume_boundary(detail.page_native_ids, idx - old_n, vol_count)
         vol_pages = read_from_cache(cache_dir, detail, idx, vol_count)
         # 新建卷：取目录扫描的最大值递推；非分卷或无数据则按页位置计算
         vol_num = str(next_vol) if do_split else None

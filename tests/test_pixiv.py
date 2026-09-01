@@ -1609,6 +1609,64 @@ async def test_ugoira_original_frames_retry_and_throttle(monkeypatch):
     assert any(abs(d - 0.1) < 0.01 for d in sleeps)  # 帧间节流
 
 
+
+# --- 分卷按作品边界切分 ---
+
+def _cbz_entries(path: str) -> list[str]:
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        return [n for n in z.namelist() if not n.endswith(".xml")]
+
+
+async def test_split_volumes_respect_work_boundaries():
+    """卷上限 6：100 作品(2页) + 12345 作品(5页) → 第1卷=100 整卷，第2卷=12345 整卷。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    pids = ["100_p0", "100_p1", "12345_p0", "12345_p1", "12345_p2", "12345_p3", "12345_p4"]
+    detail = GalleryDetail(
+        native_id="2350706", title="画师名", cover_url="", web_url="",
+        page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+        page_native_ids=pids,
+        page_tags=[[t] for t in pids], tags=["t"],
+        reported_pages=len(pids), keep_page_names=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                        output_dir=tmp, detail=detail, save_to_db=True,
+                                        cbz_max_pages=6)
+        assert len(result.files) == 2
+        v1, v2 = _cbz_entries(result.files[0]), _cbz_entries(result.files[1])
+    assert v1 == ["100_p000.jpg", "100_p001.jpg"]
+    assert v2 == [f"12345_p{i:03d}.jpg" for i in range(5)]
+
+
+async def test_split_volumes_long_work_hard_cut():
+    """单个作品超过卷上限 → 按页数硬切（无法避免），顺序不丢页。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    pids = [f"A_p{i}" for i in range(10)]
+    detail = GalleryDetail(
+        native_id="2350706", title="画师名", cover_url="", web_url="",
+        page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+        page_native_ids=pids, page_tags=[["t"] for _ in pids], tags=["t"],
+        reported_pages=10, keep_page_names=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                        output_dir=tmp, detail=detail, save_to_db=True,
+                                        cbz_max_pages=6)
+        assert len(result.files) == 2
+        v1, v2 = _cbz_entries(result.files[0]), _cbz_entries(result.files[1])
+    assert v1 == [f"A_p{i:03d}.jpg" for i in range(6)]
+    assert v2 == [f"A_p{i:03d}.jpg" for i in range(6, 10)]
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()
