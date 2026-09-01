@@ -33,7 +33,6 @@ _webp_cache: dict[str, tuple[float, bytes]] = {}
 _webp_ttl = 3000.0
 _ugoira_items: dict[str, tuple[float, dict]] = {}
 _ugoira_ttl = 3600.0
-_skip_notes: list[dict] = []
 
 # 429 全局冷却：收到限流后所有 API 请求先等待再发
 _cooldown_until: float = 0.0
@@ -334,7 +333,7 @@ class PixivSource(BaseSource):
                 pages.append((f"{wid}_p0", url))
         return pages
 
-    async def _convert_ugoira(self, client: httpx.AsyncClient, item: dict) -> bytes:
+    async def _convert_ugoira(self, client: httpx.AsyncClient, item: dict, throttle: float = 0.0) -> bytes:
         """动图 → 动画 WebP（下载阶段调用）。失败抛 RuntimeError，画廊下载失败可重试。"""
         import io
         import zipfile
@@ -357,7 +356,7 @@ class PixivSource(BaseSource):
             if zurls.get("large"):
                 images, source_desc = await self._fetch_ugoira_zip(client, wid, frames, zurls["large"])
             if images is None:
-                images, source_desc = await self._fetch_ugoira_originals(client, item, frames)
+                images, source_desc = await self._fetch_ugoira_originals(client, item, frames, throttle)
             if images is None and zurls.get("medium"):
                 images, source_desc = await self._fetch_ugoira_zip(client, wid, frames, zurls["medium"])
             if images is None:
@@ -405,10 +404,15 @@ class PixivSource(BaseSource):
             return None, ""
 
     async def _fetch_ugoira_originals(self, client: httpx.AsyncClient, item: dict,
-                                      frames: list[dict]):
-        """large 包缺失时逐帧下载 img-original 原始帧（{id}_ugoira{n} 命名规律）。失败返回 (None, "")。"""
+                                      frames: list[dict], throttle: float = 0.0):
+        """large 包缺失时逐帧下载 img-original 原始帧（{id}_ugoira{n} 命名规律），
+
+        每帧走 retry_get（429/网络错误指数退避，403/404 视为永久不重试），
+        帧间按 throttle 等待。失败返回 (None, "")。
+        """
         import io
         from PIL import Image
+        from comicfeed.infrastructure.http_retry import retry_get
         from comicfeed.infrastructure.log import get
         _log = get(__name__)
         first = (item.get("meta_single_page") or {}).get("original_image_url") or ""
@@ -421,18 +425,14 @@ class PixivSource(BaseSource):
         for i in range(len(frames)):
             url = f"{base}_ugoira{i}{ext}"
             try:
-                r = await client.get(url, headers={"Referer": "https://app-api.pixiv.net"})
-                r.raise_for_status()
+                r = await retry_get(client, url, headers={"Referer": "https://app-api.pixiv.net"})
                 images.append(Image.open(io.BytesIO(r.content)).convert("RGB"))
             except Exception as e:
                 _log.warning("pixiv 动图原始帧拉取失败(尝试下一方案): work=%s frame=%d - %r", wid, i, e)
                 return None, ""
+            if throttle > 0:
+                await asyncio.sleep(throttle)
         return images, f"原始帧×{len(images)}"
-
-    def pop_download_notes(self) -> list[dict]:
-        """下载服务调用：取走并清空本源积累的跳过说明（一次性消费）。"""
-        notes, _skip_notes[:] = list(_skip_notes), []
-        return notes
 
     @staticmethod
     def _split_ranking_id(gallery_id: str) -> tuple[str, str]:
@@ -675,7 +675,7 @@ class PixivSource(BaseSource):
                         if not it or time.time() - it[0] >= _ugoira_ttl:
                             raise RuntimeError(f"动图信息已过期，请重新检查订阅: {wid}")
                         await self._ensure_token(client)
-                        data = await self._convert_ugoira(client, it[1])
+                        data = await self._convert_ugoira(client, it[1], _throttle)
                         _webp_cache[wid] = (time.time(), data)
                     results.append(data)
                     if on_page:

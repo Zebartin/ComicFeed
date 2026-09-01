@@ -31,7 +31,6 @@ def _clear_pixiv_module_state():
     from comicfeed.sources import pixiv as px
     px._webp_cache.clear()
     px._ugoira_items.clear()
-    px._skip_notes.clear()
     px._cooldown_until = 0.0
     yield
 
@@ -1555,6 +1554,59 @@ async def test_append_accumulates_gallery_counts_and_tags():
             assert g.cover_url == "http://fake.local/cover1.jpg"  # 保留旧封面
             import json as _json
             assert sorted(_json.loads(g.tags)) == ["原创", "大腿"]
+
+
+
+# --- 原始帧拉取：节流 + 重试 ---
+
+async def test_ugoira_original_frames_retry_and_throttle(monkeypatch):
+    """原始帧逐帧拉取：失败帧经 retry_get 重试；帧间按 throttle 等待。"""
+    import copy
+    import io as _io
+    from PIL import Image as _Image
+    _frame = _io.BytesIO()
+    _Image.new("RGB", (8, 8), (255, 0, 0)).save(_frame, "JPEG")
+    frame_bytes = _frame.getvalue()
+    sleeps, frame_calls = [], {}
+
+    async def fake_sleep(d):
+        sleeps.append(d)
+
+    # asyncio 是共享模块：一次打点同时覆盖 pixiv 与 http_retry 的 sleep，避免真实等待
+    monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(200, json={"access_token": "at-1", "expires_in": 3600})
+        if request.url.path == "/v1/illust/ranking":
+            sample = copy.deepcopy(_SAMPLE_RANKING)
+            sample["illusts"][2]["meta_single_page"]["original_image_url"] = \
+                "https://i.pximg.net/img-original/img/2024/01/03/00/00/00/100003_ugoira0.jpg"
+            return httpx.Response(200, json=sample)
+        if request.url.path == "/v1/ugoira/metadata":
+            return httpx.Response(200, json={
+                "ugoira_metadata": {
+                    "zip_urls": {"medium": "https://i.pximg.net/img-zip-ugoira/img/x/100003_ugoira600x600.zip"},
+                    "frames": [{"file": "000000.jpg", "delay": 100}, {"file": "000001.jpg", "delay": 150}],
+                }})
+        if request.url.host == "i.pximg.net" and "img-original" in request.url.path:
+            key = request.url.path
+            frame_calls[key] = frame_calls.get(key, 0) + 1
+            if key.endswith("_ugoira0.jpg") and frame_calls[key] == 1:
+                return httpx.Response(500)
+            return httpx.Response(200, content=frame_bytes)
+        return httpx.Response(404)
+
+    from comicfeed.infrastructure.database import create_tables, init_db
+    init_db(":memory:")
+    await create_tables()
+    source = _make_source(handler)
+    detail = (await source.check_updates("ranking_daily_illust", {"page_ids": []})).gallery.detail
+    pages = await source.download_pages("ranking_daily_illust", slice(4, 5), detail=detail)
+    assert pages[0].startswith(b"RIFF") and pages[0][8:12] == b"WEBP"
+    assert frame_calls.get("/img-original/img/2024/01/03/00/00/00/100003_ugoira0.jpg") == 2  # 失败帧重试
+    assert frame_calls.get("/img-original/img/2024/01/03/00/00/00/100003_ugoira1.jpg") == 1
+    assert any(abs(d - 0.1) < 0.01 for d in sleeps)  # 帧间节流
 
 
 async def test_test_connection_endpoint(app, monkeypatch):
