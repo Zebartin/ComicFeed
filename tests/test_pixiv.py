@@ -1072,7 +1072,9 @@ async def test_pixiv_detail_carries_keep_page_names():
 # --- 分卷页名回归 ---
 
 async def test_split_volumes_use_correct_page_names():
-    """分卷下载：第 2 卷条目名对应正确的作品页 id，不复读第 1 卷。"""
+    """分卷下载：第 2 卷条目名对应正确的作品页 id，不复读第 1 卷。
+
+    cap=20、作品 [A(20)][B(10)][C(10)] → 第1卷 A+B(30 页，B 为跨上限作品)，第2卷 C。"""
     import tempfile
     import zipfile
     from comicfeed.infrastructure.database import create_tables, init_db
@@ -1080,11 +1082,12 @@ async def test_split_volumes_use_correct_page_names():
     from comicfeed.sources.base import GalleryDetail
     init_db(":memory:")
     await create_tables()
+    pids = [f"149035907_p{i}" for i in range(20)] + [f"149035908_p{i}" for i in range(10)] + [f"149035909_p{i}" for i in range(10)]
     detail = GalleryDetail(
         native_id="2350706", title="画师名", cover_url="", web_url="",
-        page_urls=[f"http://fake.local/{i}.jpg" for i in range(30)],
-        page_native_ids=[f"149035907_p{i}" for i in range(30)],
-        reported_pages=30, keep_page_names=True)
+        page_urls=[f"http://fake.local/{i}.jpg" for i in range(len(pids))],
+        page_native_ids=pids, page_tags=[[] for _ in pids], tags=[],
+        reported_pages=len(pids), keep_page_names=True)
     with tempfile.TemporaryDirectory() as tmp:
         result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
                                         output_dir=tmp, detail=detail, save_to_db=True,
@@ -1092,9 +1095,7 @@ async def test_split_volumes_use_correct_page_names():
         assert len(result.files) == 2
         with zipfile.ZipFile(result.files[1]) as z:
             names = [n for n in z.namelist() if not n.endswith(".xml")]
-    # 第 2 卷 = 绝对页 21..30 = p020..p029；修复前会复读 p000..p009
-    assert names[0] == "149035907_p020.jpg"
-    assert names[-1] == "149035907_p029.jpg"
+    assert names == [f"149035909_p{i:03d}.jpg" for i in range(10)]
 
 
 async def test_incremental_append_names_only_new_pages():
@@ -1649,8 +1650,8 @@ async def test_split_volumes_respect_work_boundaries():
     assert v2 == [f"99999_p{i:03d}.jpg" for i in range(3)]
 
 
-async def test_split_volumes_long_work_hard_cut():
-    """单个作品超过卷上限 → 按页数硬切（无法避免），顺序不丢页。"""
+async def test_split_volumes_long_work_stays_whole():
+    """单个作品超过卷上限 → 整卷不拆（作品边界优先，卷上限仅软约束）。"""
     import tempfile
     from comicfeed.infrastructure.database import create_tables, init_db
     from comicfeed.services.download import download_gallery
@@ -1667,10 +1668,9 @@ async def test_split_volumes_long_work_hard_cut():
         result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
                                         output_dir=tmp, detail=detail, save_to_db=True,
                                         cbz_max_pages=6)
-        assert len(result.files) == 2
-        v1, v2 = _cbz_entries(result.files[0]), _cbz_entries(result.files[1])
-    assert v1 == [f"A_p{i:03d}.jpg" for i in range(6)]
-    assert v2 == [f"A_p{i:03d}.jpg" for i in range(6, 10)]
+        assert len(result.files) == 1
+        v1 = _cbz_entries(result.files[0])
+    assert v1 == [f"A_p{i:03d}.jpg" for i in range(10)]
 
 
 
@@ -1699,6 +1699,34 @@ async def test_split_volumes_overshoot_by_one_work():
     assert len(v1) == 25  # 15+10，允许超出上限一部作品
     assert len(v2) == 8
     assert v1[-1] == "w10_p009.jpg" and v2[0] == "w8_p000.jpg"
+
+
+
+# --- 分卷策略：长作品整卷 ---
+
+async def test_split_volumes_one_and_long_work_single_volume():
+    """用户场景：作品 [1页][23页]，cap=10 → 直接第1卷 24 页，不拆长作品。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    pids = ["w1_p0"] + [f"w23_p{i}" for i in range(23)]
+    detail = GalleryDetail(
+        native_id="2350706", title="画师名", cover_url="", web_url="",
+        page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+        page_native_ids=pids, page_tags=[["t"] for _ in pids], tags=["t"],
+        reported_pages=len(pids), keep_page_names=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="2350706",
+                                        output_dir=tmp, detail=detail, save_to_db=True,
+                                        cbz_max_pages=10)
+        assert len(result.files) == 1
+        v1 = _cbz_entries(result.files[0])
+    assert len(v1) == 24
+    assert v1[0] == "w1_p000.jpg"
+    assert v1[-1] == "w23_p022.jpg"
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

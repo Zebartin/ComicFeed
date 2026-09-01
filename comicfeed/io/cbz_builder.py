@@ -51,16 +51,11 @@ def _volume_boundary(ids: list[str], idx: int, cap: int) -> int:
         k = j
         while k < total and _work_key(ids[k]) == _work_key(ids[j]):
             k += 1
-        work_size = k - j
-        if k - idx > cap:
-            if work_size > cap:
-                break  # 该作品本身超过卷上限：本卷不纳入，交给下一卷硬切
-            return k - idx  # 作品边界优先：允许超出一部作品后封卷
         last_full = k
         j = k
-    if last_full == idx:
-        return min(cap, total - idx)  # 首个作品即超上限 → 硬切
-    return last_full - idx
+        if last_full - idx > cap:
+            return last_full - idx  # 作品边界优先：跨过上限的作品纳入后封卷
+    return last_full - idx  # 已到末尾：全部作品纳入（长作品整卷）
 
 
 def strip_ads(cache_dir: str, detail, total: int, tags: list[str]) -> tuple[int, list[str]]:
