@@ -190,8 +190,10 @@ async def _download_gallery(
     append_ctx: AppendContext | None = None
     if append_pages:
         async with get_session() as s:
+            from comicfeed.repositories.page import ids_for_gallery as _ids_for_gallery
             lookup_gid = f"{source.key}:{replaces_native_id}" if replaces_native_id else full_gid
             old_count = await count_for_gallery(s, lookup_gid)
+            old_ids_all = await _ids_for_gallery(s, lookup_gid)
         _log.debug("增量模式: lookup_gid=%s old_count=%d", lookup_gid, old_count)
         if old_count > 0:
             lookup_id = replaces_native_id or gallery_id
@@ -217,6 +219,7 @@ async def _download_gallery(
                             start_page=old_count - pages_in_last,
                             vacancy=vacancy,
                             old_cbz_paths=[existing[-1]],
+                            old_ids=old_ids_all,
                         )
                 else:
                     _log.debug("不分卷: 读取 %s (%d 页)", existing[0], old_count)
@@ -224,6 +227,7 @@ async def _download_gallery(
                         old_pages=read_cbz_pages(existing[0]),
                         start_page=0, vacancy=0,
                         old_cbz_paths=[existing[0]],
+                        old_ids=old_ids_all,
                     )
 
     # 下载页面到磁盘缓存

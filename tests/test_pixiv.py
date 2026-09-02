@@ -1123,7 +1123,8 @@ async def test_incremental_append_names_only_new_pages():
         with _zipfile.ZipFile(r2.files[0]) as z:
             names = [n for n in z.namelist() if not n.endswith(".xml")]
         assert len(read_cbz_pages(r2.files[0])) == 3
-    assert names == ["0001.jpg", "0002.jpg", "149035907_p002.jpg"]
+    # 旧页保留原像素名（DB 记录），新页用其作品页 id
+    assert names == ["149035907_p000.jpg", "149035907_p001.jpg", "149035907_p002.jpg"]
 
 
 
@@ -1800,9 +1801,36 @@ async def test_incremental_merge_with_short_last_volume():
         assert "(0046-0046).cbz" not in all_names
         merged = next(f for f in r2.files if "(0046-0076)" in f)
         entries = _cbz_entries(merged)
-        assert entries[0] == "0046.jpg"  # 旧页保留序号名（无 id 映射），不被重命名
+        assert entries[0] == "w3_p000.jpg"  # 旧页保留原像素名（来自 DB 页记录）
         assert entries[1:21] == [f"w4_p{i:03d}.jpg" for i in range(20)]
         assert entries[21:] == [f"w5_p{i:03d}.jpg" for i in range(10)]
+
+
+
+async def test_incremental_nonsplit_merge_keeps_old_page_names():
+    """不分卷增量合并：旧页保留原像素名（DB 记录），不落回序号。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+
+    def make(pids):
+        return GalleryDetail(
+            native_id="20000", title="画师名", cover_url="", web_url="",
+            page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+            page_native_ids=pids, page_tags=[[] for _ in pids], tags=[],
+            reported_pages=len(pids), keep_page_names=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                               output_dir=tmp, detail=make(["w1_p0", "w2_p0"]), save_to_db=True)
+        r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                                    output_dir=tmp, detail=make(["w3_p0"]), save_to_db=True,
+                                    append_pages=True)
+        entries = _cbz_entries(r2.files[0])
+    assert entries == ["w1_p000.jpg", "w2_p000.jpg", "w3_p000.jpg"]
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

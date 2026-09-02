@@ -2,7 +2,7 @@
 import os
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from zipfile import ZipFile as _ZipFile
 
 from comicfeed.io.cbz import make_cbz_name, pack_cbz
@@ -19,6 +19,7 @@ class AppendContext:
     start_page: int
     vacancy: int
     old_cbz_paths: list[str]
+    old_ids: list[str] = field(default_factory=list)  # 全部旧页 id（DB 页记录），供合并卷保留原像素名
 
 
 _WORK_PAGE_RE = re.compile(r"^(.*)_p\d+$")
@@ -156,7 +157,13 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
             page_ids = []
             for j in range(len(vol_pages)):
                 rel = start_page + j - old_n
-                page_ids.append(pids[rel] if 0 <= rel < len(pids) else "")
+                if rel >= 0:
+                    page_ids.append(pids[rel] if 0 <= rel < len(pids) else "")
+                elif append_ctx and 0 <= start_page + j < len(append_ctx.old_ids):
+                    # 旧页：按绝对位置取 DB 记录的原像素名
+                    page_ids.append(append_ctx.old_ids[start_page + j])
+                else:
+                    page_ids.append("")
         # 卷级标签：该卷页的标签并集；合并卷并入旧卷标签
         vol_tags = None
         if getattr(detail, "page_tags", None):
