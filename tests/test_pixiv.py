@@ -1729,6 +1729,38 @@ async def test_split_volumes_one_and_long_work_single_volume():
     assert v1[-1] == "w23_p022.jpg"
 
 
+
+# --- 分卷增量追加 + 作品边界回归 ---
+
+async def test_incremental_split_append_with_work_boundary():
+    """分卷增量追加：新页配 hmm 用 3 作品追加进有分卷的画廊，不再 IndexError，页数守恒。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+
+    def make(pids):
+        return GalleryDetail(
+            native_id="20000", title="画师名", cover_url="", web_url="",
+            page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+            page_native_ids=pids, page_tags=[[] for _ in pids], tags=[],
+            reported_pages=len(pids), keep_page_names=True)
+
+    first_pids = [f"A_p{i}" for i in range(20)] + [f"B_p{i}" for i in range(10)] + [f"C_p{i}" for i in range(10)]
+    second_pids = [f"D_p{i}" for i in range(20)] + [f"E_p{i}" for i in range(10)] + [f"F_p{i}" for i in range(10)]
+    with tempfile.TemporaryDirectory() as tmp:
+        r1 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                                    output_dir=tmp, detail=make(first_pids), save_to_db=True,
+                                    cbz_max_pages=20)
+        r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                                    output_dir=tmp, detail=make(second_pids), save_to_db=True,
+                                    append_pages=True, cbz_max_pages=20)
+        total = sum(len(_cbz_entries(f)) for f in r1.files + r2.files)
+    assert total == 40 + 40  # 首下 40 页 + 增量 40 页，页数守恒
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

@@ -40,6 +40,8 @@ def _volume_boundary(ids: list[str], idx: int, cap: int) -> int:
     首个作品就超过上限（窗口即被它占满）→ 硬切 cap。
     """
     total = len(ids)
+    if idx < 0:
+        idx = 0  # 防御：负索引会从列表尾部取值甚至越界
     if not ids or idx >= total:
         return min(cap, total - idx)
     keys = [_work_key(p) for p in ids[idx:total]]
@@ -205,7 +207,8 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
     while idx < total:
         vol_count = min(cbz_max_pages, total - idx)
         if getattr(detail, "keep_page_names", False) and detail.page_native_ids:
-            vol_count = _volume_boundary(detail.page_native_ids, idx - old_n, vol_count)
+            # idx 在追加模式下是「新页计数」（filtered detail 下标），无需再减 old_n
+            vol_count = _volume_boundary(detail.page_native_ids, idx, vol_count)
         vol_pages = read_from_cache(cache_dir, detail, idx, vol_count)
         # 新建卷：取目录扫描的最大值递推；非分卷或无数据则按页位置计算
         vol_num = str(next_vol) if do_split else None
