@@ -221,6 +221,13 @@ async def _download_gallery(
                             old_cbz_paths=[existing[-1]],
                             old_ids=old_ids_all,
                         )
+                    else:
+                        # 末卷已满/超限：不合并，新内容从新卷继续编号（不重开 0001）
+                        _log.debug("末卷已满(实际 %d 页): 新卷编号从 %d 起", pages_in_last, old_count + 1)
+                        append_ctx = AppendContext(
+                            old_pages=[], start_page=old_count, vacancy=0,
+                            old_cbz_paths=[], old_ids=old_ids_all,
+                        )
                 else:
                     _log.debug("不分卷: 读取 %s (%d 页)", existing[0], old_count)
                     append_ctx = AppendContext(

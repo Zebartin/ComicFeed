@@ -1833,6 +1833,40 @@ async def test_incremental_nonsplit_merge_keeps_old_page_names():
     assert entries == ["w1_p000.jpg", "w2_p000.jpg", "w3_p000.jpg"]
 
 
+
+# --- 末卷已满：新卷编号延续 ---
+
+async def test_incremental_full_last_volume_starts_new_numbering():
+    """首下 10 页（cap=10，整卷）→ 追加 7 页：新卷应为 (0011-0017)，不得生成 0001-0007。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+
+    def make(pids):
+        return GalleryDetail(
+            native_id="20000", title="画师名", cover_url="", web_url="",
+            page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+            page_native_ids=pids, page_tags=[[] for _ in pids], tags=[],
+            reported_pages=len(pids), keep_page_names=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        r1 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                                    output_dir=tmp, detail=make([f"w1_p{i}" for i in range(10)]),
+                                    save_to_db=True, cbz_max_pages=10)
+        assert len(r1.files) == 1 and r1.files[0].endswith("(0001-0010).cbz")
+        r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                                    output_dir=tmp, detail=make([f"w2_p{i}" for i in range(7)]),
+                                    save_to_db=True, append_pages=True, cbz_max_pages=10)
+        names = [__import__("os").path.basename(f) for f in r2.files]
+        assert len(names) == 1
+        assert names[0].endswith("(0011-0017).cbz")  # 编号延续，不重开 0001
+        entries = _cbz_entries(r2.files[0])
+    assert entries == [f"w2_p{i:03d}.jpg" for i in range(7)]
+
+
 async def test_test_connection_endpoint(app, monkeypatch):
     """测试连接端点返回源的探活结果；未知源 404。"""
     await create_tables()

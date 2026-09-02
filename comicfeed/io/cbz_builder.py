@@ -149,7 +149,7 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
         if number is None:
             number = str((start_page // cbz_max_pages) + 1) if do_split else display_gid
         old_n = (append_ctx.start_page + len(append_ctx.old_pages)) if (
-            append_ctx and append_ctx.old_pages) else 0
+            append_ctx is not None) else 0
         # 保留页名：按绝对页序逐页取 id；旧页（追加合并）无 id → 回退序号
         page_ids = None
         if getattr(detail, "keep_page_names", False):
@@ -214,7 +214,7 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
         page_offset = append_ctx.start_page
 
     old_n = (append_ctx.start_page + len(append_ctx.old_pages)) if (
-        append_ctx and append_ctx.old_pages) else 0
+        append_ctx is not None) else 0
     while idx < total:
         vol_count = min(cbz_max_pages, total - idx)
         if getattr(detail, "keep_page_names", False) and detail.page_native_ids:
