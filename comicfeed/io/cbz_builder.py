@@ -182,7 +182,11 @@ def pack_cbz_volumes(cache_dir: str, detail, total: int, gallery_id: str, title:
 
     if append_ctx and append_ctx.old_pages:
         if do_split and append_ctx.vacancy > 0:
-            fill = min(append_ctx.vacancy, total)
+            # 合并填页尊重作品边界：整作品纳入，跨过空隙的作品允许塞入（与软上限策略一致）
+            if getattr(detail, "keep_page_names", False) and detail.page_native_ids:
+                fill = _volume_boundary(detail.page_native_ids, 0, append_ctx.vacancy)
+            else:
+                fill = min(append_ctx.vacancy, total)
             pages = append_ctx.old_pages + read_from_cache(cache_dir, detail, 0, fill)
             fp = _pack_vol(pages, append_ctx.start_page, number=old_vol_number or None,
                            base_tags=old_tags)

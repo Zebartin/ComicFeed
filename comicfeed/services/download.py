@@ -205,8 +205,9 @@ async def _download_gallery(
             _log.debug("查找已有 CBZ: pattern=%s found=%d", pattern, len(existing))
             if existing:
                 if do_split:
-                    pages_in_last = old_count % cbz_max_pages or cbz_max_pages
-                    vacancy = cbz_max_pages - pages_in_last if pages_in_last < cbz_max_pages else 0
+                    # 作品边界软上限下末卷可任意小：真实页数从文件读，不能按取模假设
+                    pages_in_last = len(read_cbz_pages(existing[-1]))
+                    vacancy = cbz_max_pages - pages_in_last
                     _log.debug("分卷模式: old_count=%d pages_in_last=%d vacancy=%d cbz_max=%d",
                                old_count, pages_in_last, vacancy, cbz_max_pages)
                     if vacancy > 0:
@@ -380,6 +381,7 @@ async def download_batch(
                             cover_url=t.cover_url, web_url=t.gallery_url)
         except Exception as e:
             _log.error("下载失败: %s - %s", full_gid, e)
+            _log.exception(e)
             tracker.failed(full_gid, str(e),
                            title=t.title, total_pages=t.page_count,
                            cover_url=t.cover_url, web_url=t.gallery_url)

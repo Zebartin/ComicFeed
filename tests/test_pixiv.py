@@ -1757,8 +1757,52 @@ async def test_incremental_split_append_with_work_boundary():
         r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
                                     output_dir=tmp, detail=make(second_pids), save_to_db=True,
                                     append_pages=True, cbz_max_pages=20)
-        total = sum(len(_cbz_entries(f)) for f in r1.files + r2.files)
-    assert total == 40 + 40  # 首下 40 页 + 增量 40 页，页数守恒
+        import glob as _glob
+        all_files = sorted(_glob.glob(f"{tmp}/*.cbz"))
+        total = sum(len(_cbz_entries(f)) for f in all_files)
+    assert total == 40 + 40  # 磁盘终态页数守恒（合并卷已替换旧末卷，不重复计数）
+
+
+
+# --- 分卷增量合并回归（末卷非整容量） ---
+
+async def test_incremental_merge_with_short_last_volume():
+    """作品边界软上限下末卷仅 1 页（非取模值）：合并卷标号/旧页名/新作品边界都正确。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+
+    def make(pids):
+        return GalleryDetail(
+            native_id="20000", title="画师名", cover_url="", web_url="",
+            page_urls=[f"http://fake.local/{p}.jpg" for p in pids],
+            page_native_ids=pids, page_tags=[[] for _ in pids], tags=[],
+            reported_pages=len(pids), keep_page_names=True)
+
+    first_pids = [f"w1_p{i}" for i in range(30)] + [f"w2_p{i}" for i in range(15)] + ["w3_p0"]
+    second_pids = [f"w4_p{i}" for i in range(20)] + [f"w5_p{i}" for i in range(10)]
+    with tempfile.TemporaryDirectory() as tmp:
+        r1 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                                    output_dir=tmp, detail=make(first_pids), save_to_db=True,
+                                    cbz_max_pages=30)
+        # 首下期望：第1卷=w1+w2（45 页，软上限跨过作品纳入），第2卷=w3 单页
+        assert len(r1.files) == 2
+        names1 = [__import__("os").path.basename(f) for f in r1.files]
+        assert names1[-1].endswith("(0046-0046).cbz")
+        r2 = await download_gallery(source=_make_fake_pixiv_source({}), gallery_id="20000",
+                                    output_dir=tmp, detail=make(second_pids), save_to_db=True,
+                                    append_pages=True, cbz_max_pages=30)
+        all_names = [__import__("os").path.basename(f) for f in r2.files]
+        # 旧 0046-0046 删除；新合并卷 0046-0076（1 旧页 + w4(20) + w5(10)）
+        assert "(0046-0046).cbz" not in all_names
+        merged = next(f for f in r2.files if "(0046-0076)" in f)
+        entries = _cbz_entries(merged)
+        assert entries[0] == "0046.jpg"  # 旧页保留序号名（无 id 映射），不被重命名
+        assert entries[1:21] == [f"w4_p{i:03d}.jpg" for i in range(20)]
+        assert entries[21:] == [f"w5_p{i:03d}.jpg" for i in range(10)]
 
 
 async def test_test_connection_endpoint(app, monkeypatch):
