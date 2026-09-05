@@ -965,6 +965,7 @@ def _make_fake_pixiv_source(pages_map):
         version = "1.0"
         domains = ["fake.local"]
         auth_schema = AuthSchema.NONE
+        filters_applied_at_check = True
 
         async def search(self, query, page, sort="date"):
             raise NotImplementedError
@@ -1865,6 +1866,67 @@ async def test_incremental_full_last_volume_starts_new_numbering():
         assert names[0].endswith("(0011-0017).cbz")  # 编号延续，不重开 0001
         entries = _cbz_entries(r2.files[0])
     assert entries == [f"w2_p{i:03d}.jpg" for i in range(7)]
+
+
+
+# --- 下载阶段筛选：pixiv 已在检查阶段按作品应用 ---
+
+async def test_pixiv_skips_download_stage_filter():
+    """pixiv（filters_applied_at_check=True）：下载阶段不再对集合级 detail 二次筛选。"""
+    import tempfile
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import download_gallery
+    from comicfeed.sources.base import GalleryDetail
+    init_db(":memory:")
+    await create_tables()
+    detail = GalleryDetail(
+        native_id="ranking_daily_illust", title="Pixiv 插画日榜", cover_url="", web_url="",
+        page_urls=["http://fake.local/a.jpg", "http://fake.local/b.jpg"],
+        page_native_ids=["100001_p0", "100002_p0"], page_tags=[[], []], tags=[],
+        reported_pages=2, display_id="", keep_page_names=True, num_favorites=0)
+    with tempfile.TemporaryDirectory() as tmp:
+        result = await download_gallery(
+            source=_make_fake_pixiv_source({}), gallery_id="ranking_daily_illust",
+            output_dir=tmp, detail=detail, save_to_db=True,
+            filter_rules='[{"field": "num_favorites", "op": "gte", "value": 1000}]')
+    assert len(result.files) >= 1  # 未被误跳过
+
+
+async def test_plain_source_still_filtered_at_download():
+    """非 pixiv 源（默认 False）：下载阶段画廊级筛选保持原行为。"""
+    import tempfile
+    import pytest as _pytest
+    from comicfeed.infrastructure.database import create_tables, init_db
+    from comicfeed.services.download import GallerySkipped, download_gallery
+    from comicfeed.sources.base import AuthSchema, BaseSource, GalleryDetail
+
+    class _Plain(BaseSource):
+        key = "plain"
+        name = "Plain"
+        version = "1"
+        domains = ["plain.local"]
+        auth_schema = AuthSchema.NONE
+
+        async def search(self, query, page, sort="date"):
+            raise NotImplementedError
+        async def get_gallery(self, gallery_id, gallery_url=""):
+            raise NotImplementedError
+        async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
+            return [b"\xff\xd8\xffx" for _ in page_range]
+        async def check_updates(self, gallery_id, last_known, gallery_url=""):
+            raise NotImplementedError
+
+    init_db(":memory:")
+    await create_tables()
+    detail = GalleryDetail(native_id="x", title="T", cover_url="", web_url="",
+                           page_urls=["http://plain.local/1.jpg"],
+                           page_native_ids=["p0"], reported_pages=1, num_favorites=0)
+    with tempfile.TemporaryDirectory() as tmp:
+        with _pytest.raises(GallerySkipped):
+            await download_gallery(
+                source=_Plain(), gallery_id="x", output_dir=tmp, detail=detail,
+                save_to_db=True,
+                filter_rules='[{"field": "num_favorites", "op": "gte", "value": 1000}]')
 
 
 async def test_test_connection_endpoint(app, monkeypatch):

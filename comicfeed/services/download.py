@@ -155,7 +155,8 @@ async def _download_gallery(
     full_gid = f"{source.key}:{gallery_id}"
 
     # 下载阶段筛选（exhentai 等源搜到时缺少 num_favorites/upload_date）
-    if filter_rules:
+    # 源声明「筛选在检查阶段已应用」时跳过（如 pixiv 按作品过滤，集合级 detail 无收藏数/日期语义）
+    if filter_rules and not getattr(source, "filters_applied_at_check", False):
         from comicfeed.services.subscription import _matches_filter
         from json import loads as _jloads
         try:

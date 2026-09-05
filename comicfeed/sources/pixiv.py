@@ -45,6 +45,7 @@ class PixivSource(BaseSource):
     domains = ["app-api.pixiv.net"]
     auth_schema = AuthSchema.TOKEN
     supports_search_mode = False  # 画师/榜单为集合模型，仅 SPECIFIC_GALLERY 语义
+    filters_applied_at_check = True  # 筛选按作品在检查阶段应用；集合级 detail 的收藏数/日期无画廊语义
 
     _BASE = "https://app-api.pixiv.net"
     _AUTH = "https://oauth.secure.pixiv.net"  # token 端点在 oauth 域名，不在 app-api

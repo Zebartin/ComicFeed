@@ -66,6 +66,7 @@ class BaseSource(ABC):
     domains: list[str]
     auth_schema: AuthSchema = AuthSchema.NONE
     supports_search_mode: bool = True  # False = 该源不支持 SEARCH 订阅（如 pixiv 的集合模型）
+    filters_applied_at_check: bool = False  # True = 筛选在检查阶段已按语义应用，下载阶段不再画廊级二筛（如 pixiv 按作品）
     proxy: str | None = None
     credentials: dict[str, str]
 
