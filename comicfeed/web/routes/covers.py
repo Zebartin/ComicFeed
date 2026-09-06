@@ -12,8 +12,11 @@ from fastapi.responses import Response
 
 router = APIRouter(prefix="/api", tags=["covers"])
 
+# 图床白名单：仅允许这些主机的封面经代理获取（防 SSRF）
+_ALLOWED_HOSTS = {"i.pximg.net", "t.nhentai.net", "i.nhentai.net",
+                 "exhentai.org", "e-hentai.org"}
+
 _HEADERS = {
-    "Referer": "https://www.pixiv.net",
     "User-Agent": "PixivIOSApp/7.19.1 (iOS 16.6; iPhone14,5)",
 }
 
@@ -23,8 +26,11 @@ _MAX = 200
 
 
 async def _fetch_cover(url: str) -> tuple[str, bytes]:
+    headers = dict(_HEADERS)
+    if urlparse(url).hostname == "i.pximg.net":
+        headers["Referer"] = "https://www.pixiv.net"
     async with httpx.AsyncClient(timeout=15, follow_redirects=True,
-                                 headers=_HEADERS) as client:
+                                 headers=headers) as client:
         resp = await client.get(url)
         if resp.status_code != 200:
             raise HTTPException(502, f"封面获取失败: HTTP {resp.status_code}")
@@ -33,8 +39,8 @@ async def _fetch_cover(url: str) -> tuple[str, bytes]:
 
 @router.get("/cover")
 async def cover(url: str):
-    if urlparse(url).hostname != "i.pximg.net":
-        raise HTTPException(400, "仅支持 pixiv 封面")
+    if urlparse(url).hostname not in _ALLOWED_HOSTS:
+        raise HTTPException(400, "封面主机不在白名单内")
     entry = _cache.get(url)
     if entry and time.time() - entry[0] < _TTL:
         _, ctype, data = entry

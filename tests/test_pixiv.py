@@ -814,9 +814,13 @@ async def test_cover_proxy(app, monkeypatch):
         # 缓存命中
         await client.get("/api/cover", params={"url": px_url})
         assert len(calls) == 1
-        # 非 pixiv 主机拒绝
-        r2 = await client.get("/api/cover", params={"url": "https://evil.com/x.jpg"})
-        assert r2.status_code == 400
+        # 白名单内其他图床放行；evil.com 拒绝
+        r2 = await client.get("/api/cover", params={"url": "https://t.nhentai.net/galleries/1/cover.jpg"})
+        assert r2.status_code == 200
+        r3 = await client.get("/api/cover", params={"url": "https://exhentai.org/img/x.jpg"})
+        assert r3.status_code == 200
+        r4 = await client.get("/api/cover", params={"url": "https://evil.com/x.jpg"})
+        assert r4.status_code == 400
 
 
 

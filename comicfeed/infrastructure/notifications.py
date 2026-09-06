@@ -2,8 +2,13 @@ import asyncio
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from urllib.parse import quote, urlparse
 
 import httpx
+
+# 内嵌封面上限：超过则该图回退远程 URL
+_COVER_MAX_BYTES = 300 * 1024
+_COVER_REFERERS = {"i.pximg.net": "https://www.pixiv.net"}
 
 
 def build_payload(event: dict) -> dict:
@@ -45,6 +50,43 @@ def _smtp_send(config: dict, msg: MIMEMultipart):
         s.send_message(msg)
 
 
+async def _fetch_cover_bytes(url: str) -> bytes:
+    """服务端抓封面（pixiv 图床需要 Referer）。"""
+    headers = {"User-Agent": "ComicFeed/1.0"}
+    host = urlparse(url).hostname or ""
+    ref = _COVER_REFERERS.get(host)
+    if ref:
+        headers["Referer"] = ref
+    async with httpx.AsyncClient(timeout=10, follow_redirects=True, headers=headers) as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        return r.content
+
+
+async def _make_cover(cover: str, public_domain: str, attachments: list, cid: str) -> str:
+    """生成封面 <img> 标签。
+
+    public_domain 非空 → 公网代理模式：指向自家 /api/cover；
+    否则内嵌模式：服务端抓图 → CID 附件（失败/超限回退远程 URL）。
+    """
+    if not cover:
+        return "<div style='width:80px;height:110px;background:#f0ebe0'></div>"
+    img_style = "style='width:80px;height:auto;display:block'"
+    if public_domain:
+        return f"<img src='{public_domain.rstrip('/')}/api/cover?url={quote(cover, safe='')}' {img_style}>"
+    try:
+        data = await _fetch_cover_bytes(cover)
+    except Exception:
+        return f"<img src='{cover}' {img_style}>"
+    if len(data) > _COVER_MAX_BYTES:
+        return f"<img src='{cover}' {img_style}>"
+    from email.mime.image import MIMEImage
+    img = MIMEImage(data)
+    img.add_header("Content-ID", f"<{cid}>")
+    attachments.append(img)
+    return f"<img src='cid:{cid}' {img_style}>"
+
+
 async def send_email(config: dict, event: dict):
     """发送单事件邮件（测试通知等）。event: {"name": str, "data": dict}"""
     subject = f"[ComicFeed] {event['name']}"
@@ -59,13 +101,17 @@ async def send_email(config: dict, event: dict):
 <h2 style="color:#b8860b;border-bottom:1px solid #e5ded3;padding-bottom:8px">ComicFeed · 新下载</h2>
 <p style="color:#666;font-size:14px">订阅: {data.get('subscription', '')} · {label}</p>
 """
-        for g in galleries:
+        from comicfeed.infrastructure.config import get_setting
+        public_domain = (await get_setting("cover_proxy_domain", "") or "")
+        attachments = []
+        for i, g in enumerate(galleries):
             cover = g.get('cover_url', '')
+            cover_img = await _make_cover(cover, public_domain, attachments, f"cover{i}")
             web = g.get('web_url', '')
             pages = g.get('page_count', 0)
             title = g.get('title', '')[:80]
             html += f"""<table cellpadding="0" cellspacing="0" style="margin-bottom:12px;border:1px solid #e5ded3;border-radius:8px;overflow:hidden"><tr>
-<td style="width:80px;vertical-align:top">{"<img src='"+cover+"' style='width:80px;height:auto;display:block'>" if cover else "<div style='width:80px;height:110px;background:#f0ebe0'></div>"}</td>
+<td style="width:80px;vertical-align:top">{cover_img}</td>"
 <td style="padding:8px 12px;vertical-align:top"><div style="font-size:10px;color:#b8860b;font-family:monospace">#{g.get('gallery_id','').split(':')[-1]}</div>
 <div style="font-size:13px;font-weight:500;line-height:1.3">{title}</div>
 <div style="font-size:11px;color:#999;margin-top:4px">{pages} 页</div>
@@ -80,6 +126,8 @@ async def send_email(config: dict, event: dict):
         body = html
         msg = MIMEMultipart("alternative")
         msg.attach(MIMEText(html, "html", "utf-8"))
+        for att in attachments:
+            msg.attach(att)
     else:
         title = data.get("title", "")
         body = f"事件: {event['name']}\n标题: {title}\n"
@@ -115,19 +163,23 @@ async def send_digest_email(config: dict, digest: dict):
 <p style="color:#666;font-size:14px">{label}</p>
 <p style="color:#999;font-size:12px">{window}</p>
 """]
+    from comicfeed.infrastructure.config import get_setting
+    public_domain = (await get_setting("cover_proxy_domain", "") or "")
+    attachments = []
     for g in digest["subscriptions"]:
         sub_label = f"{g['name']} · {g['count']} 个下载"
         if g["failed_count"]:
             sub_label += f" / {g['failed_count']} 个失败"
         parts.append(f"""<h3 style="font-size:14px;color:#b8860b;margin:20px 0 8px;border-bottom:1px solid #f0e8dc;padding-bottom:4px">{sub_label}</h3>""")
-        for item in g["items"]:
+        for i, item in enumerate(g["items"]):
             cover = item.get("cover_url", "")
+            cover_img = await _make_cover(cover, public_domain, attachments, f"cover{i}")
             web = item.get("web_url", "")
             pages = item.get("page_count", 0)
             title = (item.get("title", "") or "")[:80]
             gid = (item.get("gallery_id", "") or "").split(":")[-1]
             parts.append(f"""<table cellpadding="0" cellspacing="0" style="margin-bottom:10px;border:1px solid #e5ded3;border-radius:8px;overflow:hidden"><tr>
-<td style="width:80px;vertical-align:top">{"<img src='"+cover+"' style='width:80px;height:auto;display:block'>" if cover else "<div style='width:80px;height:110px;background:#f0ebe0'></div>"}</td>
+<td style="width:80px;vertical-align:top">{cover_img}</td>"
 <td style="padding:8px 12px;vertical-align:top"><div style="font-size:10px;color:#b8860b;font-family:monospace">#{gid}</div>
 <div style="font-size:13px;font-weight:500;line-height:1.3">{title}</div>
 <div style="font-size:11px;color:#999;margin-top:4px">{pages} 页</div>
@@ -142,6 +194,8 @@ async def send_digest_email(config: dict, digest: dict):
 
     msg = MIMEMultipart("alternative")
     msg.attach(MIMEText("".join(parts), "html", "utf-8"))
+    for att in attachments:
+        msg.attach(att)
     msg["Subject"] = f"[ComicFeed] 摘要 · {until.strftime('%Y-%m-%d')} · {n_sub} 订阅 · {digest['total_count']} 下载"
     msg["From"] = config.get("user", "")
     msg["To"] = config.get("to", "")

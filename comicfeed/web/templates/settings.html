@@ -70,6 +70,7 @@
       <div class="field"><label>密码</label><input id="smtp_password" type="password"></div>
     </div>
     <div class="field"><label>收件人</label><input id="smtp_to" placeholder="me@example.com"></div>
+    <div class="field"><label>公网域名</label><input id="cover_proxy_domain" placeholder="https://comics.example.com"><span class="hint">留空 = 封面内嵌进邮件（无需梯子）；填写后邮件封面经该域名 /api/cover 代理加载（公网部署时使用）</span></div>
     <button class="btn btn-ghost btn-sm" onclick="testEmail()">发送测试邮件</button>
 
     <h3>定时摘要</h3>
