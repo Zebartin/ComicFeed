@@ -116,6 +116,17 @@ async def test_cover_embed_oversize_falls_back(monkeypatch):
     assert "https://i.pximg.net/x/1.jpg" in tag and atts == []
 
 
+
+async def test_cover_public_mode_normalizes_domain():
+    """"公网域名"缺协议/带尾斜杠时自动归一化。"""
+    from comicfeed.infrastructure import notifications as nt
+    atts = []
+    tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "comics.example.com", atts, "c1")
+    assert tag.startswith("<img src='https://comics.example.com/api/cover?url=")
+    tag2 = await nt._make_cover("https://i.pximg.net/x/1.jpg", "https://comics.example.com/", atts, "c2")
+    assert tag2.startswith("<img src='https://comics.example.com/api/cover?url=")
+
+
 async def test_send_email_ssl():
     """send_email 发送 SMTP 邮件 (port 465 SSL)。"""
     event = {"name": "gallery.created", "data": {"gallery_id": "x", "title": "t", "files": []}}

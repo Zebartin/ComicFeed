@@ -73,7 +73,10 @@ async def _make_cover(cover: str, public_domain: str, attachments: list, cid: st
         return "<div style='width:80px;height:110px;background:#f0ebe0'></div>"
     img_style = "style='width:80px;height:auto;display:block'"
     if public_domain:
-        return f"<img src='{public_domain.rstrip('/')}/api/cover?url={quote(cover, safe='')}' {img_style}>"
+        domain = public_domain.strip().rstrip('/')
+        if "://" not in domain:
+            domain = f"https://{domain}"  # 缺协议时补 https（否则客户端会丢弃无 scheme 的 src）
+        return f"<img src='{domain}/api/cover?url={quote(cover, safe='')}' {img_style}>"
     try:
         data = await _fetch_cover_bytes(cover)
     except Exception:
