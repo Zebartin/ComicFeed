@@ -114,7 +114,7 @@ async def send_email(config: dict, event: dict):
             pages = g.get('page_count', 0)
             title = g.get('title', '')[:80]
             html += f"""<table cellpadding="0" cellspacing="0" style="margin-bottom:12px;border:1px solid #e5ded3;border-radius:8px;overflow:hidden"><tr>
-<td style="width:80px;vertical-align:top">{cover_img}</td>"
+<td style="width:80px;vertical-align:top">{cover_img}</td>
 <td style="padding:8px 12px;vertical-align:top"><div style="font-size:10px;color:#b8860b;font-family:monospace">#{g.get('gallery_id','').split(':')[-1]}</div>
 <div style="font-size:13px;font-weight:500;line-height:1.3">{title}</div>
 <div style="font-size:11px;color:#999;margin-top:4px">{pages} 页</div>
@@ -182,7 +182,7 @@ async def send_digest_email(config: dict, digest: dict):
             title = (item.get("title", "") or "")[:80]
             gid = (item.get("gallery_id", "") or "").split(":")[-1]
             parts.append(f"""<table cellpadding="0" cellspacing="0" style="margin-bottom:10px;border:1px solid #e5ded3;border-radius:8px;overflow:hidden"><tr>
-<td style="width:80px;vertical-align:top">{cover_img}</td>"
+<td style="width:80px;vertical-align:top">{cover_img}</td>
 <td style="padding:8px 12px;vertical-align:top"><div style="font-size:10px;color:#b8860b;font-family:monospace">#{gid}</div>
 <div style="font-size:13px;font-weight:500;line-height:1.3">{title}</div>
 <div style="font-size:11px;color:#999;margin-top:4px">{pages} 页</div>
