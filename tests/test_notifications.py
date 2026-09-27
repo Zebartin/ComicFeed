@@ -79,7 +79,7 @@ async def test_cover_public_mode_uses_proxy_url(monkeypatch):
 
     monkeypatch.setattr(nt, "_fetch_cover_bytes", boom)
     atts = []
-    tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "https://comics.example.com", atts, "c1")
+    tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "https://comics.example.com", atts)
     assert "https://comics.example.com/api/cover?url=" in tag
     assert "cid:" not in tag
     assert atts == [] and called == []
@@ -91,10 +91,10 @@ async def test_cover_embed_success(monkeypatch):
     monkeypatch.setattr(nt, "_fetch_cover_bytes",
                         lambda url: _async_bytes(b"\x89PNG\r\n\x1a\n0011"))
     atts = []
-    tag = await nt._make_cover("https://i.pximg.net/x/1.png", "", atts, "c1")
-    assert tag.startswith("<img src='cid:c1'")
+    tag = await nt._make_cover("https://i.pximg.net/x/1.png", "", atts)
     assert len(atts) == 1
-    assert "<c1>" in str(atts[0]["Content-ID"])
+    cid = atts[0]["Content-ID"].strip("<>")
+    assert tag.startswith(f"<img src='cid:{cid}'")
 
 
 async def test_cover_embed_failure_falls_back(monkeypatch, caplog):
@@ -105,7 +105,7 @@ async def test_cover_embed_failure_falls_back(monkeypatch, caplog):
     monkeypatch.setattr(nt, "_fetch_cover_bytes", fail)
     atts = []
     with caplog.at_level("WARNING"):
-        tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "", atts, "c1")
+        tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "", atts)
     assert "https://i.pximg.net/x/1.jpg" in tag and "cid:" not in tag
     assert atts == []
     warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
@@ -119,7 +119,7 @@ async def test_cover_embed_oversize_falls_back(monkeypatch, caplog):
     monkeypatch.setattr(nt, "_fetch_cover_bytes", lambda url: _async_bytes(big))
     atts = []
     with caplog.at_level("WARNING"):
-        tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "", atts, "c1")
+        tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "", atts)
     assert "https://i.pximg.net/x/1.jpg" in tag and atts == []
     warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
     assert any("https://i.pximg.net/x/1.jpg" in m for m in warnings)
@@ -130,9 +130,9 @@ async def test_cover_public_mode_normalizes_domain():
     """"公网域名"缺协议/带尾斜杠时自动归一化。"""
     from comicfeed.infrastructure import notifications as nt
     atts = []
-    tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "comics.example.com", atts, "c1")
+    tag = await nt._make_cover("https://i.pximg.net/x/1.jpg", "comics.example.com", atts)
     assert tag.startswith("<img src='https://comics.example.com/api/cover?url=")
-    tag2 = await nt._make_cover("https://i.pximg.net/x/1.jpg", "https://comics.example.com/", atts, "c2")
+    tag2 = await nt._make_cover("https://i.pximg.net/x/1.jpg", "https://comics.example.com/", atts)
     assert tag2.startswith("<img src='https://comics.example.com/api/cover?url=")
 
 
@@ -174,6 +174,20 @@ async def test_digest_embed_cids_unique_across_subscriptions(monkeypatch):
     images = {p["Content-ID"].strip("<>"): p.get_payload(decode=True)
               for p in msg.walk() if p.get_content_maintype() == "image"}
     assert [images[c][8:] for c in cids] == [b"https://a/1.jpg", b"https://a/2.jpg", b"https://b/1.jpg"]
+
+
+async def test_embed_cids_unique_across_emails(monkeypatch):
+    """CID 须全局唯一：客户端按 cid 缓存内嵌图，跨邮件同名（如都叫 cover0）会显示成先前邮件的封面。"""
+    from datetime import datetime
+    from comicfeed.infrastructure import notifications as nt
+    sent = _capture_embed_send(monkeypatch)
+    digest = {"since": datetime(2026, 9, 1), "until": datetime(2026, 9, 2), "total_count": 1, "total_failed": 0,
+              "subscriptions": [{"name": "A", "count": 1, "failed_count": 0, "failed": [],
+                                 "items": [{"cover_url": "https://a/1.jpg", "title": "t", "gallery_id": "x:1"}]}]}
+    await nt.send_digest_email({"user": "u", "to": "t"}, digest)
+    await nt.send_digest_email({"user": "u", "to": "t"}, digest)
+    cids = [p["Content-ID"] for msg in sent for p in msg.walk() if p.get_content_maintype() == "image"]
+    assert len(cids) == 2 and cids[0] != cids[1]
 
 
 async def test_html_email_is_multipart_related(monkeypatch):

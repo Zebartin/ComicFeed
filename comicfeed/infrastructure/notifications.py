@@ -2,6 +2,7 @@ import asyncio
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import make_msgid
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -67,7 +68,7 @@ async def _fetch_cover_bytes(url: str) -> bytes:
         return r.content
 
 
-async def _make_cover(cover: str, public_domain: str, attachments: list, cid: str) -> str:
+async def _make_cover(cover: str, public_domain: str, attachments: list) -> str:
     """生成封面 <img> 标签。
 
     public_domain 非空 → 公网代理模式：指向自家 /api/cover；
@@ -90,10 +91,12 @@ async def _make_cover(cover: str, public_domain: str, attachments: list, cid: st
         _log.warning("封面超过内嵌上限(%dKB)，回退远程 URL: %s", len(data) // 1024, cover)
         return f"<img src='{cover}' {img_style}>"
     from email.mime.image import MIMEImage
+    # Content-ID 须全局唯一：客户端按 cid 缓存内嵌图，跨邮件同名会显示成先前邮件的图
+    cid = make_msgid(domain="comicfeed")
     img = MIMEImage(data)
-    img.add_header("Content-ID", f"<{cid}>")
+    img.add_header("Content-ID", cid)
     attachments.append(img)
-    return f"<img src='cid:{cid}' {img_style}>"
+    return f"<img src='cid:{cid[1:-1]}' {img_style}>"
 
 
 async def send_email(config: dict, event: dict):
@@ -113,9 +116,9 @@ async def send_email(config: dict, event: dict):
         from comicfeed.infrastructure.config import get_setting
         public_domain = (await get_setting("cover_proxy_domain", "") or "")
         attachments = []
-        for i, g in enumerate(galleries):
+        for g in galleries:
             cover = g.get('cover_url', '')
-            cover_img = await _make_cover(cover, public_domain, attachments, f"cover{i}")
+            cover_img = await _make_cover(cover, public_domain, attachments)
             web = g.get('web_url', '')
             pages = g.get('page_count', 0)
             title = g.get('title', '')[:80]
@@ -183,8 +186,7 @@ async def send_digest_email(config: dict, digest: dict):
         parts.append(f"""<h3 style="font-size:14px;color:#b8860b;margin:20px 0 8px;border-bottom:1px solid #f0e8dc;padding-bottom:4px">{sub_label}</h3>""")
         for item in g["items"]:
             cover = item.get("cover_url", "")
-            # cid 须在整封邮件内唯一（跨订阅分组），按已附加的封面数编号
-            cover_img = await _make_cover(cover, public_domain, attachments, f"cover{len(attachments)}")
+            cover_img = await _make_cover(cover, public_domain, attachments)
             web = item.get("web_url", "")
             pages = item.get("page_count", 0)
             title = (item.get("title", "") or "")[:80]
