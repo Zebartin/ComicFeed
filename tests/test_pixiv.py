@@ -819,7 +819,10 @@ async def test_cover_proxy(app, monkeypatch):
         assert r2.status_code == 200
         r3 = await client.get("/api/cover", params={"url": "https://exhentai.org/img/x.jpg"})
         assert r3.status_code == 200
-        r4 = await client.get("/api/cover", params={"url": "https://evil.com/x.jpg"})
+        # exhentai 封面实际托管于 ehgt.org
+        r_eh = await client.get("/api/cover", params={"url": "https://ehgt.org/w/01/234/5678-abcd.webp"})
+        assert r_eh.status_code == 200
+        r4 =await client.get("/api/cover", params={"url": "https://evil.com/x.jpg"})
         assert r4.status_code == 400
 
 

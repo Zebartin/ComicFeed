@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api", tags=["covers"])
 
 # 图床白名单：仅允许这些主机的封面经代理获取（防 SSRF）
 _ALLOWED_HOSTS = {"i.pximg.net", "t.nhentai.net", "i.nhentai.net",
-                 "exhentai.org", "e-hentai.org"}
+                 "exhentai.org", "e-hentai.org", "ehgt.org"}
 
 _HEADERS = {
     "User-Agent": "PixivIOSApp/7.19.1 (iOS 16.6; iPhone14,5)",
