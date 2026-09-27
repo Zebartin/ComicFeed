@@ -6,6 +6,10 @@ from urllib.parse import quote, urlparse
 
 import httpx
 
+from comicfeed.infrastructure.log import get
+
+_log = get(__name__)
+
 # 内嵌封面上限：超过则该图回退远程 URL
 _COVER_MAX_BYTES = 300 * 1024
 _COVER_REFERERS = {"i.pximg.net": "https://www.pixiv.net"}
@@ -79,9 +83,11 @@ async def _make_cover(cover: str, public_domain: str, attachments: list, cid: st
         return f"<img src='{domain}/api/cover?url={quote(cover, safe='')}' {img_style}>"
     try:
         data = await _fetch_cover_bytes(cover)
-    except Exception:
+    except Exception as e:
+        _log.warning("封面抓取失败，回退远程 URL: %s - %r", cover, e)
         return f"<img src='{cover}' {img_style}>"
     if len(data) > _COVER_MAX_BYTES:
+        _log.warning("封面超过内嵌上限(%dKB)，回退远程 URL: %s", len(data) // 1024, cover)
         return f"<img src='{cover}' {img_style}>"
     from email.mime.image import MIMEImage
     img = MIMEImage(data)
@@ -127,7 +133,8 @@ async def send_email(config: dict, event: dict):
             html += f"<p style='font-size:11px;color:#999'>... 等共 {failed_count} 个失败</p>"
         html += f"<p style='color:#999;font-size:11px;margin-top:20px;border-top:1px solid #e5ded3;padding-top:10px'>由 ComicFeed 自动发送</p></body></html>"
         body = html
-        msg = MIMEMultipart("alternative")
+        # related：内嵌封面与正文同组，cid: 引用才能被解析
+        msg = MIMEMultipart("related")
         msg.attach(MIMEText(html, "html", "utf-8"))
         for att in attachments:
             msg.attach(att)
@@ -174,9 +181,10 @@ async def send_digest_email(config: dict, digest: dict):
         if g["failed_count"]:
             sub_label += f" / {g['failed_count']} 个失败"
         parts.append(f"""<h3 style="font-size:14px;color:#b8860b;margin:20px 0 8px;border-bottom:1px solid #f0e8dc;padding-bottom:4px">{sub_label}</h3>""")
-        for i, item in enumerate(g["items"]):
+        for item in g["items"]:
             cover = item.get("cover_url", "")
-            cover_img = await _make_cover(cover, public_domain, attachments, f"cover{i}")
+            # cid 须在整封邮件内唯一（跨订阅分组），按已附加的封面数编号
+            cover_img = await _make_cover(cover, public_domain, attachments, f"cover{len(attachments)}")
             web = item.get("web_url", "")
             pages = item.get("page_count", 0)
             title = (item.get("title", "") or "")[:80]
@@ -195,7 +203,7 @@ async def send_digest_email(config: dict, digest: dict):
             parts.append(f"<p style='font-size:11px;color:#999'>... 等共 {g['failed_count']} 个失败</p>")
     parts.append("<p style='color:#999;font-size:11px;margin-top:20px;border-top:1px solid #e5ded3;padding-top:10px'>由 ComicFeed 自动发送</p></body></html>")
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("related")
     msg.attach(MIMEText("".join(parts), "html", "utf-8"))
     for att in attachments:
         msg.attach(att)
