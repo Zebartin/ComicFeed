@@ -39,6 +39,7 @@ def build_digest(events) -> dict | None:
         evs = groups[name]
         ok = [e for e in evs if e.status == "success"]
         fail = [e for e in evs if e.status == "failed"]
+        warned = [e for e in ok if e.warning]
         total_count += len(ok)
         total_failed += len(fail)
         subscriptions.append({
@@ -46,6 +47,9 @@ def build_digest(events) -> dict | None:
             "count": len(ok),
             "failed_count": len(fail),
             "items": [_item(e) for e in ok[:EMAIL_ITEM_LIMIT]],
+            "warning_count": len(warned),
+            "warnings": [{"title": e.title, "warning": e.warning}
+                         for e in warned[:EMAIL_ITEM_LIMIT]],
             "failed": [{"title": f.title, "error": f.error} for f in fail[:FAILED_LIMIT]],
         })
     return {

@@ -9,7 +9,7 @@ async def record_event(session: AsyncSession, *, subscription_id: int | None = N
                        subscription_name: str = "", source_key: str = "",
                        gallery_id: str = "", title: str = "", cover_url: str = "",
                        web_url: str = "", page_count: int = 0,
-                       status: str = "success", error: str = ""):
+                       status: str = "success", error: str = "", warning: str = ""):
     """记录一次下载事件（成功或失败）。调用方负责 commit。"""
     session.add(DownloadEvent(
         subscription_id=subscription_id,
@@ -22,6 +22,7 @@ async def record_event(session: AsyncSession, *, subscription_id: int | None = N
         page_count=page_count,
         status=status,
         error=error,
+        warning=warning,
     ))
 
 

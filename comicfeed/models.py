@@ -93,4 +93,5 @@ class DownloadEvent(Base):
     page_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(16), default="success")  # success / failed
     error: Mapped[str] = mapped_column(Text, default="")
+    warning: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

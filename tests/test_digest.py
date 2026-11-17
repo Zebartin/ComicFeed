@@ -282,3 +282,37 @@ async def test_send_digest_email_groups_and_omits(monkeypatch):
     assert "Fail" in html  # 失败项标题在组内
     assert "统计范围：" in html  # until 有明确含义（窗口终点）
     assert "15 下载" in captured["subject"]
+
+
+@pytest.mark.parametrize("warning_count,total_downloads,shown_warnings", [(1, 13, 1), (13, 25, 12)])
+async def test_digest_email_keeps_success_warning_when_gallery_list_is_capped(
+    monkeypatch, warning_count, total_downloads, shown_warnings
+):
+    from comicfeed.infrastructure import notifications as infra
+    from comicfeed.repositories.download_event import record_event
+
+    await _add_event("Machi馬吉", n=12)
+    warning = "4KHD 图集图片不完整：标注 3 张，公开 2 张（少 1 张）。"
+    async with get_session() as session:
+        for i in range(warning_count):
+            await record_event(session, subscription_name="Machi馬吉", source_key="4khd",
+                               gallery_id=f"4khd:{42 + i}", title="带提示 <样本> & 测试",
+                               page_count=2, warning=warning)
+        await session.commit()
+    captured = {}
+
+    def fake_smtp(config, msg):
+        captured["subject"] = msg["Subject"]
+        captured["html"] = msg.get_payload()[0].get_payload(decode=True).decode("utf-8")
+
+    monkeypatch.setattr(infra, "_smtp_send", fake_smtp)
+    await set_setting("smtp_host", "smtp.example.com")
+    await set_setting("smtp_to", "test@example.com")
+    assert await send_digest() is True
+    assert f"{total_downloads} 下载" in captured["subject"]
+    assert "下载提示" in captured["html"]
+    assert captured["html"].count(warning) == shown_warnings
+    assert "带提示 &lt;样本&gt; &amp; 测试" in captured["html"]
+    assert "个失败" not in captured["html"]
+    if warning_count == 13:
+        assert "等共 13 个下载提示" in captured["html"]

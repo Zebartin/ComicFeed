@@ -67,3 +67,30 @@ async def test_delete_before():
     async with get_session() as s:
         remaining = [e.subscription_name for e in await pending_since(s, now - timedelta(days=90))]
     assert remaining == ["new"]
+
+
+async def test_old_download_events_gain_warning_field_without_losing_records(tmp_path):
+    from sqlalchemy import text
+
+    path = str(tmp_path / "events.db")
+    init_db(path)
+    await create_tables()
+    async with get_session() as session:
+        await record_event(session, source_key="nhentai", gallery_id="nhentai:1", title="Existing")
+        await session.commit()
+        # 模拟上一版本没有 warning 列、已存有下载事件的数据库。
+        await session.execute(text("ALTER TABLE download_event DROP COLUMN warning"))
+        await session.commit()
+    await create_tables()
+    warning = "标注 3 张，公开 2 张"
+    async with get_session() as session:
+        await record_event(session, source_key="4khd", gallery_id="4khd:42",
+                           title="Partial", page_count=2, warning=warning)
+        await session.commit()
+    init_db(path)
+    await create_tables()
+    async with get_session() as session:
+        events = await pending_since(session, datetime(1970, 1, 1))
+    assert [event.gallery_id for event in events] == ["nhentai:1", "4khd:42"]
+    assert [event.warning for event in events] == ["", warning]
+    assert all(event.status == "success" for event in events)

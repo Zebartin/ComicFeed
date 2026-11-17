@@ -30,7 +30,8 @@ class GallerySkipped(Exception):
 async def record_download_event(status: str, *, subscription_id: int | None = None,
                                  subscription_name: str = "", source_key: str = "",
                                  gallery_id: str = "", title: str = "", cover_url: str = "",
-                                 web_url: str = "", page_count: int = 0, error: str = ""):
+                                 web_url: str = "", page_count: int = 0, error: str = "",
+                                 warning: str = ""):
     """记录下载事件（成功/失败），供定时摘要聚合。best-effort，失败仅记日志。"""
     try:
         async with get_session() as session:
@@ -38,7 +39,8 @@ async def record_download_event(status: str, *, subscription_id: int | None = No
                                 subscription_name=subscription_name or "手动下载",
                                 source_key=source_key, gallery_id=gallery_id,
                                 title=title, cover_url=cover_url, web_url=web_url,
-                                page_count=page_count, status=status, error=error)
+                                page_count=page_count, status=status, error=error,
+                                warning=warning)
             await session.commit()
     except Exception:
         _log.exception("记录下载事件失败: %s", gallery_id)
@@ -153,6 +155,8 @@ async def _download_gallery(
     title = detail.title
     total = detail.reported_pages
     full_gid = f"{source.key}:{gallery_id}"
+    if detail.warning:
+        _log.warning("%s - %s", full_gid, detail.warning)
 
     # 下载阶段筛选（exhentai 等源搜到时缺少 num_favorites/upload_date）
     # 源声明「筛选在检查阶段已应用」时跳过（如 pixiv 按作品过滤，集合级 detail 无收藏数/日期语义）
@@ -315,7 +319,8 @@ async def _download_gallery(
                                  subscription_name=subscription_name,
                                  source_key=source.key, gallery_id=full_gid,
                                  title=title, cover_url=detail.cover_url,
-                                 web_url=detail.web_url, page_count=result.page_count)
+                                 web_url=detail.web_url, page_count=result.page_count,
+                                 warning=detail.warning)
 
     return result
 

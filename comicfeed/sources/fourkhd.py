@@ -137,14 +137,19 @@ class FourKHDSource(BaseSource):
             raise ValueError("4KHD 图集未公开，无法下载")
         images = self._images(post)
         expected = self._reported_count(post)
-        if not images or len(images) < expected:
-            raise ValueError(f"4KHD 图集图片不完整：标注 {expected} 张，公开 {len(images)} 张")
+        if not images:
+            raise ValueError("4KHD 图集没有公开图片，无法下载")
+        warning = ""
+        if len(images) < expected:
+            warning = (f"4KHD 图集图片不完整：标注 {expected} 张，公开 {len(images)} 张"
+                       f"（少 {expected - len(images)} 张）。")
         return GalleryDetail(
             native_id=str(post["id"]), title=self._title(post), cover_url=images[0],
             web_url=post["link"], page_urls=images, reported_pages=len(images),
             page_native_ids=[hashlib.sha256(url.encode()).hexdigest()[:16] for url in images],
             upload_date=post["date"], tags=self._tags(post),
             num_favorites=None,
+            warning=warning,
         )
 
     async def get_gallery(self, gallery_id: str, gallery_url: str = "") -> GalleryDetail:

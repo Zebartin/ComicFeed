@@ -179,13 +179,42 @@ def test_all_content_pages_are_extracted_in_order():
     assert len(set(detail.page_native_ids)) == 257
 
 
-@pytest.mark.parametrize("protected,declared", [(True, 2), (False, 3)])
-def test_unavailable_or_incomplete_gallery_fails(protected, declared):
+@pytest.mark.parametrize("protected", [True, False])
+def test_unavailable_or_empty_gallery_fails(protected):
     post = deepcopy(_POST)
     post["content"]["protected"] = protected
-    post["title"]["rendered"] = f"样本[{declared}photos]"
-    with pytest.raises(ValueError, match="未公开|不完整"):
+    if not protected:
+        post["content"]["rendered"] = ""
+    with pytest.raises(ValueError, match="未公开|没有公开图片"):
         FourKHDSource()._parse_gallery_response(post)
+
+
+async def test_incomplete_public_gallery_downloads_and_records_a_success_warning(
+    source, tmp_path, monkeypatch
+):
+    from datetime import datetime
+    from comicfeed.infrastructure.database import create_tables, get_session, init_db
+    from comicfeed.repositories.download_event import pending_since
+
+    instance, _ = source
+    monkeypatch.setitem(_POST["title"], "rendered", "样本[3photos]")
+    monkeypatch.chdir(tmp_path)
+    init_db(":memory:")
+    await create_tables()
+    result = await download_gallery(instance, "42", str(tmp_path), cbz_max_pages=1,
+                                    subscription_name="Machi馬吉")
+    assert result.page_count == 2
+    assert len(result.files) == 2
+    for path in result.files:
+        with ZipFile(path) as archive:
+            assert len([name for name in archive.namelist() if name != "ComicInfo.xml"]) == 1
+    async with get_session() as session:
+        events = await pending_since(session, datetime(1970, 1, 1))
+    assert len(events) == 1
+    assert events[0].status == "success"
+    assert events[0].page_count == 2
+    assert events[0].error == ""
+    assert events[0].warning == "4KHD 图集图片不完整：标注 3 张，公开 2 张（少 1 张）。"
 
 
 def test_extra_public_images_are_not_truncated():

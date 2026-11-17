@@ -1,4 +1,5 @@
 import asyncio
+from html import escape
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -199,6 +200,15 @@ async def send_digest_email(config: dict, digest: dict):
 {"<a href='"+web+"' style='font-size:11px;color:#b8860b;text-decoration:none'>在源站查看</a>" if web else ""}</td></tr></table>""")
         if g["count"] > len(g["items"]):
             parts.append(f"<p style='color:#999;font-size:12px'>... 等共 {g['count']} 个画廊</p>")
+        warnings = g.get("warnings", [])
+        if warnings:
+            parts.append("<p style='font-size:12px;color:#b8860b'>下载提示</p>")
+        for warning in warnings:
+            title = escape(warning["title"][:80])
+            message = escape(warning["warning"])
+            parts.append(f"<p style='font-size:12px;color:#b8860b;margin:4px 0'>&#9888; {title} &mdash; {message}</p>")
+        if g.get("warning_count", 0) > len(warnings):
+            parts.append(f"<p style='font-size:11px;color:#999'>... 等共 {g['warning_count']} 个下载提示</p>")
         for f in g["failed"]:
             parts.append(f"<p style='font-size:11px;color:#c0392b;margin:4px 0'>&#10007; {f['title'][:60]} &mdash; {f['error'][:100]}</p>")
         if g["failed_count"] > len(g["failed"]):
