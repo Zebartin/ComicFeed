@@ -10,7 +10,7 @@ from comicfeed.models import Gallery
 
 async def get_or_create(session: AsyncSession, full_gid: str, source_key: str,
                         native_id: str, title: str, cover_url: str, web_url: str,
-                        tags: list[str], num_favorites: int, reported_pages: int,
+                        tags: list[str], num_favorites: int | None, reported_pages: int,
                         actual_pages: int, append_pages: bool = False,
                         page_native_ids: list[str] | None = None) -> Gallery:
     g = await session.get(Gallery, full_gid)

@@ -261,7 +261,9 @@ async def _download_gallery(
                                     page_count=0, error=note.get("error", ""))
 
     # 广告检测（从缓存读尾部页）
-    ad_count, detail.tags = strip_ads(cache_dir, detail, total, detail.tags)
+    ad_count = 0
+    if getattr(source, "remove_ads", True):
+        ad_count, detail.tags = strip_ads(cache_dir, detail, total, detail.tags)
     downloaded -= ad_count
     result.page_count = downloaded
 

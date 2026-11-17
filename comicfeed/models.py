@@ -44,7 +44,7 @@ class Gallery(Base):
     normalized_title: Mapped[str] = mapped_column(Text)
     cover_url: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[str] = mapped_column(Text, default="")  # JSON 字符串
-    num_favorites: Mapped[int] = mapped_column(Integer, default=0)
+    num_favorites: Mapped[int | None] = mapped_column(Integer().evaluates_none(), nullable=True, default=0)
     reported_pages: Mapped[int] = mapped_column(Integer, default=0)
     actual_pages: Mapped[int] = mapped_column(Integer, default=0)
     web_url: Mapped[str] = mapped_column(Text, default="")

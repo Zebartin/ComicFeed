@@ -41,6 +41,17 @@ async def test_valid_source_passes_validation():
     assert result is True
 
 
+async def test_url_resolution_keeps_existing_source_parser():
+    class Source(_ValidSource):
+        def parse_url(self, url):
+            return "test-source:42" if url == "https://test.com/42" else None
+
+    source = Source()
+    assert source.remove_ads is True
+    assert await source.resolve_url("https://test.com/42") == "test-source:42"
+    assert await source.resolve_url("invalid") is None
+
+
 async def test_source_missing_key_fails_validation():
     """缺少 key 的源验证失败。"""
     manager = SourceManager()

@@ -140,7 +140,11 @@ async def download_by_id(req: DownloadRequest):
     # 解析 URL → gallery_id
     gid = req.gallery_id
     if req.url:
-        parsed = source.parse_url(req.url)
+        try:
+            parsed = await source.resolve_url(req.url)
+        except Exception as error:
+            _log.warning("解析画廊 URL 失败: %s", error)
+            return {"error": f"无法解析 URL：{error}"}
         if parsed:
             gid = parsed.split(":", 1)[1]
         else:

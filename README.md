@@ -4,7 +4,8 @@
 
 ## 功能
 
-- **多源支持** — exhentai、nhentai、pixiv，源为插件式可扩展
+- **多源支持** — exhentai、nhentai、pixiv、4KHD，源为插件式可扩展
+- **4KHD 图集** — 免费公开图片，支持普通关键词订阅及文章 ID／网页链接下载；保留全部正文图片，不下载视频，不追踪同篇文章补图，不使用漫画源的全局搜索语法
 - **订阅模式** — 搜索条件订阅（自动发现新画廊）、特定画廊追踪（增量更新检测），按间隔定时巡检
 - **增量更新** — exhentai 画廊新增页面后自动检测，只下载新页，合并到已有 CBZ
 - **本地筛选** — 收藏数、页数、上传日期条件过滤
@@ -127,7 +128,7 @@ comicfeed/
   services/              # 下载编排、订阅检查、去重、队列
   repositories/          # Gallery / Page 数据访问
   io/                    # CBZ 打包、广告检测、页面下载
-  sources/               # 漫画源插件（exhentai / nhentai / pixiv）
+  sources/               # 图片源插件（exhentai / nhentai / pixiv / 4KHD）
   web/                   # FastAPI 路由 + Jinja2 模板
 ```
 

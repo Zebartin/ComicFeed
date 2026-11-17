@@ -368,6 +368,9 @@ function closeForm() { $('form').classList.remove('on') }
 function onModeChange() {
   const isPixiv = $('source_key').value === 'pixiv'
   const isSearch = $('mode').value === 'SEARCH'
+  const source = window._srcs?.find(s => s.key === $('source_key').value)
+  $('use_global_search').disabled = source?.supports_global_search === false
+  if ($('use_global_search').disabled) $('use_global_search').checked = false
   document.getElementById('query-label').textContent = isPixiv ? '画师主页或榜单 URL' : (isSearch ? '查询串' : '画廊URL')
   $('query').placeholder = isPixiv ? 'https://www.pixiv.net/users/… 或 …/ranking.php?mode=daily&content=illust' : ''
   document.querySelectorAll('.search-only').forEach(el => el.style.display = (isSearch && !isPixiv) ? '' : 'none')
@@ -398,7 +401,7 @@ async function editSub(id) {
   for (const k of ['name','source_key','query','mode','interval_minutes','cbz_max_pages','search_pages','download_dir']) $(k==='interval_minutes'?'interval':k).value = s[k] ?? ''
   updateSortForm(); $('sort').value = s.sort || 'date'
   setFilterRules(s.filter_rules || '')
-  $('use_global_search').checked = s.use_global_search !== false
+  $('use_global_search').checked = !$('use_global_search').disabled && s.use_global_search !== false
   $('enabled').checked = s.enabled; $('form').classList.add('on')
 }
 async function saveSub() {

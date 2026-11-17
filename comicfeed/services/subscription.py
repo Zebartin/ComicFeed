@@ -59,7 +59,7 @@ def _apply_filters(items: list[GallerySummary], rules_json: str) -> list[Gallery
 
 async def _build_query(sub, source) -> str:
     """拼接全局搜索条件。exhentai 源会将 tag:xxx 转换为真实 namespace。"""
-    if not getattr(sub, 'use_global_search', False):
+    if not getattr(sub, 'use_global_search', False) or not getattr(source, 'supports_global_search', True):
         return sub.query
     from comicfeed.infrastructure.config import get_setting
     from comicfeed.infrastructure.tag_translator import get_translator

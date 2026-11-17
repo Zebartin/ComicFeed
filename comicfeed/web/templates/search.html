@@ -73,6 +73,8 @@ async function load() {
 }
 function updateSort() {
   const s=window._srcs?.find(x=>x.key===$('src-key').value)
+  $('use-global').disabled=s?.supports_global_search===false
+  if($('use-global').disabled)$('use-global').checked=false
   const opts=s?.sort_options||[]
   $('sort').innerHTML=opts.length?opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join(''):'<option value="">(无)</option>'
   updateSaveBtn()

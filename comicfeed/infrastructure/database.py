@@ -1,4 +1,4 @@
-from sqlalchemy import event, text
+from sqlalchemy import MetaData, event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from comicfeed.models import Base
@@ -60,3 +60,16 @@ async def _migrate(conn):
                         default = f" DEFAULT {col.default.arg}"
                 sql = f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {col.type} {nullable}{default}'
                 await conn.execute(text(sql))
+
+    # SQLite 不能直接移除 NOT NULL；重建 gallery，使未知收藏数可以存为 NULL。
+    result = await conn.execute(text("PRAGMA table_info(gallery)"))
+    if any(row[1] == "num_favorites" and row[3] for row in result.fetchall()):
+        # 保存点保证 SQLite 的 DDL 与数据复制一起回滚，失败后仍可重新启动迁移。
+        async with conn.begin_nested():
+            gallery = Base.metadata.tables["gallery"]
+            replacement = gallery.to_metadata(MetaData(), name="_gallery_nullable")
+            await conn.run_sync(replacement.create)
+            await conn.execute(replacement.insert().from_select(list(gallery.columns.keys()),
+                                                               select(gallery)))
+            await conn.run_sync(gallery.drop)
+            await conn.execute(text("ALTER TABLE _gallery_nullable RENAME TO gallery"))

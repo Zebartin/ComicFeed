@@ -66,7 +66,7 @@ async def search_source(req: SearchRequest):
         source._next_url = req.next_url
 
     query = req.query
-    if req.use_global_search:
+    if req.use_global_search and getattr(source, "supports_global_search", True):
         query = await _merge_global(req.source_key, req.query)
 
     result = await source.search(query, page=req.page, sort=req.sort)

@@ -23,7 +23,7 @@ class GalleryDetail:
     writers: list[str] = field(default_factory=list)
     upload_date: str = ""
     reported_pages: int = 0
-    num_favorites: int = 0
+    num_favorites: int | None = 0
     display_id: str | None = None  # 文件名/ComicInfo 展示用 ID；None=用 native_id，""=省略
     keep_page_names: bool = False  # CBZ 条目名保留 page_native_ids（如 pixiv 的 149035907_p2）
     page_tags: list[list[str]] = field(default_factory=list)  # 与 page_native_ids 对齐的页级标签
@@ -65,6 +65,8 @@ class BaseSource(ABC):
     version: str
     domains: list[str]
     auth_schema: AuthSchema = AuthSchema.NONE
+    remove_ads: bool = True  # 写真源可保留正文末尾的宣传页
+    supports_global_search: bool = True  # 是否支持全局搜索条件的语法
     supports_search_mode: bool = True  # False = 该源不支持 SEARCH 订阅（如 pixiv 的集合模型）
     filters_applied_at_check: bool = False  # True = 筛选在检查阶段已按语义应用，下载阶段不再画廊级二筛（如 pixiv 按作品）
     proxy: str | None = None
@@ -102,6 +104,10 @@ class BaseSource(ABC):
 
     def parse_url(self, url: str) -> str | None:
         return None
+
+    async def resolve_url(self, url: str) -> str | None:
+        """解析画廊 URL；需要请求网页才能取得 ID 的源可覆盖。"""
+        return self.parse_url(url)
 
     async def resolve_domain(self) -> list[str]:
         return self.domains

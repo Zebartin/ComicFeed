@@ -172,6 +172,68 @@ async def test_get_download_pool(app):
     assert isinstance(pool, DownloadPool)
 
 
+async def test_keyword_source_search_ignores_global_comic_filters(
+    app, auth, db_tables, transport
+):
+    from comicfeed.web.app import get_source_manager
+    from comicfeed.sources.base import GallerySummary
+
+    queries = []
+
+    class Source(_FakeSource):
+        supports_global_search = False
+
+        async def search(self, query, page, sort="date"):
+            queries.append(query)
+            return SearchResult(items=[GallerySummary(
+                native_id="42", title="Sample", cover_url="", page_count=2,
+            )], total_pages=1, current_page=page)
+
+    manager = get_source_manager()
+    manager._classes[Source.key] = Source
+    manager._instances[Source.key] = Source()
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        metadata = await client.get("/api/sources", auth=auth)
+        response = await client.post("/api/search", auth=auth, json={
+            "source_key": "fake", "query": "Machi馬吉", "use_global_search": True,
+        })
+    assert metadata.json()[0]["supports_global_search"] is False
+    assert queries == ["Machi馬吉"]
+    assert response.json()["items"][0]["native_id"] == "42"
+
+
+@pytest.mark.parametrize("resolution_fails", [False, True])
+async def test_manual_download_resolves_article_url_before_queueing(
+    app, auth, db_tables, transport, monkeypatch, resolution_fails
+):
+    from comicfeed.web.app import get_download_pool, get_source_manager
+    from unittest.mock import AsyncMock
+
+    class Source(_FakeSource):
+        async def resolve_url(self, url):
+            assert url == "https://fake.local/article.html"
+            if resolution_fails:
+                raise ValueError("网页请求失败")
+            return "fake:42"
+
+    get_source_manager()._classes[Source.key] = Source
+    download = AsyncMock()
+    monkeypatch.setattr(get_download_pool(), "download", download)
+    monkeypatch.setattr("comicfeed.services.komga.trigger_komga_scan", AsyncMock())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/galleries/download", auth=auth,
+            json={"source_key": "fake", "gallery_id": "", "url": "https://fake.local/article.html"},
+        )
+    await asyncio.sleep(0)
+    if resolution_fails:
+        assert "网页请求失败" in response.json()["error"]
+        download.assert_not_awaited()
+        return
+    assert response.json()["gallery_id"] == "fake:42"
+    assert download.await_args.args[1] == "42"
+
+
 async def test_manual_download_goes_through_pool(app, auth, db_tables, transport, tmp_path):
     """手动单画廊下载实际走 pool 并完成任务。"""
     from comicfeed.infrastructure.config import set_setting
