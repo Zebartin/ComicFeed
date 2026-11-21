@@ -9,7 +9,7 @@ from comicfeed.infrastructure.database import get_session
 from comicfeed.infrastructure.log import get
 from comicfeed.io.cbz import read_cbz_pages
 from comicfeed.io.cbz_builder import AppendContext, pack_cbz_volumes, strip_ads
-from comicfeed.io.page_fetcher import cleanup_cache, fetch_pages, read_from_cache
+from comicfeed.io.page_fetcher import cleanup_cache, fetch_pages, protect_cache, read_from_cache
 from comicfeed.repositories.gallery import get_or_create
 from comicfeed.repositories.page import append_new, count_for_gallery, migrate_gallery, replace_all
 from comicfeed.repositories.download_event import record_event as _record_event
@@ -244,42 +244,43 @@ async def _download_gallery(
 
     # 下载页面到磁盘缓存
     cache_root = os.path.join(os.getcwd(), ".cache")
-    cleanup_cache(cache_root)
     cache_dir = os.path.join(cache_root, gallery_id)
-    os.makedirs(cache_dir, exist_ok=True)
+    with protect_cache(cache_dir):
+        cleanup_cache(cache_root)
+        os.makedirs(cache_dir, exist_ok=True)
 
-    downloaded = await fetch_pages(
-        source, gallery_id, gallery_url, detail, total, cache_dir, tracker, full_gid
-    )
+        downloaded = await fetch_pages(
+            source, gallery_id, gallery_url, detail, total, cache_dir, tracker, full_gid
+        )
 
-    # 源上报的跳过说明（如动图转换失败）→ 记录为失败下载事件，进入摘要通知
-    for note in source.pop_download_notes():
-        if note.get("gallery_id") and note["gallery_id"] != gallery_id:
-            continue  # 其他画廊的说明不记到本画廊名下
-        _log.info("源跳过说明: %s - %s", note.get("title", ""), note.get("error", ""))
-        await record_download_event("failed", subscription_id=subscription_id,
-                                    subscription_name=subscription_name,
-                                    source_key=source.key, gallery_id=full_gid,
-                                    title=note.get("title", full_gid),
-                                    cover_url=detail.cover_url, web_url=detail.web_url,
-                                    page_count=0, error=note.get("error", ""))
+        # 源上报的跳过说明（如动图转换失败）→ 记录为失败下载事件，进入摘要通知
+        for note in source.pop_download_notes():
+            if note.get("gallery_id") and note["gallery_id"] != gallery_id:
+                continue  # 其他画廊的说明不记到本画廊名下
+            _log.info("源跳过说明: %s - %s", note.get("title", ""), note.get("error", ""))
+            await record_download_event("failed", subscription_id=subscription_id,
+                                        subscription_name=subscription_name,
+                                        source_key=source.key, gallery_id=full_gid,
+                                        title=note.get("title", full_gid),
+                                        cover_url=detail.cover_url, web_url=detail.web_url,
+                                        page_count=0, error=note.get("error", ""))
 
-    # 广告检测（从缓存读尾部页）
-    ad_count = 0
-    if getattr(source, "remove_ads", True):
-        ad_count, detail.tags = strip_ads(cache_dir, detail, total, detail.tags)
-    downloaded -= ad_count
-    result.page_count = downloaded
+        # 广告检测（从缓存读尾部页）
+        ad_count = 0
+        if getattr(source, "remove_ads", True):
+            ad_count, detail.tags = strip_ads(cache_dir, detail, total, detail.tags)
+        downloaded -= ad_count
+        result.page_count = downloaded
 
-    # 打包 CBZ（从缓存逐卷读取）
-    result.files = pack_cbz_volumes(
-        cache_dir, detail, downloaded, gallery_id, title, output_dir,
-        cbz_max_pages, do_split, append_ctx
-    )
-    result.tags = detail.tags
+        # 打包 CBZ（从缓存逐卷读取）
+        result.files = pack_cbz_volumes(
+            cache_dir, detail, downloaded, gallery_id, title, output_dir,
+            cbz_max_pages, do_split, append_ctx
+        )
+        result.tags = detail.tags
 
-    # 清理缓存
-    shutil.rmtree(cache_dir, ignore_errors=True)
+        # 清理缓存
+        shutil.rmtree(cache_dir, ignore_errors=True)
 
     if tracker:
         tracker.finished(full_gid)

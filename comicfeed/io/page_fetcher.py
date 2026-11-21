@@ -2,6 +2,7 @@
 import os
 import shutil
 import time
+from contextlib import contextmanager
 
 from comicfeed.infrastructure.log import get
 
@@ -11,16 +12,34 @@ _CACHE_TTL = 259200  # 72h
 _CACHE_MAX_MB = 500
 _CHUNK_SIZE = 10  # 单次 download_pages 请求的页数上限（限制峰值内存）
 # 源在块内逐页下载时通过 on_page 回调逐页上报进度，避免 UI 进度每 10 页才跳一次
+_active_caches: dict[str, int] = {}
+
+
+@contextmanager
+def protect_cache(cache_dir: str):
+    """下载到打包结束期间，保护缓存不被其他任务淘汰。"""
+    path = os.path.normcase(os.path.abspath(cache_dir))
+    _active_caches[path] = _active_caches.get(path, 0) + 1
+    try:
+        yield
+    finally:
+        _active_caches[path] -= 1
+        if not _active_caches[path]:
+            del _active_caches[path]
 
 
 def cleanup_cache(root: str):
-    """删除过期缓存文件，超总大小阈值时淘汰最旧。"""
+    """删除空闲缓存中的过期文件，超大小阈值时淘汰最旧。"""
     if not os.path.exists(root):
         return
     now = time.time()
     total = 0
     keep = []
-    for dirpath, _dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            name for name in dirnames
+            if os.path.normcase(os.path.abspath(os.path.join(dirpath, name))) not in _active_caches
+        ]
         for fn in filenames:
             fp = os.path.join(dirpath, fn)
             try:
@@ -91,7 +110,8 @@ async def fetch_pages(source, gallery_id: str, gallery_url: str, detail,
         for abs_idx in range(chunk_start, chunk_end):
             pid = detail.page_native_ids[abs_idx] if abs_idx < len(detail.page_native_ids) else ""
             cache_name = (pid + ".dat") if pid else f"{abs_idx:04d}.dat"
-            if os.path.exists(os.path.join(cache_dir, cache_name)):
+            cache_file = os.path.join(cache_dir, cache_name)
+            if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
                 downloaded += 1
                 _report(downloaded)
             else:
@@ -131,7 +151,10 @@ def read_from_cache(cache_dir: str, detail, start: int, count: int) -> list[byte
         cache_file = os.path.join(cache_dir, cache_name)
         if os.path.exists(cache_file):
             with open(cache_file, "rb") as f:
-                pages.append(f.read())
+                data = f.read()
+            if not data:
+                raise ValueError(f"页面缓存为空: {cache_file}")
+            pages.append(data)
         else:
-            pages.append(b"")
+            raise FileNotFoundError(f"页面缓存缺失: {cache_file}")
     return pages

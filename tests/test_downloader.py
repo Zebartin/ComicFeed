@@ -301,3 +301,138 @@ async def test_fetch_pages_does_not_retry(tmp_path):
     with pytest.raises(RuntimeError):
         await fetch_pages(src, "g", "", detail, 25, str(tmp_path))
     assert len(src.calls) == 1
+
+
+@pytest.mark.parametrize("chunk_size", [8, 10])
+async def test_parallel_downloads_preserve_all_cbz_images(tmp_path, monkeypatch, chunk_size):
+    """另一画廊开始下载并清理缓存时，活动画廊的前段图片仍完整。"""
+    from io import BytesIO
+    from zipfile import ZipFile
+
+    from PIL import Image
+    from comicfeed.io import page_fetcher
+
+    image = BytesIO()
+    Image.new("RGB", (1, 1), "white").save(image, "PNG")
+    page_data = image.getvalue()
+    # 缩小容量阈值，保留真实清理逻辑而不写入数百 MB。
+    monkeypatch.setattr(page_fetcher, "_CHUNK_SIZE", chunk_size)
+    monkeypatch.setattr(page_fetcher, "_CACHE_MAX_MB", 5 * len(page_data) / 1024 / 1024)
+    monkeypatch.chdir(tmp_path)
+    paused = asyncio.Event()
+    resume = asyncio.Event()
+
+    class PausedSource(_ChunkSource):
+        remove_ads = False
+
+        async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
+            if page_range.start > 0 and not paused.is_set():
+                paused.set()
+                await resume.wait()
+            pages = [page_data] * (page_range.stop - page_range.start)
+            for _ in pages:
+                if on_page:
+                    on_page()
+            return pages
+
+    first = PausedSource(20)
+    second = _ChunkSource(1)
+    second.remove_ads = False
+    async with DownloadPool(max_workers=2) as pool:
+        task = asyncio.create_task(pool.download(
+            first, "first", str(tmp_path / "first"), cbz_max_pages=10,
+            save_to_db=False,
+        ))
+        try:
+            await asyncio.wait_for(paused.wait(), timeout=2)
+            await asyncio.wait_for(
+                pool.download(second, "second", str(tmp_path / "second"), save_to_db=False),
+                timeout=2,
+            )
+        finally:
+            resume.set()
+            result = await asyncio.wait_for(task, timeout=2)
+
+    images = []
+    for path in result.files:
+        with ZipFile(path) as archive:
+            images.extend(archive.read(name) for name in archive.namelist() if name != "ComicInfo.xml")
+    assert images == [page_data] * 20
+
+
+@pytest.mark.parametrize("chunk_size", [8, 10])
+async def test_download_batch_reports_missing_cache_as_failed(tmp_path, monkeypatch, chunk_size):
+    """页面下载后缓存缺失时，批次返回失败且队列不标记完成。"""
+    from comicfeed.io import page_fetcher
+
+    monkeypatch.setattr(page_fetcher, "_CHUNK_SIZE", chunk_size)
+    monkeypatch.chdir(tmp_path)
+
+    class MissingCacheSource(_ChunkSource):
+        remove_ads = False
+        cache_deleted = False
+
+        async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
+            if page_range.start > 0 and not self.cache_deleted:
+                (tmp_path / ".cache" / gallery_id / "0.dat").unlink()
+                self.cache_deleted = True
+            return await super().download_pages(gallery_id, page_range, gallery_url, detail, on_page)
+
+    source = MissingCacheSource(20)
+    tracker = DownloadTracker()
+    task = DownloadTask(
+        source_key=source.key, gallery_id="missing", output_dir=str(tmp_path / "output"),
+        cbz_max_pages=10,
+    )
+    downloaded, failed = await download_batch(source, None, tracker, [task])
+    assert downloaded == []
+    assert len(failed) == 1
+    assert "0.dat" in failed[0]["error"]
+    assert tracker.snapshot()["completed"] == []
+    assert tracker.snapshot()["failed"][0]["gallery_id"] == "mock:missing"
+
+
+async def test_download_batch_reports_empty_image_as_failed(tmp_path, monkeypatch):
+    """源返回空图片时，批次报告失败且不生成空图片分卷。"""
+    monkeypatch.chdir(tmp_path)
+
+    class EmptyImageSource(_ChunkSource):
+        remove_ads = False
+
+        async def download_pages(self, gallery_id, page_range, gallery_url="", detail=None, on_page=None):
+            return [b""]
+
+    source = EmptyImageSource(1)
+    tracker = DownloadTracker()
+    output = tmp_path / "output"
+    task = DownloadTask(source_key=source.key, gallery_id="empty", output_dir=str(output))
+    downloaded, failed = await download_batch(source, None, tracker, [task])
+    assert downloaded == []
+    assert len(failed) == 1
+    assert "空" in failed[0]["error"]
+    assert "0.dat" in failed[0]["error"]
+    assert tracker.snapshot()["completed"] == []
+    assert tracker.snapshot()["failed"][0]["gallery_id"] == "mock:empty"
+    assert list(output.glob("*.cbz")) == []
+
+
+async def test_download_batch_redownloads_empty_cached_pages(tmp_path, monkeypatch):
+    """重试时补下空缓存页，并保留已有的非空缓存页。"""
+    from zipfile import ZipFile
+
+    monkeypatch.chdir(tmp_path)
+    cache = tmp_path / ".cache" / "retry"
+    cache.mkdir(parents=True)
+    (cache / "0.dat").write_bytes(b"")
+    cached_page = b"\xff\xd8\xffCached"
+    (cache / "1.dat").write_bytes(cached_page)
+    source = _ChunkSource(2)
+    source.remove_ads = False
+    tracker = DownloadTracker()
+    task = DownloadTask(source_key=source.key, gallery_id="retry", output_dir=str(tmp_path / "output"))
+    downloaded, failed = await download_batch(source, None, tracker, [task])
+    assert failed == []
+    assert tracker.snapshot()["completed"][0]["gallery_id"] == "mock:retry"
+    with ZipFile(downloaded[0]["files"][0]) as archive:
+        images = [archive.read(name) for name in archive.namelist() if name != "ComicInfo.xml"]
+    assert images == [b"\xff\xd8\xffMock", cached_page]
